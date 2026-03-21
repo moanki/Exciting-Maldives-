@@ -1014,6 +1014,7 @@ function AdminPageCustomization() {
         };
 
         setSettings(finalSettings);
+        setLoading(false);
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
