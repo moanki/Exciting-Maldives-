@@ -7,13 +7,14 @@ import { User } from '@supabase/supabase-js';
 import PublicHome from './pages/PublicHome';
 import ResortSearch from './pages/ResortSearch';
 import ResortDetail from './pages/ResortDetail';
-import AgentDashboard from './pages/AgentDashboard';
+import PartnerDashboard from './pages/PartnerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import TouristInfo from './pages/TouristInfo';
 import MaldivesMap from './pages/MaldivesMap';
 import Legal from './pages/Legal';
 import CustomPage from './pages/CustomPage';
+import BecomePartner from './pages/BecomePartner';
 
 // Components
 import Navbar from './components/Navbar';
@@ -32,10 +33,10 @@ export default function App() {
       const mockUser = {
         id: 'demo-id',
         email: 'demo@example.com',
-        user_metadata: { full_name: demoMode === 'admin' ? 'Demo Admin' : 'Demo Agent' }
+        user_metadata: { full_name: demoMode === 'admin' ? 'Demo Admin' : 'Demo Partner' }
       } as any;
       setUser(mockUser);
-      setRole(demoMode === 'admin' ? 'super_admin' : 'agent');
+      setRole(demoMode === 'admin' ? 'super_admin' : 'partner');
       setLoading(false);
       return;
     }
@@ -100,7 +101,7 @@ export default function App() {
           .single();
 
         if (agentData) {
-          setRole('agent');
+          setRole('partner');
         } else {
           setRole(null);
         }
@@ -134,12 +135,13 @@ export default function App() {
             <Route path="/map" element={<MaldivesMap />} />
             <Route path="/legal" element={<Legal />} />
             <Route path="/p/:slug" element={<CustomPage />} />
+            <Route path="/become-partner" element={<BecomePartner />} />
             <Route path="/login" element={<Login />} />
             
             {/* Protected Routes */}
             <Route 
-              path="/agent/*" 
-              element={role === 'agent' ? <AgentDashboard /> : <Navigate to="/login" />} 
+              path="/partner/*" 
+              element={role === 'partner' ? <PartnerDashboard /> : <Navigate to="/login" />} 
             />
             <Route 
               path="/admin/*" 

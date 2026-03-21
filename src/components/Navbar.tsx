@@ -1,8 +1,9 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
 import { Menu, X, User as UserIcon, LogOut } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { getSiteSettings } from '../lib/settings';
 
 interface NavbarProps {
   user: User | null;
@@ -13,20 +14,16 @@ export default function Navbar({ user, role }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<any>({});
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('site_settings').select('*');
-      if (data) {
-        const settingsMap = data.reduce((acc: any, curr: any) => {
-          acc[curr.key] = curr.value;
-          return acc;
-        }, {});
-        setSettings(settingsMap);
-      }
+      const isPreview = searchParams.get('preview') === 'true';
+      const settingsData = await getSiteSettings(isPreview);
+      setSettings(settingsData);
     };
     fetchSettings();
-  }, []);
+  }, [searchParams]);
 
   const handleLogout = async () => {
     localStorage.removeItem('demo_mode');
@@ -99,8 +96,8 @@ export default function Navbar({ user, role }: NavbarProps) {
             
             {user ? (
               <div className="flex items-center space-x-6">
-                {role === 'agent' && (
-                  <Link to="/agent" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Agent Portal</Link>
+                {role === 'partner' && (
+                  <Link to="/partner" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Partner Portal</Link>
                 )}
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
                   <Link to="/admin" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Admin</Link>
@@ -118,7 +115,7 @@ export default function Navbar({ user, role }: NavbarProps) {
                 to="/login" 
                 className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
               >
-                Agent Login
+                Partner Login
               </Link>
             )}
           </div>
@@ -150,12 +147,12 @@ export default function Navbar({ user, role }: NavbarProps) {
             ))}
             {user ? (
               <>
-                {role === 'agent' && <Link to="/agent" className="block px-3 py-2 text-base font-medium text-brand-teal">Agent Portal</Link>}
+                {role === 'partner' && <Link to="/partner" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Portal</Link>}
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && <Link to="/admin" className="block px-3 py-2 text-base font-medium text-brand-teal">Admin</Link>}
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700">Logout</button>
               </>
             ) : (
-              <Link to="/login" className="block px-3 py-2 text-base font-medium text-brand-teal">Agent Login</Link>
+              <Link to="/login" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</Link>
             )}
           </div>
         </div>

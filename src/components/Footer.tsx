@@ -1,24 +1,21 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useState, useEffect } from 'react';
 import { Facebook, Instagram, Twitter, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { getSiteSettings } from '../lib/settings';
 
 export default function Footer() {
   const [settings, setSettings] = useState<any>({});
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('site_settings').select('*');
-      if (data) {
-        const settingsMap = data.reduce((acc: any, curr: any) => {
-          acc[curr.key] = curr.value;
-          return acc;
-        }, {});
-        setSettings(settingsMap);
-      }
+      const isPreview = searchParams.get('preview') === 'true';
+      const settingsData = await getSiteSettings(isPreview);
+      setSettings(settingsData);
     };
     fetchSettings();
-  }, []);
+  }, [searchParams]);
 
   const footer = settings.footer || {
     contact: {
@@ -36,7 +33,7 @@ export default function Footer() {
       { label: 'Resorts', path: '/resorts' },
       { label: 'Maldives Map', path: '/map' },
       { label: 'Tourist Info', path: '/tourist-info' },
-      { label: 'Agent Portal', path: '/login' }
+      { label: 'Partner Portal', path: '/login' }
     ],
     legal_links: [
       { label: 'Privacy Policy', path: '/legal' },

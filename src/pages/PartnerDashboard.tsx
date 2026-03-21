@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { LayoutDashboard, Hotel, FileText, MessageSquare, Clock, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { Link, Routes, Route } from 'react-router-dom';
 
-export default function AgentDashboard() {
+export default function PartnerDashboard() {
   const [stats, setStats] = useState({
     totalRequests: 0,
     confirmedRequests: 0,
@@ -15,7 +15,7 @@ export default function AgentDashboard() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const fetchAgentData = async () => {
+    const fetchPartnerData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
       setUser(session.user);
@@ -48,7 +48,7 @@ export default function AgentDashboard() {
       setLoading(false);
     };
 
-    fetchAgentData();
+    fetchPartnerData();
   }, []);
 
   if (loading) return <div className="p-12 text-center font-serif italic text-brand-navy">Loading dashboard...</div>;
@@ -57,8 +57,8 @@ export default function AgentDashboard() {
     <div className="max-w-7xl mx-auto px-4 py-12 bg-brand-paper/10 min-h-screen">
       <Routes>
         <Route path="/" element={<DashboardOverview stats={stats} recentRequests={recentRequests} user={user} />} />
-        <Route path="/requests" element={<AgentRequests />} />
-        <Route path="/resources" element={<AgentResources />} />
+        <Route path="/requests" element={<PartnerRequests />} />
+        <Route path="/resources" element={<PartnerResources />} />
       </Routes>
     </div>
   );
@@ -68,7 +68,7 @@ function DashboardOverview({ stats, recentRequests, user }: any) {
   return (
     <>
       <div className="mb-12">
-        <h1 className="text-4xl font-serif mb-2 text-brand-navy">Welcome, {user?.user_metadata?.full_name?.split(' ')[0] || 'Agent'}</h1>
+        <h1 className="text-4xl font-serif mb-2 text-brand-navy">Welcome, {user?.user_metadata?.full_name?.split(' ')[0] || 'Partner'}</h1>
         <p className="text-brand-navy/50 text-[10px] uppercase tracking-[0.3em] font-bold font-sans">Your B2B Travel Dashboard</p>
       </div>
 
@@ -102,7 +102,7 @@ function DashboardOverview({ stats, recentRequests, user }: any) {
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-serif text-brand-navy">Recent <span className="italic text-brand-teal">Requests</span></h2>
-            <Link to="/agent/requests" className="text-[10px] font-bold uppercase tracking-widest text-brand-teal font-sans hover:text-brand-navy transition-colors">View All</Link>
+            <Link to="/partner/requests" className="text-[10px] font-bold uppercase tracking-widest text-brand-teal font-sans hover:text-brand-navy transition-colors">View All</Link>
           </div>
           
           <div className="space-y-4">
@@ -147,7 +147,7 @@ function DashboardOverview({ stats, recentRequests, user }: any) {
                 <span className="text-[10px] font-bold uppercase tracking-widest font-sans">Search Resorts</span>
                 <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform text-brand-beige" />
               </Link>
-              <Link to="/agent/resources" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all group">
+              <Link to="/partner/resources" className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all group">
                 <span className="text-[10px] font-bold uppercase tracking-widest font-sans">Sales Resources</span>
                 <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform text-brand-beige" />
               </Link>
@@ -187,7 +187,7 @@ function DashboardOverview({ stats, recentRequests, user }: any) {
   );
 }
 
-function AgentRequests() {
+function PartnerRequests() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -259,7 +259,7 @@ function AgentRequests() {
   );
 }
 
-function AgentResources() {
+function PartnerResources() {
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,23 +1,21 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Search, MapPin, Star, ArrowRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { getSiteSettings } from '../lib/settings';
 
 export default function PublicHome() {
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch settings
-      const { data: settingsData } = await supabase.from('site_settings').select('*');
-      const settingsMap = settingsData?.reduce((acc: any, curr: any) => {
-        acc[curr.key] = curr.value;
-        return acc;
-      }, {}) || {};
+      const isPreview = searchParams.get('preview') === 'true';
+      const settingsMap = await getSiteSettings(isPreview);
       setSettings(settingsMap);
 
       // Fetch featured resorts
@@ -36,7 +34,7 @@ export default function PublicHome() {
       setLoading(false);
     };
     fetchData();
-  }, []);
+  }, [searchParams]);
 
   const hero = settings.hero || {
     title: 'The Art of Maldivian Luxury',
@@ -67,12 +65,32 @@ export default function PublicHome() {
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <img 
-            src="https://picsum.photos/seed/maldives-luxury/1920/1080" 
-            alt="Exciting Maldives Hero" 
-            className="w-full h-full object-cover brightness-75"
-            referrerPolicy="no-referrer"
-          />
+          {hero.banner_url ? (
+            hero.banner_type === 'video' ? (
+              <video 
+                src={hero.banner_url} 
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+                className="w-full h-full object-cover brightness-75"
+              />
+            ) : (
+              <img 
+                src={hero.banner_url} 
+                alt="Exciting Maldives Hero" 
+                className="w-full h-full object-cover brightness-75"
+                referrerPolicy="no-referrer"
+              />
+            )
+          ) : (
+            <img 
+              src="https://picsum.photos/seed/maldives-luxury/1920/1080" 
+              alt="Exciting Maldives Hero" 
+              className="w-full h-full object-cover brightness-75"
+              referrerPolicy="no-referrer"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-b from-brand-navy/40 via-transparent to-brand-paper"></div>
         </div>
 
@@ -211,7 +229,7 @@ export default function PublicHome() {
             {partner.summary}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to={partner.agent_url} className="bg-white text-brand-navy px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all font-sans">
+            <Link to="/become-agent" className="bg-white text-brand-navy px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all font-sans">
               Become an Agent
             </Link>
             <Link to={partner.guide_url} className="border border-white/20 px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-brand-navy transition-all font-sans">

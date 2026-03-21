@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/ai';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,7 +20,7 @@ export default function AdminDashboard() {
           <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} />
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} />
           <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} />
-          <SidebarLink to="/admin/agents" icon={<Users size={18} />} label="Agents" active={location.pathname.startsWith('/admin/agents')} />
+          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partner Management" active={location.pathname.startsWith('/admin/partners')} />
           <SidebarLink to="/admin/customization" icon={<Palette size={18} />} label="Page Customization" active={location.pathname.startsWith('/admin/customization')} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} />
         </nav>
@@ -32,7 +32,7 @@ export default function AdminDashboard() {
           <Route path="/" element={<AdminOverview />} />
           <Route path="/resorts" element={<AdminResorts />} />
           <Route path="/bookings" element={<AdminBookings />} />
-          <Route path="/agents" element={<AdminAgents />} />
+          <Route path="/partners" element={<AdminPartners />} />
           <Route path="/customization" element={<AdminPageCustomization />} />
           <Route path="/resources" element={<AdminResources />} />
         </Routes>
@@ -345,9 +345,9 @@ function AdminOverview() {
           key: 'partner',
           value: {
             title: 'BECOME A PARTNER',
-            summary: 'Join our network of elite travel agents and gain access to the best of the Maldives.',
-            agent_url: '/agent-registration',
-            guide_url: '/travel-guide'
+            summary: 'Join our network of elite travel partners and gain access to the best of the Maldives.',
+            partner_url: '/become-partner',
+            guide_url: '/tourist-info'
           }
         },
         {
@@ -422,7 +422,7 @@ function AdminOverview() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         <StatCard label="Total Resorts" value="42" />
-        <StatCard label="Active Agents" value="156" />
+        <StatCard label="Active Partners" value="156" />
         <StatCard label="New Requests" value="12" />
         <StatCard label="Active Chats" value="5" />
       </div>
@@ -613,21 +613,21 @@ function AdminBookings() {
   );
 }
 
-function AdminAgents() {
-  const [agents, setAgents] = useState<any[]>([]);
+function AdminPartners() {
+  const [partners, setPartners] = useState<any[]>([]);
 
   useEffect(() => {
-    const fetchAgents = async () => {
+    const fetchPartners = async () => {
       const { data, error } = await supabase
         .from('agents')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (data) {
-        setAgents(data);
+        setPartners(data);
       }
     };
-    fetchAgents();
+    fetchPartners();
   }, []);
 
   const updateStatus = async (id: string, status: string) => {
@@ -637,51 +637,141 @@ function AdminAgents() {
       .eq('id', id);
     
     if (!error) {
-      setAgents(agents.map(a => a.id === id ? { ...a, status } : a));
+      setPartners(partners.map(p => p.id === id ? { ...p, status } : p));
     }
+  };
+
+  const downloadCSV = () => {
+    const headers = ['Full Name', 'Email', 'Phone', 'Company', 'Website', 'Status', 'Created At'];
+    const rows = partners.map(p => [
+      p.full_name,
+      p.email,
+      p.phone,
+      p.company_name,
+      p.website,
+      p.status,
+      p.created_at
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(c => `"${c || ''}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'partner_requests.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadIndividual = (partner: any) => {
+    const content = `
+PARTNER REQUEST DETAILS
+-----------------------
+Full Name: ${partner.full_name}
+Email: ${partner.email}
+Phone: ${partner.phone}
+Company: ${partner.company_name}
+Website: ${partner.website || 'N/A'}
+Status: ${partner.status}
+Submitted At: ${new Date(partner.created_at).toLocaleString()}
+
+Message:
+${partner.message || 'No message provided.'}
+    `.trim();
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `request_${partner.full_name.replace(/ /g, '_')}.txt`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
     <div>
-      <h1 className="text-3xl font-serif mb-10 text-brand-navy">Agent Management</h1>
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-3xl font-serif text-brand-navy">Partner Management</h1>
+        <button 
+          onClick={downloadCSV}
+          className="flex items-center gap-2 px-6 py-3 bg-brand-navy text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all shadow-lg shadow-brand-navy/10"
+        >
+          <Upload size={14} />
+          Download All (CSV)
+        </button>
+      </div>
       <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-brand-paper border-b border-brand-navy/5">
             <tr>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Agent Name</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Email</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Partner / Company</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Contact Details</th>
               <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Status</th>
               <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-brand-paper">
-            {agents.map(agent => (
-              <tr key={agent.id} className="hover:bg-brand-paper/50 transition-colors">
-                <td className="px-6 py-4 font-medium text-brand-navy font-sans">{agent.full_name}</td>
-                <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{agent.email}</td>
+            {partners.map(partner => (
+              <tr key={partner.id} className="hover:bg-brand-paper/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="font-medium text-brand-navy font-sans">{partner.full_name}</div>
+                  <div className="text-[10px] text-brand-navy/40 font-bold uppercase tracking-widest mt-1">{partner.company_name}</div>
+                  {partner.website && (
+                    <a href={partner.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-teal hover:underline mt-1 block font-sans">
+                      {partner.website}
+                    </a>
+                  )}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2 text-brand-navy/60 font-sans text-sm">
+                    <Mail size={12} className="text-brand-teal" />
+                    {partner.email}
+                  </div>
+                  <div className="flex items-center gap-2 text-brand-navy/60 font-sans text-sm mt-1">
+                    <Phone size={12} className="text-brand-teal" />
+                    {partner.phone}
+                  </div>
+                </td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${
-                    agent.status === 'active' ? 'bg-green-50 text-green-600' : 
-                    agent.status === 'pending' ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-coral/10 text-brand-coral'
+                    partner.status === 'active' ? 'bg-green-50 text-green-600' : 
+                    partner.status === 'pending' ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-coral/10 text-brand-coral'
                   }`}>
-                    {agent.status}
+                    {partner.status}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
-                    {agent.status === 'pending' && (
+                    {partner.status === 'pending' && (
                       <button 
-                        onClick={() => updateStatus(agent.id, 'active')}
+                        onClick={() => updateStatus(partner.id, 'active')}
                         className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-all"
+                        title="Approve"
                       >
                         <Check size={16} />
                       </button>
                     )}
                     <button 
-                      onClick={() => updateStatus(agent.id, agent.status === 'active' ? 'deactivated' : 'active')}
+                      onClick={() => updateStatus(partner.id, partner.status === 'active' ? 'deactivated' : 'active')}
                       className="p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
+                      title={partner.status === 'active' ? 'Deactivate' : 'Activate'}
                     >
-                      <X size={16} />
+                      {partner.status === 'active' ? <X size={16} /> : <Check size={16} />}
+                    </button>
+                    <button 
+                      onClick={() => downloadIndividual(partner)}
+                      className="p-2 text-brand-navy/40 hover:text-brand-teal rounded-lg transition-all"
+                      title="Download Details"
+                    >
+                      <Upload size={16} />
                     </button>
                   </div>
                 </td>
@@ -699,6 +789,7 @@ function AdminPageCustomization() {
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [resorts, setResorts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -709,11 +800,39 @@ function AdminPageCustomization() {
   const fetchSettings = async () => {
     const { data, error } = await supabase.from('site_settings').select('*');
     if (data) {
-      const settingsMap = data.reduce((acc: any, curr: any) => {
-        acc[curr.key] = curr.value;
+      // Load published settings first
+      const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
+      const settingsMap = publishedSettings.reduce((acc: any, curr: any) => {
+        const key = curr.key.replace(':published', '');
+        acc[key] = curr.value;
         return acc;
       }, {});
-      setSettings(settingsMap);
+
+      // Overlay draft settings
+      const draftSettings = data.filter((s: any) => s.key.endsWith(':draft'));
+      draftSettings.forEach((s: any) => {
+        const key = s.key.replace(':draft', '');
+        settingsMap[key] = s.value;
+      });
+      
+      // Apply defaults for missing critical sections
+      const finalSettings = {
+        hero: {
+          title: 'The Art of Maldivian Luxury',
+          subtitle: 'Bespoke Destination Management for Travel Professionals',
+          banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
+          banner_type: 'image',
+          ...settingsMap.hero
+        },
+        introduction: {
+          title: 'Bespoke Destination Management',
+          summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.',
+          ...settingsMap.introduction
+        },
+        ...settingsMap
+      };
+
+      setSettings(finalSettings);
     }
     setLoading(false);
   };
@@ -727,7 +846,7 @@ function AdminPageCustomization() {
     setSaving(true);
     const { error } = await supabase
       .from('site_settings')
-      .upsert({ key, value }, { onConflict: 'key' });
+      .upsert({ key: `${key}:draft`, value }, { onConflict: 'key' });
     
     if (!error) {
       setSettings({ ...settings, [key]: value });
@@ -735,23 +854,97 @@ function AdminPageCustomization() {
     setSaving(false);
   };
 
+  const publishSettings = async () => {
+    setPublishing(true);
+    try {
+      // Get all draft settings
+      const { data: draftData } = await supabase
+        .from('site_settings')
+        .select('*')
+        .like('key', '%:draft');
+
+      if (draftData) {
+        const publishPromises = draftData.map(draft => {
+          const publishedKey = draft.key.replace(':draft', ':published');
+          return supabase
+            .from('site_settings')
+            .upsert({ key: publishedKey, value: draft.value }, { onConflict: 'key' });
+        });
+        await Promise.all(publishPromises);
+        alert('Website published successfully!');
+      }
+    } catch (error) {
+      console.error('Error publishing:', error);
+      alert('Failed to publish. Please try again.');
+    }
+    setPublishing(false);
+  };
+
+  const handlePreview = () => {
+    window.open(`${window.location.origin}/?preview=true`, '_blank');
+  };
+
+  const uploadFile = async (file: File, path: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `${path}/${fileName}`;
+
+    const { error: uploadError, data } = await supabase.storage
+      .from('site-assets')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      // If bucket doesn't exist, we might need to handle it, but for now assume it does
+      console.error('Upload error:', uploadError);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('site-assets')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div></div>;
 
   return (
     <div className="max-w-5xl">
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-3xl font-serif text-brand-navy">Page Customization</h1>
-        {saving && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-teal animate-pulse">Saving changes...</span>}
+        <div>
+          <h1 className="text-3xl font-serif text-brand-navy">Page Customization</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mt-2">Manage your website content and appearance</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handlePreview}
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-brand-navy/10 rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-paper transition-all"
+          >
+            <Eye size={14} />
+            Preview
+          </button>
+          <button 
+            onClick={publishSettings}
+            disabled={publishing}
+            className="flex items-center gap-2 px-6 py-3 bg-brand-navy text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all shadow-lg shadow-brand-navy/10 disabled:opacity-50"
+          >
+            {publishing ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            Publish to Website
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
+          <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
         {[
           { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
           { id: 'pages', label: 'Custom Pages', icon: <FileText size={14} /> },
           { id: 'hero', label: 'Hero & Intro', icon: <Image size={14} /> },
           { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
           { id: 'retreats', label: 'Featured Retreats', icon: <Hotel size={14} /> },
-          { id: 'partner', label: 'Partner Section', icon: <Users size={14} /> },
           { id: 'footer', label: 'Footer', icon: <Settings size={14} /> }
         ].map(tab => (
           <button
@@ -827,17 +1020,29 @@ function AdminPageCustomization() {
                   <LogoInput 
                     label="Primary Logo" 
                     value={settings.logos?.primary} 
-                    onChange={(val) => saveSetting('logos', { ...settings.logos, primary: val })} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'logos');
+                      if (url) saveSetting('logos', { ...settings.logos, primary: url });
+                    }}
+                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, primary: val })} 
                   />
                   <LogoInput 
                     label="White Logo" 
                     value={settings.logos?.white} 
-                    onChange={(val) => saveSetting('logos', { ...settings.logos, white: val })} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'logos');
+                      if (url) saveSetting('logos', { ...settings.logos, white: url });
+                    }}
+                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, white: val })} 
                   />
                   <LogoInput 
                     label="Black Logo" 
                     value={settings.logos?.black} 
-                    onChange={(val) => saveSetting('logos', { ...settings.logos, black: val })} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'logos');
+                      if (url) saveSetting('logos', { ...settings.logos, black: url });
+                    }}
+                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, black: val })} 
                   />
                 </div>
               </section>
@@ -903,6 +1108,19 @@ function AdminPageCustomization() {
               <section>
                 <h3 className="text-xl font-serif text-brand-navy mb-6">Hero Banner</h3>
                 <div className="space-y-6">
+                  <BannerInput 
+                    label="Banner Media (Image or Video)"
+                    value={settings.hero?.banner_url}
+                    type={settings.hero?.banner_type || 'image'}
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'banners');
+                      if (url) {
+                        const type = file.type.startsWith('video/') ? 'video' : 'image';
+                        saveSetting('hero', { ...settings.hero, banner_url: url, banner_type: type });
+                      }
+                    }}
+                    onChange={(val: string) => saveSetting('hero', { ...settings.hero, banner_url: val })}
+                  />
                   <TextInput 
                     label="Main Title" 
                     value={settings.hero?.title} 
@@ -935,7 +1153,35 @@ function AdminPageCustomization() {
 
           {activeTab === 'why' && (
             <div className="space-y-6">
-              <h3 className="text-xl font-serif text-brand-navy mb-6">Why Us Pillars</h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-serif text-brand-navy">Why Us Pillars</h3>
+                <button 
+                  onClick={() => {
+                    const defaultPillars = [
+                      {
+                        title: "Authentic Connections",
+                        description: "We focus on fostering genuine relationships with our B2B partners by understanding their needs and providing personalized solutions."
+                      },
+                      {
+                        title: "Curated Luxury",
+                        description: "Our strategy centers on curating unique luxury experiences that showcase the beauty and culture of the Maldives."
+                      },
+                      {
+                        title: "Streamlined Collaboration",
+                        description: "We aim to enhance collaboration that simplify the booking process and improve communication, ensuring seamless service delivery."
+                      },
+                      {
+                        title: "Tailored Support",
+                        description: "We offer dedicated support to our partners, providing them with the insights and resources needed to effectively promote our offerings."
+                      }
+                    ];
+                    saveSetting('why_us', defaultPillars);
+                  }}
+                  className="text-[10px] font-bold text-brand-teal uppercase tracking-widest hover:underline"
+                >
+                  Reset to Defaults
+                </button>
+              </div>
               {(settings.why_us || []).map((pillar: any, idx: number) => (
                 <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
                   <button 
@@ -1005,35 +1251,6 @@ function AdminPageCustomization() {
             </div>
           )}
 
-          {activeTab === 'partner' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-serif text-brand-navy mb-6">Become a Partner</h3>
-              <TextInput 
-                label="Section Title" 
-                value={settings.partner?.title} 
-                onChange={(val) => saveSetting('partner', { ...settings.partner, title: val })} 
-              />
-              <TextAreaInput 
-                label="Summary" 
-                value={settings.partner?.summary} 
-                onChange={(val) => saveSetting('partner', { ...settings.partner, summary: val })} 
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TextInput 
-                  label="Become an Agent URL" 
-                  value={settings.partner?.agent_url} 
-                  onChange={(val) => saveSetting('partner', { ...settings.partner, agent_url: val })} 
-                  icon={<Link2 size={14} />}
-                />
-                <TextInput 
-                  label="Travel Guide URL" 
-                  value={settings.partner?.guide_url} 
-                  onChange={(val) => saveSetting('partner', { ...settings.partner, guide_url: val })} 
-                  icon={<Link2 size={14} />}
-                />
-              </div>
-            </div>
-          )}
 
           {activeTab === 'footer' && (
             <div className="space-y-8">
@@ -1181,23 +1398,90 @@ function TextAreaInput({ label, value, onChange }: any) {
   );
 }
 
-function LogoInput({ label, value, onChange }: any) {
+function LogoInput({ label, value, onUpload, onChange }: any) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   return (
     <div className="bg-brand-paper/30 p-4 rounded-2xl">
       <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-4 font-sans">{label}</label>
-      <div className="bg-white p-4 rounded-xl mb-4 flex items-center justify-center h-24 overflow-hidden border border-brand-navy/5">
+      <div className="bg-white p-4 rounded-xl mb-4 flex items-center justify-center h-24 overflow-hidden border border-brand-navy/5 relative group">
         {value ? (
           <img src={value} alt={label} className="max-h-full object-contain" referrerPolicy="no-referrer" />
         ) : (
           <div className="text-brand-navy/10"><Image size={32} /></div>
         )}
+        <div className="absolute inset-0 bg-brand-navy/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2 bg-white rounded-full text-brand-navy hover:bg-brand-teal hover:text-white transition-all"
+          >
+            <Upload size={16} />
+          </button>
+        </div>
       </div>
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUpload(file);
+        }}
+      />
       <input
         type="text"
         placeholder="Logo URL"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-white border-none rounded-lg px-3 py-2 text-[10px] focus:ring-1 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy"
+      />
+    </div>
+  );
+}
+
+function BannerInput({ label, value, type, onUpload, onChange }: any) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="bg-brand-paper/30 p-6 rounded-3xl">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-4 font-sans">{label}</label>
+      <div className="bg-white rounded-2xl mb-4 flex items-center justify-center aspect-video overflow-hidden border border-brand-navy/5 relative group">
+        {value ? (
+          type === 'video' ? (
+            <video src={value} className="w-full h-full object-cover" controls />
+          ) : (
+            <img src={value} alt={label} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          )
+        ) : (
+          <div className="text-brand-navy/10"><Image size={48} /></div>
+        )}
+        <div className="absolute inset-0 bg-brand-navy/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4">
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-6 py-3 bg-white rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-teal hover:text-white transition-all"
+          >
+            <Upload size={14} />
+            Upload File
+          </button>
+        </div>
+      </div>
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*,video/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUpload(file);
+        }}
+      />
+      <input
+        type="text"
+        placeholder="Media URL"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy"
       />
     </div>
   );
