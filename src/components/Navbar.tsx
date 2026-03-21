@@ -21,63 +21,68 @@ export default function Navbar({ user, role }: NavbarProps) {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#1a1a1a]/10">
+    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-brand-navy/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
-              <div className="relative w-10 h-10 flex items-center justify-center">
-                {/* Stylized seashell/scallop symbol in teal gradient */}
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                {/* Recreated Shell Icon from Brand Guidelines */}
                 <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
                   <defs>
-                    <linearGradient id="shellGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#008080" />
-                      <stop offset="100%" stopColor="#20b2aa" />
+                    <linearGradient id="brandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#3fabb6" />
+                      <stop offset="100%" stopColor="#d9af89" />
                     </linearGradient>
                   </defs>
-                  <path 
-                    d="M50 10 C30 10 10 30 10 50 C10 70 30 90 50 90 C70 90 90 70 90 50 C90 30 70 10 50 10 Z M50 80 C35 80 20 65 20 50 C20 35 35 20 50 20 C65 20 80 35 80 50 C80 65 65 80 50 80 Z" 
-                    fill="url(#shellGradient)" 
-                  />
-                  <path 
-                    d="M50 25 C40 25 30 35 30 50 C30 65 40 75 50 75 C60 75 70 65 70 50 C70 35 60 25 50 25 Z" 
-                    fill="url(#shellGradient)" 
-                    opacity="0.6"
-                  />
+                  {/* Fan-like shell segments */}
+                  <path d="M50 85 C50 85 20 75 10 50 C10 25 30 15 50 15 C70 15 90 25 90 50 C80 75 50 85 50 85 Z" fill="none" stroke="url(#brandGradient)" strokeWidth="0.5" opacity="0.2" />
+                  <g fill="url(#brandGradient)">
+                    <path d="M50 80 L45 30 A25 25 0 0 1 55 30 Z" />
+                    <path d="M50 80 L30 35 A30 30 0 0 1 40 28 Z" transform="rotate(-15 50 80)" />
+                    <path d="M50 80 L15 45 A35 35 0 0 1 25 35 Z" transform="rotate(-35 50 80)" />
+                    <path d="M50 80 L70 35 A30 30 0 0 0 60 28 Z" transform="rotate(15 50 80)" />
+                    <path d="M50 80 L85 45 A35 35 0 0 0 75 35 Z" transform="rotate(35 50 80)" />
+                  </g>
                 </svg>
               </div>
-              <span className="text-xl font-serif font-bold tracking-tighter text-brand-ink">
-                EXCITING<span className="text-brand-teal">ING</span> MALDIVES
-              </span>
+              <div className="flex flex-col leading-none">
+                <span className="text-xl font-serif font-bold tracking-[0.1em] text-brand-navy uppercase">
+                  Exciting
+                </span>
+                <span className="text-[10px] font-sans font-bold tracking-[0.5em] text-brand-teal uppercase ml-0.5">
+                  Maldives
+                </span>
+              </div>
             </Link>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/resorts" className="text-sm font-medium uppercase tracking-widest hover:text-brand-teal transition-colors">Resorts</Link>
-            <Link to="/map" className="text-sm font-medium uppercase tracking-widest hover:text-brand-teal transition-colors">Map</Link>
-            <Link to="/tourist-info" className="text-sm font-medium uppercase tracking-widest hover:text-brand-teal transition-colors">Info</Link>
+            <Link to="/resorts" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Resorts</Link>
+            <Link to="/map" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Map</Link>
+            <Link to="/tourist-info" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Info</Link>
             
             {user ? (
               <div className="flex items-center space-x-6">
                 {role === 'agent' && (
-                  <Link to="/agent" className="text-sm font-medium uppercase tracking-widest text-brand-teal">Agent Portal</Link>
+                  <Link to="/agent" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Agent Portal</Link>
                 )}
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
-                  <Link to="/admin" className="text-sm font-medium uppercase tracking-widest text-brand-teal">Admin</Link>
+                  <Link to="/admin" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Admin</Link>
                 )}
                 <button 
                   onClick={handleLogout}
-                  className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  className="p-2 rounded-full hover:bg-brand-paper transition-colors text-brand-navy"
                   title="Logout"
                 >
-                  <LogOut size={20} />
+                  <LogOut size={18} />
                 </button>
               </div>
             ) : (
               <Link 
                 to="/login" 
-                className="bg-brand-ink text-white px-6 py-2 rounded-full text-sm font-medium uppercase tracking-widest hover:bg-brand-teal transition-colors"
+                className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
               >
                 Agent Login
               </Link>

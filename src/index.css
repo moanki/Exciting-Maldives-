@@ -5,10 +5,14 @@
   --font-serif: "Playfair Display", serif;
   --font-sans: "Raleway", sans-serif;
   
-  --color-brand-teal: #008080;
-  --color-brand-teal-light: #20b2aa;
+  --color-brand-teal: #3fabb6;
+  --color-brand-deep-teal: #328c97;
+  --color-brand-beige: #d9af89;
+  --color-brand-coral: #ff6b51;
+  --color-brand-yellow: #ffd54f;
+  --color-brand-navy: #003366;
   --color-brand-paper: #f5f2ed;
-  --color-brand-ink: #1a1a1a;
+  --color-brand-ink: #003366; /* Using Midnight Navy for text */
 }
 
 @layer base {

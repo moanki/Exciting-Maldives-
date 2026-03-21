@@ -9,11 +9,11 @@ export default function AdminDashboard() {
   const location = useLocation();
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-brand-paper/10">
       {/* Sidebar */}
-      <aside className="w-64 bg-brand-ink text-white p-6 flex flex-col">
+      <aside className="w-64 bg-brand-navy text-white p-6 flex flex-col shadow-2xl">
         <div className="mb-12">
-          <h2 className="text-xl font-serif font-bold tracking-tighter">ADMIN CENTER</h2>
+          <h2 className="text-xl font-serif font-bold tracking-[0.2em] text-brand-beige">ADMIN CENTER</h2>
         </div>
         
         <nav className="flex-1 space-y-2">
@@ -60,10 +60,10 @@ function AdminResources() {
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-3xl font-serif text-brand-ink">Resource Library</h1>
+        <h1 className="text-3xl font-serif text-brand-navy">Resource Library</h1>
         <button 
           onClick={() => setIsAdding(true)}
-          className="bg-brand-teal text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-brand-teal/80 transition-all flex items-center gap-2 font-sans"
+          className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20"
         >
           <Plus size={16} /> Add Resource
         </button>
@@ -71,17 +71,17 @@ function AdminResources() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {resources.map(resource => (
-          <div key={resource.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-            <div className="bg-gray-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 text-brand-teal">
+          <div key={resource.id} className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 hover:shadow-2xl transition-all">
+            <div className="bg-brand-paper w-12 h-12 rounded-2xl flex items-center justify-center mb-4 text-brand-teal">
               <FileText size={24} />
             </div>
-            <h3 className="text-xl font-serif text-brand-ink mb-2">{resource.title}</h3>
-            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-4 font-sans">{resource.type}</p>
+            <h3 className="text-xl font-serif text-brand-navy mb-2">{resource.title}</h3>
+            <p className="text-[10px] text-brand-navy/30 uppercase tracking-widest font-bold mb-4 font-sans">{resource.type}</p>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-400 font-sans">{resource.size}</span>
+              <span className="text-[10px] text-brand-navy/30 font-bold font-sans">{resource.size}</span>
               <div className="flex gap-2">
-                <button className="p-2 text-gray-400 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
-                <button className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                <button className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
               </div>
             </div>
           </div>
@@ -96,20 +96,42 @@ function SidebarLink({ to, icon, label, active }: any) {
     <Link 
       to={to} 
       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-sans ${
-        active ? 'bg-brand-teal text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'
+        active ? 'bg-brand-teal text-white shadow-lg shadow-brand-teal/20' : 'text-white/40 hover:text-white hover:bg-white/5'
       }`}
     >
       {icon}
-      <span className="text-sm font-medium uppercase tracking-widest">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
     </Link>
   );
 }
 
 function AdminOverview() {
   const [seeding, setSeeding] = useState(false);
+  const [seedStatus, setSeedStatus] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'testing' | 'success' | 'failed'>('testing');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const { data, error } = await supabase.from('resorts').select('id').limit(1);
+        if (error) {
+          setConnectionStatus('failed');
+          setErrorMsg(error.message);
+        } else {
+          setConnectionStatus('success');
+        }
+      } catch (err: any) {
+        setConnectionStatus('failed');
+        setErrorMsg(err.message);
+      }
+    };
+    testConnection();
+  }, []);
 
   const seedData = async () => {
     setSeeding(true);
+    setSeedStatus('Seeding resorts...');
     const sampleResorts = [
       {
         name: "Soneva Fushi",
@@ -249,6 +271,7 @@ function AdminOverview() {
 
       // Seed some demo requests
       if (resorts && resorts.length > 0) {
+        setSeedStatus('Seeding booking requests...');
         const demoRequests = [
           {
             agent_id: 'demo-id',
@@ -271,13 +294,15 @@ function AdminOverview() {
             status: 'in_progress'
           }
         ];
-        await supabase.from('booking_requests').insert(demoRequests);
+        const { error: bookingError } = await supabase.from('booking_requests').insert(demoRequests);
+        if (bookingError) throw bookingError;
       }
 
-      alert('Sample data seeded successfully!');
+      setSeedStatus('Success! Sample data seeded.');
+      setTimeout(() => setSeedStatus(null), 5000);
     } catch (err: any) {
       console.error('Seeding failed:', err.message);
-      alert('Seeding failed: ' + err.message);
+      setSeedStatus('Error: ' + err.message);
     } finally {
       setSeeding(false);
     }
@@ -286,36 +311,57 @@ function AdminOverview() {
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-serif text-brand-ink">System Overview</h1>
-        <button 
-          onClick={seedData}
-          disabled={seeding}
-          className="bg-brand-teal text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-brand-teal/80 transition-all disabled:opacity-50 font-sans"
-        >
-          {seeding ? 'Seeding...' : 'Seed Sample Data'}
-        </button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-serif text-brand-navy">System Overview</h1>
+          <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans flex items-center gap-2 ${
+            connectionStatus === 'success' ? 'bg-green-50 text-green-600' : 
+            connectionStatus === 'failed' ? 'bg-brand-coral/10 text-brand-coral' : 'bg-brand-paper text-brand-navy/30'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              connectionStatus === 'success' ? 'bg-green-500' : 
+              connectionStatus === 'failed' ? 'bg-brand-coral' : 'bg-brand-navy/20 animate-pulse'
+            }`} />
+            Supabase: {connectionStatus === 'success' ? 'Connected' : connectionStatus === 'failed' ? 'Error' : 'Testing...'}
+          </div>
+        </div>
+        <div className="flex gap-4 items-center">
+          {seedStatus && (
+            <div className={`text-[10px] font-bold uppercase tracking-widest font-sans ${
+              seedStatus.startsWith('Error') ? 'text-brand-coral' : 
+              seedStatus.startsWith('Success') ? 'text-green-600' : 'text-brand-teal animate-pulse'
+            }`}>
+              {seedStatus}
+            </div>
+          )}
+          {connectionStatus === 'failed' && (
+            <div className="text-[10px] text-brand-coral font-sans max-w-xs truncate" title={errorMsg}>
+              {errorMsg}
+            </div>
+          )}
+          <button 
+            onClick={seedData}
+            disabled={seeding || connectionStatus !== 'success'}
+            className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50 font-sans shadow-lg shadow-brand-teal/20"
+          >
+            {seeding ? 'Seeding...' : 'Seed Sample Data'}
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-        <StatCard label="Total Resorts" value="42" color="blue" />
-        <StatCard label="Active Agents" value="156" color="green" />
-        <StatCard label="New Requests" value="12" color="orange" />
-        <StatCard label="Active Chats" value="5" color="purple" />
+        <StatCard label="Total Resorts" value="42" />
+        <StatCard label="Active Agents" value="156" />
+        <StatCard label="New Requests" value="12" />
+        <StatCard label="Active Chats" value="5" />
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, color }: any) {
-  const colors: any = {
-    blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
-    orange: 'bg-orange-50 text-orange-600',
-    purple: 'bg-purple-50 text-purple-600'
-  };
+function StatCard({ label, value }: any) {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-      <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1 font-sans">{label}</p>
-      <p className="text-3xl font-serif text-brand-ink">{value}</p>
+    <div className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5">
+      <p className="text-[10px] uppercase tracking-widest font-bold text-brand-navy/30 mb-1 font-sans">{label}</p>
+      <p className="text-3xl font-serif text-brand-navy">{value}</p>
     </div>
   );
 }
@@ -375,47 +421,47 @@ function AdminResorts() {
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-3xl font-serif text-brand-ink">Resort Management</h1>
+        <h1 className="text-3xl font-serif text-brand-navy">Resort Management</h1>
         <div className="flex gap-4">
-          <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-brand-teal/80 transition-all flex items-center gap-2 font-sans">
+          <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
             <Upload size={16} /> {aiProcessing ? 'AI Extracting...' : 'AI Upload PDF'}
             <input type="file" className="hidden" accept=".pdf" onChange={handleFileUpload} disabled={aiProcessing} />
           </label>
           <button 
             onClick={() => setIsAdding(true)}
-            className="bg-brand-ink text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-brand-ink/80 transition-all flex items-center gap-2 font-sans"
+            className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
           >
             <Plus size={16} /> Manual Add
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-100">
+          <thead className="bg-brand-paper border-b border-brand-navy/5">
             <tr>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Resort Name</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Atoll</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Category</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Status</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Actions</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Resort Name</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Atoll</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Category</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Status</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-brand-paper">
             {resorts.map(resort => (
-              <tr key={resort.id} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-6 py-4 font-medium text-brand-ink font-sans">{resort.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-500 font-sans">{resort.atoll}</td>
-                <td className="px-6 py-4 text-sm text-gray-500 font-sans">{resort.category}</td>
+              <tr key={resort.id} className="hover:bg-brand-paper/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-navy font-sans">{resort.name}</td>
+                <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{resort.atoll}</td>
+                <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{resort.category}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${resort.is_featured ? 'bg-yellow-50 text-yellow-600' : 'bg-gray-50 text-gray-400'}`}>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${resort.is_featured ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-paper text-brand-navy/30'}`}>
                     {resort.is_featured ? 'Featured' : 'Standard'}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
-                    <button className="p-2 text-gray-400 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
-                    <button className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                    <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                    <button className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
                   </div>
                 </td>
               </tr>
@@ -457,17 +503,17 @@ function AdminBookings() {
 
   return (
     <div>
-      <h1 className="text-3xl font-serif mb-10 text-brand-ink">Booking Requests</h1>
+      <h1 className="text-3xl font-serif mb-10 text-brand-navy">Booking Requests</h1>
       <div className="space-y-4">
         {bookings.map(booking => (
-          <div key={booking.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div key={booking.id} className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 flex items-center justify-between hover:shadow-2xl transition-all">
             <div className="flex items-center gap-6">
-              <div className="bg-gray-50 p-4 rounded-2xl text-brand-teal">
+              <div className="bg-brand-paper p-4 rounded-2xl text-brand-teal">
                 <FileText size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-serif text-brand-ink">{booking.resort_name}</h3>
-                <p className="text-xs text-gray-400 uppercase tracking-widest font-sans">
+                <h3 className="text-xl font-serif text-brand-navy">{booking.resort_name}</h3>
+                <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">
                   {booking.check_in} - {booking.check_out} • {booking.guests} Guests • {booking.room_type}
                 </p>
               </div>
@@ -476,14 +522,14 @@ function AdminBookings() {
               <select 
                 value={booking.status}
                 onChange={(e) => updateStatus(booking.id, e.target.value)}
-                className="bg-gray-50 border-none rounded-xl text-xs font-bold uppercase tracking-widest px-4 py-2 focus:ring-0 font-sans"
+                className="bg-brand-paper border-none rounded-xl text-[10px] font-bold uppercase tracking-widest px-4 py-2 focus:ring-0 font-sans text-brand-navy"
               >
                 <option value="new">New</option>
                 <option value="in_progress">In Progress</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
-              <button className="bg-brand-ink text-white p-2 rounded-full hover:bg-brand-teal transition-colors">
+              <button className="bg-brand-navy text-white p-2 rounded-full hover:bg-brand-teal transition-colors shadow-lg shadow-brand-navy/10">
                 <MessageSquare size={16} />
               </button>
             </div>
@@ -524,26 +570,26 @@ function AdminAgents() {
 
   return (
     <div>
-      <h1 className="text-3xl font-serif mb-10 text-brand-ink">Agent Management</h1>
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <h1 className="text-3xl font-serif mb-10 text-brand-navy">Agent Management</h1>
+      <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-100">
+          <thead className="bg-brand-paper border-b border-brand-navy/5">
             <tr>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Agent Name</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Email</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Status</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400 font-sans">Actions</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Agent Name</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Email</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Status</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-brand-paper">
             {agents.map(agent => (
-              <tr key={agent.id}>
-                <td className="px-6 py-4 font-medium text-brand-ink font-sans">{agent.full_name}</td>
-                <td className="px-6 py-4 text-sm text-gray-500 font-sans">{agent.email}</td>
+              <tr key={agent.id} className="hover:bg-brand-paper/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-navy font-sans">{agent.full_name}</td>
+                <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{agent.email}</td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${
                     agent.status === 'active' ? 'bg-green-50 text-green-600' : 
-                    agent.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
+                    agent.status === 'pending' ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-coral/10 text-brand-coral'
                   }`}>
                     {agent.status}
                   </span>
@@ -560,7 +606,7 @@ function AdminAgents() {
                     )}
                     <button 
                       onClick={() => updateStatus(agent.id, agent.status === 'active' ? 'deactivated' : 'active')}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
                     >
                       <X size={16} />
                     </button>
