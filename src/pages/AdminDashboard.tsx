@@ -248,11 +248,26 @@ create table if not exists public.messages (
 );
 
 -- 8. Storage Buckets
-insert into storage.buckets (id, name, public) values ('site-assets', 'site-assets', true) on conflict do nothing;
-create policy "Public Access" on storage.objects for select using (bucket_id = 'site-assets');
-create policy "Admin Insert" on storage.objects for insert with check (bucket_id = 'site-assets');
-create policy "Admin Update" on storage.objects for update using (bucket_id = 'site-assets');
-create policy "Admin Delete" on storage.objects for delete using (bucket_id = 'site-assets');
+insert into storage.buckets (id, name, public) values 
+  ('site-assets', 'site-assets', true),
+  ('resort-images', 'resort-images', true),
+  ('documents', 'documents', true)
+on conflict do nothing;
+
+create policy "Public Access site-assets" on storage.objects for select using (bucket_id = 'site-assets');
+create policy "Admin Insert site-assets" on storage.objects for insert with check (bucket_id = 'site-assets');
+create policy "Admin Update site-assets" on storage.objects for update using (bucket_id = 'site-assets');
+create policy "Admin Delete site-assets" on storage.objects for delete using (bucket_id = 'site-assets');
+
+create policy "Public Access resort-images" on storage.objects for select using (bucket_id = 'resort-images');
+create policy "Admin Insert resort-images" on storage.objects for insert with check (bucket_id = 'resort-images');
+create policy "Admin Update resort-images" on storage.objects for update using (bucket_id = 'resort-images');
+create policy "Admin Delete resort-images" on storage.objects for delete using (bucket_id = 'resort-images');
+
+create policy "Public Access documents" on storage.objects for select using (bucket_id = 'documents');
+create policy "Admin Insert documents" on storage.objects for insert with check (bucket_id = 'documents');
+create policy "Admin Update documents" on storage.objects for update using (bucket_id = 'documents');
+create policy "Admin Delete documents" on storage.objects for delete using (bucket_id = 'documents');
 
 -- Enable RLS
 alter table public.profiles enable row level security;
@@ -272,7 +287,12 @@ create policy "Admin manage resorts" on public.resorts for all using (true);
 create policy "Public insert partner_requests" on public.partner_requests for insert with check (true);
 create policy "Admin manage partner_requests" on public.partner_requests for all using (true);
 create policy "Public insert agents" on public.agents for insert with check (true);
-create policy "Admin manage agents" on public.agents for all using (true);`;
+create policy "Admin manage agents" on public.agents for all using (true);
+create policy "Agents read own record" on public.agents for select using (auth.uid() = id);
+create policy "Public read profiles" on public.profiles for select using (true);
+
+-- Enable Realtime for messages
+alter publication supabase_realtime add table messages;`;
 
   useEffect(() => {
     const testConnection = async () => {
@@ -1099,23 +1119,27 @@ function AdminPageCustomization() {
     window.open(`${window.location.origin}/?preview=true`, '_blank');
   };
 
-  const uploadFile = async (file: File, path: string) => {
+  const uploadFile = async (file: File, path: string, bucket: string = 'site-assets') => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${path}/${fileName}`;
 
     const { error: uploadError, data } = await supabase.storage
-      .from('site-assets')
+      .from(bucket)
       .upload(filePath, file);
 
     if (uploadError) {
-      // If bucket doesn't exist, we might need to handle it, but for now assume it does
       console.error('Upload error:', uploadError);
+      if (uploadError.message.includes('Bucket not found')) {
+        alert(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
+      } else {
+        alert(`Upload error: ${uploadError.message}`);
+      }
       return null;
     }
 
     const { data: { publicUrl } } = supabase.storage
-      .from('site-assets')
+      .from(bucket)
       .getPublicUrl(filePath);
 
     return publicUrl;
