@@ -46,11 +46,17 @@ export default function BecomePartner() {
       return;
     }
 
+    const countryName = countryCodes.find(c => c.code === formData.country_code)?.name || 'Unknown';
+
     const { error } = await supabase
-      .from('agents')
+      .from('partner_requests')
       .insert([
         {
-          ...formData,
+          full_name: formData.full_name,
+          email: formData.email,
+          company_name: formData.company_name,
+          website: formData.website,
+          country: countryName,
           phone: `${formData.country_code} ${formData.phone}`,
           status: 'pending'
         }
@@ -59,7 +65,7 @@ export default function BecomePartner() {
     if (!error) {
       setSubmitted(true);
     } else {
-      alert('Error submitting request. Please try again.');
+      alert('Error submitting request details. Please try again.');
     }
     setLoading(false);
   };
@@ -77,7 +83,7 @@ export default function BecomePartner() {
           </div>
           <h2 className="text-3xl font-serif text-brand-navy mb-4">Request Received</h2>
           <p className="text-brand-navy/60 font-sans leading-relaxed mb-8">
-            Thank you for your interest in partnering with us. Our team will review your application and get back to you shortly.
+            Thank you for your interest in partnering with us. Our team will review your application and get back to you shortly. For follow-ups, feel free to contact us via email or phone.
           </p>
           <button 
             onClick={() => window.location.href = '/'}

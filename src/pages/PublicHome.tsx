@@ -229,8 +229,8 @@ export default function PublicHome() {
             {partner.summary}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/become-agent" className="bg-white text-brand-navy px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all font-sans">
-              Become an Agent
+            <Link to="/become-partner" className="bg-white text-brand-navy px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all font-sans">
+              Become a Partner
             </Link>
             <Link to={partner.guide_url} className="border border-white/20 px-10 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-white hover:text-brand-navy transition-all font-sans">
               Travel Guide

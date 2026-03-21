@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/ai';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,16 +27,48 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-10 overflow-y-auto">
-        <Routes>
-          <Route path="/" element={<AdminOverview />} />
-          <Route path="/resorts" element={<AdminResorts />} />
-          <Route path="/bookings" element={<AdminBookings />} />
-          <Route path="/partners" element={<AdminPartners />} />
-          <Route path="/customization" element={<AdminPageCustomization />} />
-          <Route path="/resources" element={<AdminResources />} />
-        </Routes>
-      </main>
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        {/* Header */}
+        <header className="h-20 bg-white border-b border-brand-navy/5 flex items-center justify-between px-10 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-brand-paper rounded-xl flex items-center justify-center text-brand-teal">
+              <Shield size={20} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-brand-navy uppercase tracking-widest">Admin Control Center</h2>
+              <p className="text-[10px] text-brand-navy/40 font-medium">System Management & Content Control</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-bold text-brand-navy">Administrator</span>
+              <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">Super Admin</span>
+            </div>
+            <button 
+              onClick={() => {
+                localStorage.removeItem('demo_mode');
+                supabase.auth.signOut();
+                window.location.href = '/';
+              }}
+              className="p-3 bg-brand-paper rounded-xl text-brand-navy/40 hover:text-brand-coral hover:bg-brand-coral/5 transition-all"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-10 bg-brand-paper/30">
+          <Routes>
+            <Route path="/" element={<AdminOverview />} />
+            <Route path="/resorts" element={<AdminResorts />} />
+            <Route path="/bookings" element={<AdminBookings />} />
+            <Route path="/partners" element={<AdminPartners />} />
+            <Route path="/customization" element={<AdminPageCustomization />} />
+            <Route path="/resources" element={<AdminResources />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   );
 }
@@ -112,6 +144,135 @@ function AdminOverview() {
   const [seedStatus, setSeedStatus] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'success' | 'failed'>('testing');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showSql, setShowSql] = useState(false);
+  const [stats, setStats] = useState({
+    totalResorts: 0,
+    activePartners: 0,
+    newRequests: 0,
+    activeChats: 0
+  });
+
+  const schemaSql = `-- Supabase Schema for Exciting Maldives
+
+-- 1. Profiles (Admins)
+create table if not exists public.profiles (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique not null,
+  role text check (role in ('admin', 'superadmin')) default 'admin',
+  full_name text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. Agents (Partners)
+create table if not exists public.agents (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique not null,
+  full_name text not null,
+  company_name text not null,
+  country text not null,
+  website text,
+  phone text,
+  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2.5 Partner Requests (Public Form Submissions)
+create table if not exists public.partner_requests (
+  id uuid default gen_random_uuid() primary key,
+  email text not null,
+  full_name text not null,
+  company_name text not null,
+  country text not null,
+  website text,
+  phone text,
+  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3. Resorts
+create table if not exists public.resorts (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  atoll text not null,
+  category text not null,
+  transfer_type text not null,
+  description text,
+  images text[],
+  highlights text[],
+  meal_plans text[],
+  room_types jsonb[],
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 4. Booking Requests
+create table if not exists public.booking_requests (
+  id uuid default gen_random_uuid() primary key,
+  agent_id uuid references auth.users on delete set null,
+  resort_id uuid references public.resorts on delete set null,
+  resort_name text not null,
+  check_in date not null,
+  check_out date not null,
+  guests integer not null,
+  room_type text not null,
+  notes text,
+  status text check (status in ('new', 'processing', 'confirmed', 'cancelled')) default 'new',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 5. Site Settings
+create table if not exists public.site_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6. Resources
+create table if not exists public.resources (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  category text not null,
+  type text not null,
+  size text,
+  file_url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 7. Messages
+create table if not exists public.messages (
+  id uuid default gen_random_uuid() primary key,
+  chat_id text not null,
+  text text not null,
+  sender_id uuid references auth.users on delete set null,
+  sender_name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 8. Storage Buckets
+insert into storage.buckets (id, name, public) values ('site-assets', 'site-assets', true) on conflict do nothing;
+create policy "Public Access" on storage.objects for select using (bucket_id = 'site-assets');
+create policy "Admin Insert" on storage.objects for insert with check (bucket_id = 'site-assets');
+create policy "Admin Update" on storage.objects for update using (bucket_id = 'site-assets');
+create policy "Admin Delete" on storage.objects for delete using (bucket_id = 'site-assets');
+
+-- Enable RLS
+alter table public.profiles enable row level security;
+alter table public.agents enable row level security;
+alter table public.partner_requests enable row level security;
+alter table public.resorts enable row level security;
+alter table public.booking_requests enable row level security;
+alter table public.site_settings enable row level security;
+alter table public.resources enable row level security;
+alter table public.messages enable row level security;
+
+-- RLS Policies (Simplified for setup)
+create policy "Public read site_settings" on public.site_settings for select using (true);
+create policy "Admin manage site_settings" on public.site_settings for all using (true);
+create policy "Public read resorts" on public.resorts for select using (true);
+create policy "Admin manage resorts" on public.resorts for all using (true);
+create policy "Public insert partner_requests" on public.partner_requests for insert with check (true);
+create policy "Admin manage partner_requests" on public.partner_requests for all using (true);
+create policy "Public insert agents" on public.agents for insert with check (true);
+create policy "Admin manage agents" on public.agents for all using (true);`;
 
   useEffect(() => {
     const testConnection = async () => {
@@ -120,6 +281,9 @@ function AdminOverview() {
         if (error) {
           setConnectionStatus('failed');
           setErrorMsg(error.message);
+          if (error.message.includes('site_settings') || error.message.includes('resorts')) {
+            setShowSql(true);
+          }
         } else {
           setConnectionStatus('success');
         }
@@ -129,256 +293,120 @@ function AdminOverview() {
       }
     };
     testConnection();
+    fetchStats();
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      const { count: resortsCount } = await supabase.from('resorts').select('*', { count: 'exact', head: true });
+      const { count: partnersCount } = await supabase.from('partner_requests').select('*', { count: 'exact', head: true }).eq('status', 'approved');
+      const { count: requestsCount } = await supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      
+      setStats({
+        totalResorts: resortsCount || 0,
+        activePartners: partnersCount || 0,
+        newRequests: requestsCount || 0,
+        activeChats: 5
+      });
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  };
 
   const seedData = async () => {
     setSeeding(true);
-    setSeedStatus('Seeding resorts...');
-    const sampleResorts = [
-      {
-        name: "Soneva Fushi",
-        atoll: "Baa Atoll",
-        location: "Kunfunadhoo Island",
-        description: "The original desert island hideaway in the Maldives. Soneva Fushi is located in the Baa Atoll UNESCO Biosphere Reserve.",
-        category: "Ultra-Luxury",
-        transfer_type: "Seaplane",
-        meal_plans: ["Bed & Breakfast", "Half Board", "Full Board"],
-        room_types: [{ name: "Crusoe Villa", max_guests: 2, size: "235sqm" }],
-        highlights: ["Eco-friendly", "Private Cinema", "Observatory"],
-        images: ["https://picsum.photos/seed/soneva/1200/800"],
-        is_featured: true
-      },
-      {
-        name: "Gili Lankanfushi",
-        atoll: "North Malé Atoll",
-        location: "Lankanfushi Island",
-        description: "An eco-friendly resort that combines rustic chic with ultimate luxury. All villas are overwater.",
-        category: "Ultra-Luxury",
-        transfer_type: "Speedboat",
-        meal_plans: ["Bed & Breakfast", "Half Board"],
-        room_types: [{ name: "Villa Suite", max_guests: 2, size: "210sqm" }],
-        highlights: ["Overwater Villas", "No News, No Shoes", "Private Reserve"],
-        images: ["https://picsum.photos/seed/gili/1200/800"],
-        is_featured: true
-      },
-      {
-        name: "One&Only Reethi Rah",
-        atoll: "North Malé Atoll",
-        location: "Reethi Rah",
-        description: "A jewel among a string of coral atolls, lagoons and white sands. Experience pure luxury.",
-        category: "Ultra-Luxury",
-        transfer_type: "Luxury Yacht",
-        meal_plans: ["Bed & Breakfast"],
-        room_types: [{ name: "Beach Villa", max_guests: 3, size: "135sqm" }],
-        highlights: ["Privacy", "Thirteen Beaches", "World-class Spa"],
-        images: ["https://picsum.photos/seed/oneonly/1200/800"],
-        is_featured: true
-      },
-      {
-        name: "Velaa Private Island",
-        atoll: "Noonu Atoll",
-        location: "Velaa Island",
-        description: "The ultimate island escape, Velaa Private Island was born from the passion to create a truly private luxury retreat.",
-        category: "Ultra-Luxury",
-        transfer_type: "Seaplane",
-        meal_plans: ["Bed & Breakfast"],
-        room_types: [{ name: "Beach Pool Villa", max_guests: 2, size: "287sqm" }],
-        highlights: ["Golf Course", "Snow Room", "Private Submarine"],
-        images: ["https://picsum.photos/seed/velaa/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Joali Maldives",
-        atoll: "Raa Atoll",
-        location: "Muravandhoo Island",
-        description: "The first art-immersive resort in the Maldives, Joali is a wonderland of creativity and luxury.",
-        category: "Ultra-Luxury",
-        transfer_type: "Seaplane",
-        meal_plans: ["Bed & Breakfast", "Half Board"],
-        room_types: [{ name: "Luxury Beach Villa", max_guests: 2, size: "108sqm" }],
-        highlights: ["Art Studio", "Manta Treehouse", "Sustainable Luxury"],
-        images: ["https://picsum.photos/seed/joali/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Cheval Blanc Randheli",
-        atoll: "Noonu Atoll",
-        location: "Randheli Island",
-        description: "An intimate and contemporary haven designed by Jean-Michel Gathy.",
-        category: "Ultra-Luxury",
-        transfer_type: "Custom Seaplane",
-        meal_plans: ["Bed & Breakfast"],
-        room_types: [{ name: "Island Villa", max_guests: 2, size: "240sqm" }],
-        highlights: ["Designer Interiors", "Culinary Excellence", "Private Butler"],
-        images: ["https://picsum.photos/seed/cheval/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Four Seasons Landaa Giraavaru",
-        atoll: "Baa Atoll",
-        location: "Landaa Giraavaru",
-        description: "A natural UNESCO Biosphere Reserve wilderness where luxury meets conservation.",
-        category: "Luxury",
-        transfer_type: "Seaplane",
-        meal_plans: ["Bed & Breakfast", "Half Board", "Full Board"],
-        room_types: [{ name: "Ocean Villa", max_guests: 3, size: "139sqm" }],
-        highlights: ["Manta Ray Research", "Ayurvedic Spa", "Turtle Rehab"],
-        images: ["https://picsum.photos/seed/fourseasons/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Six Senses Laamu",
-        atoll: "Laamu Atoll",
-        location: "Olhuveli Island",
-        description: "The only resort in the Laamu Atoll, deep in the Indian Ocean.",
-        category: "Luxury",
-        transfer_type: "Domestic Flight + Boat",
-        meal_plans: ["Bed & Breakfast", "Half Board"],
-        room_types: [{ name: "Lagoon Water Villa", max_guests: 2, size: "108sqm" }],
-        highlights: ["Sustainability", "Surfing", "Outdoor Cinema"],
-        images: ["https://picsum.photos/seed/sixsenses/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Amilla Maldives",
-        atoll: "Baa Atoll",
-        location: "Finolhas",
-        description: "A stylish, contemporary resort offering a unique 'island home' experience.",
-        category: "Luxury",
-        transfer_type: "Seaplane",
-        meal_plans: ["Bed & Breakfast", "Half Board", "Full Board", "All Inclusive"],
-        room_types: [{ name: "Treetop Villa", max_guests: 2, size: "220sqm" }],
-        highlights: ["Treetop Villas", "Wellness Lab", "Glamping"],
-        images: ["https://picsum.photos/seed/amilla/1200/800"],
-        is_featured: false
-      },
-      {
-        name: "Patina Maldives",
-        atoll: "North Malé Atoll",
-        location: "Fari Islands",
-        description: "A sophisticated sanctuary for the next generation of travelers.",
-        category: "Luxury",
-        transfer_type: "Speedboat",
-        meal_plans: ["Bed & Breakfast", "Half Board"],
-        room_types: [{ name: "One Bedroom Villa", max_guests: 2, size: "170sqm" }],
-        highlights: ["Fari Marina Village", "James Turrell Skyspace", "Plant-based Dining"],
-        images: ["https://picsum.photos/seed/patina/1200/800"],
-        is_featured: false
-      }
-    ];
-
     try {
-      const { data: resorts, error: resortError } = await supabase.from('resorts').insert(sampleResorts).select();
-      if (resortError) throw resortError;
+      setSeedStatus('Seeding resorts...');
+      const sampleResorts = [
+        {
+          name: "Soneva Fushi",
+          atoll: "Baa Atoll",
+          location: "Kunfunadhoo Island",
+          description: "The original desert island hideaway in the Maldives. Soneva Fushi is located in the Baa Atoll UNESCO Biosphere Reserve.",
+          category: "Ultra-Luxury",
+          transfer_type: "Seaplane",
+          meal_plans: ["Bed & Breakfast", "Half Board", "Full Board"],
+          room_types: [{ name: "Crusoe Villa", max_guests: 2, size: "235sqm" }],
+          highlights: ["Eco-friendly", "Private Cinema", "Observatory"],
+          images: ["https://picsum.photos/seed/soneva/1200/800"],
+          is_featured: true
+        },
+        {
+          name: "Gili Lankanfushi",
+          atoll: "North Malé Atoll",
+          location: "Lankanfushi Island",
+          description: "An eco-friendly resort that combines rustic chic with ultimate luxury. All villas are overwater.",
+          category: "Ultra-Luxury",
+          transfer_type: "Speedboat",
+          meal_plans: ["Bed & Breakfast", "Half Board"],
+          room_types: [{ name: "Villa Suite", max_guests: 2, size: "210sqm" }],
+          highlights: ["Overwater Villas", "No News, No Shoes", "Private Reserve"],
+          images: ["https://picsum.photos/seed/gili/1200/800"],
+          is_featured: true
+        }
+      ];
 
-      // Seed some demo requests
-      if (resorts && resorts.length > 0) {
-        setSeedStatus('Seeding booking requests...');
-        const demoRequests = [
-          {
-            agent_id: 'demo-id',
-            resort_id: resorts[0].id,
-            resort_name: resorts[0].name,
-            check_in: '2026-06-01',
-            check_out: '2026-06-08',
-            guests: 2,
-            room_type: "Crusoe Villa",
-            status: 'confirmed'
-          },
-          {
-            agent_id: 'demo-id',
-            resort_id: resorts[1].id,
-            resort_name: resorts[1].name,
-            check_in: '2026-07-15',
-            check_out: '2026-07-22',
-            guests: 2,
-            room_type: "Villa Suite",
-            status: 'in_progress'
-          }
-        ];
-        const { error: bookingError } = await supabase.from('booking_requests').insert(demoRequests);
-        if (bookingError) throw bookingError;
-      }
+      await supabase.from('resorts').upsert(sampleResorts, { onConflict: 'name' });
 
       setSeedStatus('Seeding site settings...');
       const initialSettings = [
         {
-          key: 'logos',
+          key: 'hero:published',
           value: {
-            primary: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-primary.png',
-            white: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-white.png',
-            black: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-black.png'
+            title: 'The Art of Maldivian Luxury',
+            subtitle: 'Bespoke Destination Management for Travel Professionals',
+            banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
+            banner_type: 'image'
           }
         },
         {
-          key: 'navbar',
+          key: 'introduction:published',
+          value: {
+            title: 'Bespoke Destination Management',
+            summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.'
+          }
+        },
+        {
+          key: 'navbar:published',
           value: [
-            { label: 'Home', path: '/' },
             { label: 'Resorts', path: '/resorts' },
-            { label: 'About Us', path: '/about' },
-            { label: 'Contact', path: '/contact' }
+            { label: 'Map', path: '/map' },
+            { label: 'Info', path: '/tourist-info' }
           ]
         },
         {
-          key: 'hero',
+          key: 'footer:published',
           value: {
-            title: 'EXPERIENCE THE EXTRAORDINARY',
-            subtitle: 'Curated Luxury Escapes in the Heart of the Maldives'
-          }
-        },
-        {
-          key: 'introduction',
-          value: {
-            title: 'YOUR MALDIVES EXPERTS',
-            summary: 'With over a decade of experience in luxury travel, Exciting Maldives brings you the most exclusive resorts and personalized service in the worlds most beautiful destination.'
-          }
-        },
-        {
-          key: 'why_us',
-          value: [
-            { title: 'EXPERT KNOWLEDGE', description: 'Our team has personally visited and vetted every resort we recommend.' },
-            { title: 'EXCLUSIVE OFFERS', description: 'Access special rates and perks not available anywhere else.' },
-            { title: 'PERSONAL SERVICE', description: 'Dedicated travel consultants to handle every detail of your journey.' }
-          ]
-        },
-        {
-          key: 'partner',
-          value: {
-            title: 'BECOME A PARTNER',
-            summary: 'Join our network of elite travel partners and gain access to the best of the Maldives.',
-            partner_url: '/become-partner',
-            guide_url: '/tourist-info'
-          }
-        },
-        {
-          key: 'footer',
-          value: {
-            contact: {
-              email: 'hello@excitingmaldives.com',
-              phone: '+960 123 4567',
-              address: 'H. Malé, Republic of Maldives'
-            },
-            social: {
-              instagram: 'https://instagram.com/excitingmaldives',
-              linkedin: 'https://linkedin.com/company/excitingmaldives',
-              facebook: 'https://facebook.com/excitingmaldives'
-            }
+            contact: { email: 'info@excitingmaldives.com', phone: '+960 123 4567', address: 'Male, Maldives' },
+            social: { instagram: '', linkedin: '', facebook: '', twitter: '' },
+            important_links: [{ label: 'Resorts', path: '/resorts' }],
+            legal_links: [{ label: 'Privacy Policy', path: '/legal' }]
           }
         }
       ];
 
-      for (const setting of initialSettings) {
-        await supabase.from('site_settings').upsert(setting, { onConflict: 'key' });
-      }
+      await supabase.from('site_settings').upsert(initialSettings, { onConflict: 'key' });
 
-      setSeedStatus('Success! Sample data seeded.');
-      setTimeout(() => setSeedStatus(null), 5000);
+      setSeedStatus('Seeding booking requests...');
+      const sampleRequests = [
+        {
+          resort_name: "Soneva Fushi",
+          guest_name: "John Doe",
+          email: "john@example.com",
+          check_in: new Date().toISOString(),
+          check_out: new Date(Date.now() + 86400000 * 7).toISOString(),
+          status: 'pending'
+        }
+      ];
+
+      await supabase.from('booking_requests').upsert(sampleRequests);
+
+      setSeedStatus('Success! Data seeded.');
+      fetchStats();
     } catch (err: any) {
-      console.error('Seeding failed:', err.message);
-      setSeedStatus('Error: ' + err.message);
-    } finally {
-      setSeeding(false);
+      setSeedStatus(`Error: ${err.message}`);
     }
+    setSeeding(false);
   };
 
   return (
@@ -397,44 +425,120 @@ function AdminOverview() {
             Supabase: {connectionStatus === 'success' ? 'Connected' : connectionStatus === 'failed' ? 'Error' : 'Testing...'}
           </div>
         </div>
-        <div className="flex gap-4 items-center">
-          {seedStatus && (
-            <div className={`text-[10px] font-bold uppercase tracking-widest font-sans ${
-              seedStatus.startsWith('Error') ? 'text-brand-coral' : 
-              seedStatus.startsWith('Success') ? 'text-green-600' : 'text-brand-teal animate-pulse'
-            }`}>
-              {seedStatus}
-            </div>
-          )}
-          {connectionStatus === 'failed' && (
-            <div className="text-[10px] text-brand-coral font-sans max-w-xs truncate" title={errorMsg}>
-              {errorMsg}
-            </div>
-          )}
-          <button 
-            onClick={seedData}
-            disabled={seeding || connectionStatus !== 'success'}
-            className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50 font-sans shadow-lg shadow-brand-teal/20"
-          >
-            {seeding ? 'Seeding...' : 'Seed Sample Data'}
-          </button>
-        </div>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-        <StatCard label="Total Resorts" value="42" />
-        <StatCard label="Active Partners" value="156" />
-        <StatCard label="New Requests" value="12" />
-        <StatCard label="Active Chats" value="5" />
+        <StatCard 
+          icon={<Palmtree className="text-brand-teal" />} 
+          label="Total Resorts" 
+          value={stats.totalResorts} 
+          color="teal"
+        />
+        <StatCard 
+          icon={<Users className="text-brand-navy" />} 
+          label="Active Partners" 
+          value={stats.activePartners} 
+          color="navy"
+        />
+        <StatCard 
+          icon={<Calendar className="text-brand-coral" />} 
+          label="New Requests" 
+          value={stats.newRequests} 
+          color="coral"
+        />
+        <StatCard 
+          icon={<MessageSquare className="text-brand-teal" />} 
+          label="Active Chats" 
+          value={stats.activeChats} 
+          color="teal"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[40px] border border-brand-navy/5 shadow-xl shadow-brand-navy/5">
+          <h3 className="text-xl font-serif text-brand-navy mb-6">Database Management</h3>
+          <div className="space-y-6">
+            <div className="p-6 bg-brand-paper/50 rounded-3xl border border-brand-navy/5">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-4 font-sans">Quick Actions</h4>
+              <div className="flex flex-wrap gap-4">
+                <button 
+                  onClick={seedData}
+                  disabled={seeding}
+                  className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all disabled:opacity-50 flex items-center gap-2 font-sans"
+                >
+                  {seeding ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Database size={16} />}
+                  Seed Sample Data
+                </button>
+                <button 
+                  onClick={() => setShowSql(!showSql)}
+                  className="border border-brand-navy/10 text-brand-navy px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-paper transition-all font-sans"
+                >
+                  {showSql ? 'Hide SQL Schema' : 'View SQL Schema'}
+                </button>
+              </div>
+              {seedStatus && (
+                <p className={`mt-4 text-[10px] font-bold uppercase tracking-widest font-sans ${seedStatus.includes('Error') ? 'text-brand-coral' : 'text-brand-teal'}`}>
+                  {seedStatus}
+                </p>
+              )}
+            </div>
+
+            {connectionStatus === 'failed' && (
+              <div className="p-6 bg-brand-coral/5 rounded-3xl border border-brand-coral/10">
+                <div className="flex items-start gap-3 text-brand-coral mb-4">
+                  <AlertCircle size={20} className="shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-bold font-sans">Connection Error</h4>
+                    <p className="text-xs font-sans opacity-80 mt-1">{errorMsg}</p>
+                  </div>
+                </div>
+                <p className="text-[10px] font-sans text-brand-navy/60 leading-relaxed">
+                  This error usually means the required tables haven't been created in your Supabase project yet. 
+                  Please copy the SQL schema below and run it in the <strong>SQL Editor</strong> of your Supabase dashboard.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {showSql && (
+          <div className="bg-brand-navy p-8 rounded-[40px] text-white overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-serif">SQL Schema</h3>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(schemaSql);
+                  alert('SQL copied to clipboard!');
+                }}
+                className="text-[10px] font-bold uppercase tracking-widest bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-all font-sans"
+              >
+                Copy SQL
+              </button>
+            </div>
+            <pre className="text-[10px] font-mono bg-black/20 p-6 rounded-3xl overflow-auto flex-1 max-h-[400px] scrollbar-thin scrollbar-thumb-white/10">
+              {schemaSql}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value }: any) {
+function StatCard({ icon, label, value, color }: any) {
+  const colorClasses = {
+    teal: 'text-brand-teal bg-brand-teal/5',
+    navy: 'text-brand-navy bg-brand-navy/5',
+    coral: 'text-brand-coral bg-brand-coral/5'
+  };
+
   return (
-    <div className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5">
-      <p className="text-[10px] uppercase tracking-widest font-bold text-brand-navy/30 mb-1 font-sans">{label}</p>
-      <p className="text-3xl font-serif text-brand-navy">{value}</p>
+    <div className="bg-white p-8 rounded-[40px] border border-brand-navy/5 shadow-xl shadow-brand-navy/5 hover:shadow-2xl transition-all group">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110 ${colorClasses[color as keyof typeof colorClasses] || colorClasses.navy}`}>
+        {icon}
+      </div>
+      <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-navy/30 mb-2 font-sans">{label}</p>
+      <p className="text-4xl font-serif text-brand-navy">{value}</p>
     </div>
   );
 }
@@ -619,7 +723,7 @@ function AdminPartners() {
   useEffect(() => {
     const fetchPartners = async () => {
       const { data, error } = await supabase
-        .from('agents')
+        .from('partner_requests')
         .select('*')
         .order('created_at', { ascending: false });
       
@@ -632,7 +736,7 @@ function AdminPartners() {
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase
-      .from('agents')
+      .from('partner_requests')
       .update({ status })
       .eq('id', id);
     
@@ -791,6 +895,8 @@ function AdminPageCustomization() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [resorts, setResorts] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -798,41 +904,97 @@ function AdminPageCustomization() {
   }, []);
 
   const fetchSettings = async () => {
-    const { data, error } = await supabase.from('site_settings').select('*');
-    if (data) {
-      // Load published settings first
-      const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
-      const settingsMap = publishedSettings.reduce((acc: any, curr: any) => {
-        const key = curr.key.replace(':published', '');
-        acc[key] = curr.value;
-        return acc;
-      }, {});
-
-      // Overlay draft settings
-      const draftSettings = data.filter((s: any) => s.key.endsWith(':draft'));
-      draftSettings.forEach((s: any) => {
-        const key = s.key.replace(':draft', '');
-        settingsMap[key] = s.value;
-      });
+    try {
+      const { data, error } = await supabase.from('site_settings').select('*');
       
-      // Apply defaults for missing critical sections
-      const finalSettings = {
-        hero: {
-          title: 'The Art of Maldivian Luxury',
-          subtitle: 'Bespoke Destination Management for Travel Professionals',
-          banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
-          banner_type: 'image',
-          ...settingsMap.hero
-        },
-        introduction: {
-          title: 'Bespoke Destination Management',
-          summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.',
-          ...settingsMap.introduction
-        },
-        ...settingsMap
-      };
+      if (error) {
+        // If table doesn't exist (PGRST205), we just return defaults silently
+        if (error.code !== 'PGRST205') {
+          console.error('Error fetching settings:', error);
+        }
+        setSettings({
+          navbar: [{ label: 'Resorts', path: '/resorts' }, { label: 'Map', path: '/map' }, { label: 'Info', path: '/tourist-info' }],
+          hero: { title: 'The Art of Maldivian Luxury', subtitle: 'Bespoke Destination Management for Travel Professionals', banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080', banner_type: 'image' },
+          introduction: { title: 'Bespoke Destination Management', summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.' },
+          why_us: [
+            { title: 'Authentic Connections', description: 'We focus on fostering genuine relationships with our B2B partners by understanding their needs and providing personalized solutions.' },
+            { title: 'Curated Luxury', description: 'Our strategy centers on curating unique luxury experiences that showcase the beauty and culture of the Maldives.' },
+            { title: 'Streamlined Collaboration', description: 'We aim to enhance collaboration that simplify the booking process and improve communication, ensuring seamless service delivery.' },
+            { title: 'Tailored Support', description: 'We offer dedicated support to our partners, providing them with the insights and resources needed to effectively promote our offerings.' }
+          ],
+          footer: { contact: { email: 'info@excitingmaldives.com' }, social: {}, important_links: [], legal_links: [] },
+          custom_pages: []
+        });
+        setLoading(false);
+        return;
+      }
 
-      setSettings(finalSettings);
+      if (data) {
+        // Load published settings first
+        const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
+        const settingsMap = publishedSettings.reduce((acc: any, curr: any) => {
+          const key = curr.key.replace(':published', '');
+          acc[key] = curr.value;
+          return acc;
+        }, {});
+
+        // Overlay draft settings
+        const draftSettings = data.filter((s: any) => s.key.endsWith(':draft'));
+        draftSettings.forEach((s: any) => {
+          const key = s.key.replace(':draft', '');
+          settingsMap[key] = s.value;
+        });
+        
+        // Apply defaults for missing critical sections to ensure UI is populated
+        const finalSettings = {
+          navbar: [
+            { label: 'Resorts', path: '/resorts' },
+            { label: 'Map', path: '/map' },
+            { label: 'Info', path: '/tourist-info' }
+          ],
+          logos: {
+            primary: '',
+            white: '',
+            black: ''
+          },
+          hero: {
+            title: 'The Art of Maldivian Luxury',
+            subtitle: 'Bespoke Destination Management for Travel Professionals',
+            banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
+            banner_type: 'image'
+          },
+          introduction: {
+            title: 'Bespoke Destination Management',
+            summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.'
+          },
+          why_us: [
+            { title: 'Local Expertise', description: 'Deeply rooted in the Maldives with unparalleled local knowledge.' },
+            { title: 'Bespoke Service', description: 'Tailored experiences designed for the most discerning travelers.' },
+            { title: 'B2B Focus', description: 'Dedicated support for our travel industry partners.' }
+          ],
+          footer: {
+            contact: { email: 'info@excitingmaldives.com', phone: '+960 123 4567', address: 'Male, Maldives' },
+            social: { instagram: '', linkedin: '', facebook: '', twitter: '' },
+            important_links: [{ label: 'Resorts', path: '/resorts' }],
+            legal_links: [{ label: 'Privacy Policy', path: '/legal' }]
+          },
+          custom_pages: [],
+          ...settingsMap
+        };
+
+        setSettings(finalSettings);
+      }
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+      // Fallback to defaults if table missing or error
+      setSettings({
+        navbar: [{ label: 'Resorts', path: '/resorts' }, { label: 'Map', path: '/map' }, { label: 'Info', path: '/tourist-info' }],
+        hero: { title: 'The Art of Maldivian Luxury', subtitle: 'Bespoke Destination Management for Travel Professionals', banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080', banner_type: 'image' },
+        introduction: { title: 'Bespoke Destination Management', summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.' },
+        why_us: [{ title: 'Local Expertise', description: 'Deeply rooted in the Maldives.' }],
+        footer: { contact: { email: 'info@excitingmaldives.com' }, social: {}, important_links: [], legal_links: [] },
+        custom_pages: []
+      });
     }
     setLoading(false);
   };
@@ -840,6 +1002,21 @@ function AdminPageCustomization() {
   const fetchResorts = async () => {
     const { data } = await supabase.from('resorts').select('id, name');
     if (data) setResorts(data);
+  };
+
+  const fetchHistory = async (key: string) => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('*')
+      .eq('key', `history:${key}`)
+      .single();
+    
+    if (data && data.value) {
+      setHistory(data.value);
+    } else {
+      setHistory([]);
+    }
+    setShowHistory(true);
   };
 
   const saveSetting = async (key: string, value: any) => {
@@ -864,12 +1041,43 @@ function AdminPageCustomization() {
         .like('key', '%:draft');
 
       if (draftData) {
-        const publishPromises = draftData.map(draft => {
-          const publishedKey = draft.key.replace(':draft', ':published');
+        const publishPromises = draftData.map(async (draft) => {
+          const key = draft.key.replace(':draft', '');
+          const publishedKey = `${key}:published`;
+          
+          // 1. Get current published to add to history
+          const { data: currentPublished } = await supabase
+            .from('site_settings')
+            .select('*')
+            .eq('key', publishedKey)
+            .maybeSingle();
+          
+          if (currentPublished) {
+            const historyKey = `history:${key}`;
+            const { data: currentHistory } = await supabase
+              .from('site_settings')
+              .select('*')
+              .eq('key', historyKey)
+              .maybeSingle();
+            
+            const historyList = currentHistory?.value || [];
+            const newHistory = [{
+              timestamp: new Date().toISOString(),
+              value: currentPublished.value,
+              id: Math.random().toString(36).substr(2, 9)
+            }, ...historyList].slice(0, 10); // Keep last 10
+
+            await supabase
+              .from('site_settings')
+              .upsert({ key: historyKey, value: newHistory }, { onConflict: 'key' });
+          }
+
+          // 2. Publish new value
           return supabase
             .from('site_settings')
             .upsert({ key: publishedKey, value: draft.value }, { onConflict: 'key' });
         });
+        
         await Promise.all(publishPromises);
         alert('Website published successfully!');
       }
@@ -878,6 +1086,13 @@ function AdminPageCustomization() {
       alert('Failed to publish. Please try again.');
     }
     setPublishing(false);
+  };
+
+  const revertHistory = async (key: string, historyItem: any) => {
+    if (confirm('Are you sure you want to revert to this version? This will overwrite your current draft.')) {
+      await saveSetting(key, historyItem.value);
+      setShowHistory(false);
+    }
   };
 
   const handlePreview = () => {
@@ -938,7 +1153,7 @@ function AdminPageCustomization() {
         </div>
       </div>
 
-          <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
+      <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
         {[
           { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
           { id: 'pages', label: 'Custom Pages', icon: <FileText size={14} /> },
@@ -960,6 +1175,16 @@ function AdminPageCustomization() {
         ))}
       </div>
 
+      <div className="mb-6 flex justify-end">
+        <button 
+          onClick={() => fetchHistory(activeTab)}
+          className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 hover:text-brand-teal transition-all"
+        >
+          <History size={14} />
+          View History & Revert
+        </button>
+      </div>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
@@ -969,6 +1194,44 @@ function AdminPageCustomization() {
           transition={{ duration: 0.2 }}
           className="bg-white p-8 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5"
         >
+          {/* History Overlay */}
+          {showHistory && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-navy/20 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden"
+              >
+                <div className="p-8 border-b border-brand-navy/5 flex justify-between items-center">
+                  <h3 className="text-xl font-serif text-brand-navy">Version History: {activeTab}</h3>
+                  <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-brand-paper rounded-full transition-all"><X size={20} /></button>
+                </div>
+                <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4">
+                  {history.length === 0 ? (
+                    <div className="text-center py-10">
+                      <p className="text-brand-navy/40 text-sm font-sans italic">No history found for this section.</p>
+                      <p className="text-[10px] text-brand-navy/20 uppercase tracking-widest font-bold mt-2">History is created when you publish changes</p>
+                    </div>
+                  ) : (
+                    history.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-4 bg-brand-paper/30 rounded-2xl border border-brand-navy/5">
+                        <div>
+                          <p className="text-xs font-bold text-brand-navy">{new Date(item.timestamp).toLocaleString()}</p>
+                          <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold mt-1">Published Version</p>
+                        </div>
+                        <button 
+                          onClick={() => revertHistory(activeTab, item)}
+                          className="px-4 py-2 bg-brand-navy text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all"
+                        >
+                          Revert
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
           {activeTab === 'nav' && (
             <div className="space-y-8">
               <section>
@@ -976,24 +1239,42 @@ function AdminPageCustomization() {
                 <div className="space-y-4">
                   {(settings.navbar || []).map((item: any, idx: number) => (
                     <div key={idx} className="flex gap-4 items-center bg-brand-paper/30 p-4 rounded-2xl">
-                      <TextInput 
-                        label="Label" 
-                        value={item.label} 
-                        onChange={(val) => {
-                          const newNav = [...settings.navbar];
-                          newNav[idx].label = val;
-                          saveSetting('navbar', newNav);
-                        }} 
-                      />
-                      <TextInput 
-                        label="Path" 
-                        value={item.path} 
-                        onChange={(val) => {
-                          const newNav = [...settings.navbar];
-                          newNav[idx].path = val;
-                          saveSetting('navbar', newNav);
-                        }} 
-                      />
+                      <div className="flex-1">
+                        <TextInput 
+                          label="Page" 
+                          value={item.label} 
+                          onChange={(val) => {
+                            const newNav = [...settings.navbar];
+                            newNav[idx].label = val;
+                            saveSetting('navbar', newNav);
+                          }} 
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">
+                          Path
+                        </label>
+                        <select
+                          value={item.path}
+                          onChange={(e) => {
+                            const newNav = [...settings.navbar];
+                            newNav[idx].path = e.target.value;
+                            saveSetting('navbar', newNav);
+                          }}
+                          className="w-full bg-white border border-brand-navy/10 rounded-xl px-4 py-3 text-sm font-sans text-brand-navy focus:outline-none focus:border-brand-teal transition-all"
+                        >
+                          <option value="/">Home (/)</option>
+                          <option value="/resorts">Resorts (/resorts)</option>
+                          <option value="/map">Map (/map)</option>
+                          <option value="/tourist-info">Tourist Info (/tourist-info)</option>
+                          <option value="/become-partner">Become a Partner (/become-partner)</option>
+                          {(settings.custom_pages || []).map((p: any) => (
+                            <option key={p.slug} value={`/${p.slug}`}>
+                              {p.title} (/{p.slug})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <button 
                         onClick={() => {
                           const newNav = settings.navbar.filter((_: any, i: number) => i !== idx);
@@ -1259,20 +1540,20 @@ function AdminPageCustomization() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <TextInput 
                     label="Email" 
-                    value={settings.footer?.contact?.email} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, email: val } })} 
+                    value={settings.footer?.contact?.email || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...(settings.footer?.contact || {}), email: val } })} 
                     icon={<Mail size={14} />}
                   />
                   <TextInput 
                     label="Phone" 
-                    value={settings.footer?.contact?.phone} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, phone: val } })} 
+                    value={settings.footer?.contact?.phone || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...(settings.footer?.contact || {}), phone: val } })} 
                     icon={<Phone size={14} />}
                   />
                   <TextInput 
                     label="Address" 
-                    value={settings.footer?.contact?.address} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, address: val } })} 
+                    value={settings.footer?.contact?.address || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...(settings.footer?.contact || {}), address: val } })} 
                     icon={<MapPin size={14} />}
                   />
                 </div>
@@ -1282,26 +1563,26 @@ function AdminPageCustomization() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <TextInput 
                     label="Instagram" 
-                    value={settings.footer?.social?.instagram} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, instagram: val } })} 
+                    value={settings.footer?.social?.instagram || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...(settings.footer?.social || {}), instagram: val } })} 
                     icon={<Instagram size={14} />}
                   />
                   <TextInput 
                     label="LinkedIn" 
-                    value={settings.footer?.social?.linkedin} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, linkedin: val } })} 
+                    value={settings.footer?.social?.linkedin || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...(settings.footer?.social || {}), linkedin: val } })} 
                     icon={<Linkedin size={14} />}
                   />
                   <TextInput 
                     label="Facebook" 
-                    value={settings.footer?.social?.facebook} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, facebook: val } })} 
+                    value={settings.footer?.social?.facebook || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...(settings.footer?.social || {}), facebook: val } })} 
                     icon={<Facebook size={14} />}
                   />
                   <TextInput 
                     label="Twitter" 
-                    value={settings.footer?.social?.twitter} 
-                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, twitter: val } })} 
+                    value={settings.footer?.social?.twitter || ''} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...(settings.footer?.social || {}), twitter: val } })} 
                     icon={<Twitter size={14} />}
                   />
                 </div>

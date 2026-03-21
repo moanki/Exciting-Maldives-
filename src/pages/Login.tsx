@@ -85,6 +85,7 @@ export default function Login() {
                 <input 
                   type="email" 
                   required
+                  autoComplete="username"
                   className="w-full pl-12 pr-4 py-4 bg-brand-paper/50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-teal/20 font-sans text-brand-navy"
                   placeholder="name@company.com"
                   value={email}
@@ -100,6 +101,7 @@ export default function Login() {
                 <input 
                   type="password" 
                   required
+                  autoComplete="current-password"
                   className="w-full pl-12 pr-4 py-4 bg-brand-paper/50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-teal/20 font-sans text-brand-navy"
                   placeholder="••••••••"
                   value={password}

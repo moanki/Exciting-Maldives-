@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { User } from '@supabase/supabase-js';
@@ -20,6 +20,42 @@ import BecomePartner from './pages/BecomePartner';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ChatWidget from './components/ChatWidget';
+
+function AppContent({ user, role }: { user: User | null, role: string | null }) {
+  const location = useLocation();
+  const isDashboard = location.pathname.startsWith('/admin') || location.pathname.startsWith('/partner');
+
+  return (
+    <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans">
+      <Navbar user={user} role={role} />
+      <main>
+        <Routes>
+          <Route path="/" element={<PublicHome />} />
+          <Route path="/resorts" element={<ResortSearch />} />
+          <Route path="/resorts/:id" element={<ResortDetail />} />
+          <Route path="/tourist-info" element={<TouristInfo />} />
+          <Route path="/map" element={<MaldivesMap />} />
+          <Route path="/legal" element={<Legal />} />
+          <Route path="/p/:slug" element={<CustomPage />} />
+          <Route path="/become-partner" element={<BecomePartner />} />
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes */}
+          <Route 
+            path="/partner/*" 
+            element={role === 'partner' ? <PartnerDashboard /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/admin/*" 
+            element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
+          />
+        </Routes>
+      </main>
+      {!isDashboard && <Footer />}
+      {!isDashboard && <ChatWidget />}
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -124,34 +160,7 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans">
-        <Navbar user={user} role={role} />
-        <main>
-          <Routes>
-            <Route path="/" element={<PublicHome />} />
-            <Route path="/resorts" element={<ResortSearch />} />
-            <Route path="/resorts/:id" element={<ResortDetail />} />
-            <Route path="/tourist-info" element={<TouristInfo />} />
-            <Route path="/map" element={<MaldivesMap />} />
-            <Route path="/legal" element={<Legal />} />
-            <Route path="/p/:slug" element={<CustomPage />} />
-            <Route path="/become-partner" element={<BecomePartner />} />
-            <Route path="/login" element={<Login />} />
-            
-            {/* Protected Routes */}
-            <Route 
-              path="/partner/*" 
-              element={role === 'partner' ? <PartnerDashboard /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/admin/*" 
-              element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
-            />
-          </Routes>
-        </main>
-        <Footer />
-        <ChatWidget />
-      </div>
+      <AppContent user={user} role={role} />
     </Router>
   );
 }

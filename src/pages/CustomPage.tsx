@@ -1,29 +1,27 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
 import { motion } from 'motion/react';
+import { getSiteSettings } from '../lib/settings';
 
 export default function CustomPage() {
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
   const [page, setPage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPage = async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'custom_pages')
-        .single();
+      const isPreview = searchParams.get('preview') === 'true';
+      const settings = await getSiteSettings(isPreview);
       
-      if (data?.value) {
-        const found = data.value.find((p: any) => p.slug === slug);
+      if (settings.custom_pages) {
+        const found = settings.custom_pages.find((p: any) => p.slug === slug);
         setPage(found);
       }
       setLoading(false);
     };
     fetchPage();
-  }, [slug]);
+  }, [slug, searchParams]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div></div>;
   if (!page) return <div className="min-h-screen flex items-center justify-center text-brand-navy font-serif text-2xl">Page Not Found</div>;

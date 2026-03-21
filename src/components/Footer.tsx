@@ -17,25 +17,25 @@ export default function Footer() {
     fetchSettings();
   }, [searchParams]);
 
-  const footer = settings.footer || {
+  const footer = {
     contact: {
-      address: "Male', Republic of Maldives",
-      phone: "+960 123 4567",
-      email: "info@excitingmaldives.com"
+      address: settings.footer?.contact?.address || "Male', Republic of Maldives",
+      phone: settings.footer?.contact?.phone || "+960 123 4567",
+      email: settings.footer?.contact?.email || "info@excitingmaldives.com"
     },
     social: {
-      facebook: "https://facebook.com",
-      instagram: "https://instagram.com",
-      twitter: "https://twitter.com",
-      linkedin: "https://linkedin.com"
+      facebook: settings.footer?.social?.facebook || "",
+      instagram: settings.footer?.social?.instagram || "",
+      twitter: settings.footer?.social?.twitter || "",
+      linkedin: settings.footer?.social?.linkedin || ""
     },
-    important_links: [
+    important_links: settings.footer?.important_links || [
       { label: 'Resorts', path: '/resorts' },
       { label: 'Maldives Map', path: '/map' },
       { label: 'Tourist Info', path: '/tourist-info' },
       { label: 'Partner Portal', path: '/login' }
     ],
-    legal_links: [
+    legal_links: settings.footer?.legal_links || [
       { label: 'Privacy Policy', path: '/legal' },
       { label: 'Terms of Service', path: '/legal' },
       { label: 'Media Kit', path: '/legal' },
