@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", serif;
+  --font-sans: "Raleway", sans-serif;
+  
+  --color-brand-teal: #008080;
+  --color-brand-teal-light: #20b2aa;
+  --color-brand-paper: #f5f2ed;
+  --color-brand-ink: #1a1a1a;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-brand-paper text-brand-ink;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Exciting Maldives B2B Portal",
+  "description": "A luxury B2B travel portal for Maldives resorts with AI-assisted content generation and real-time sales communication.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
