@@ -1,20 +1,45 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Exciting Maldives - Project Documentation
 
-# Run and deploy your AI Studio app
+## Overview
+Exciting Maldives is a bespoke Destination Management platform designed for B2B travel professionals. It provides a comprehensive suite of tools for managing resorts, bookings, and partner relationships in the Maldives.
 
-This contains everything you need to run your app locally.
+## Architecture
+The application is built using a modern full-stack architecture:
+- **Frontend**: React 19 with Vite, Tailwind CSS, and Framer Motion.
+- **Backend**: Supabase (PostgreSQL, Auth, Storage, Real-time).
+- **Security**: Advanced frontend deterrence measures to protect the codebase and intellectual property.
 
-View your app in AI Studio: https://ai.studio/apps/3c05d140-0354-4825-bb4b-9904e9bc5355
+## Key Features
+- **Resort Management**: Advanced resort database with smart document extraction.
+- **Partner Portal**: Secure management of B2B partner requests and approvals.
+- **Booking System**: Real-time tracking of booking requests.
+- **Page Customization**: Dynamic control over site content and branding.
 
-## Run Locally
+## Getting Started
+1. **Environment Setup**:
+   - Copy `.env.example` to `.env`.
+   - Configure your Supabase URL and Anon Key.
+2. **Installation**:
+   ```bash
+   npm install
+   ```
+3. **Development**:
+   ```bash
+   npm run dev
+   ```
+4. **Build**:
+   ```bash
+   npm run build
+   ```
 
-**Prerequisites:**  Node.js
+## Security
+This project implements several security measures to protect the frontend:
+- Disabled right-click and common DevTools shortcuts.
+- Anti-debugging loops to deter inspection.
+- Periodic console clearing.
+- Obfuscation of sensitive strings.
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Documentation
+For detailed information, please refer to:
+- [Architecture Guide](./ARCHITECTURE.md)
+- [Error Handling Reference](./DOCS/ERROR_HANDLING.md)

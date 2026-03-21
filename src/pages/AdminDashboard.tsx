@@ -2,9 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle } from 'lucide-react';
 import { supabase } from '../supabase';
-import { extractResortDataFromPDF } from '../services/ai';
+import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
 
+/**
+ * AdminDashboard Component
+ * 
+ * The central management hub for the application. 
+ * Provides interfaces for resort management, booking tracking, partner requests,
+ * and site-wide customization.
+ * 
+ * Architecture:
+ * - Uses React Router for internal navigation within the admin panel.
+ * - Integrates with Supabase for real-time data management.
+ * - Implements secure data processing for document uploads.
+ */
 export default function AdminDashboard() {
   const location = useLocation();
 
@@ -621,7 +633,7 @@ function AdminResorts() {
         <h1 className="text-3xl font-serif text-brand-navy">Resort Management</h1>
         <div className="flex gap-4">
           <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
-            <Upload size={16} /> {aiProcessing ? 'AI Extracting...' : 'AI Upload PDF'}
+            <Upload size={16} /> {aiProcessing ? 'Processing...' : 'Smart Upload PDF'}
             <input type="file" className="hidden" accept=".pdf" onChange={handleFileUpload} disabled={aiProcessing} />
           </label>
           <button 

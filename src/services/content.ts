@@ -1,0 +1,117 @@
+/**
+ * Content Processing Service
+ * 
+ * This service handles advanced content extraction and generation tasks.
+ * It uses a secure backend processing engine to analyze documents and generate
+ * descriptive content for resorts.
+ */
+
+import { GoogleGenAI, Type } from "@google/genai";
+
+// Initialize the processing engine with the secure API key
+const engine = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
+/**
+ * Extracts structured resort data from a PDF document.
+ * 
+ * @param base64Data - The base64 encoded PDF data.
+ * @returns A structured object containing resort information.
+ * @throws Error if the extraction fails or the engine is unavailable.
+ */
+export const extractResortDataFromPDF = async (base64Data: string) => {
+  const model = "gemini-3.1-pro-preview";
+  
+  const prompt = `
+    Extract resort information from this PDF document. 
+    Return a JSON object with the following fields:
+    - name: string
+    - location: string
+    - atoll: string
+    - description: string (detailed, luxury tone)
+    - category: string (e.g., Ultra-Luxury, Luxury, Premium)
+    - transfer_type: string (e.g., Seaplane, Speedboat)
+    - meal_plans: string[]
+    - room_types: object[] (name, description, max_guests, size)
+    - highlights: string[] (key selling points)
+  `;
+
+  try {
+    const response = await engine.models.generateContent({
+      model,
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: "application/pdf",
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            location: { type: Type.STRING },
+            atoll: { type: Type.STRING },
+            description: { type: Type.STRING },
+            category: { type: Type.STRING },
+            transfer_type: { type: Type.STRING },
+            meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
+            room_types: { 
+              type: Type.ARRAY, 
+              items: { 
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  max_guests: { type: Type.INTEGER },
+                  size: { type: Type.STRING }
+                }
+              } 
+            },
+            highlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+          }
+        }
+      }
+    });
+
+    if (!response.text) {
+      throw new Error('Failed to extract data from the document.');
+    }
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error('Content processing error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generates a luxury description for a resort based on its features.
+ * 
+ * @param resortName - The name of the resort.
+ * @param features - A list of features to include in the description.
+ * @returns A string containing the generated description.
+ */
+export const generateResortDescription = async (resortName: string, features: string[]) => {
+  const model = "gemini-3-flash-preview";
+  const prompt = `Write a luxury, evocative description for a Maldives resort named "${resortName}" with these features: ${features.join(', ')}. Focus on the sensory experience, privacy, and the beauty of the Indian Ocean.`;
+  
+  try {
+    const response = await engine.models.generateContent({
+      model,
+      contents: prompt,
+    });
+
+    return response.text;
+  } catch (error) {
+    console.error('Description generation error:', error);
+    throw error;
+  }
+};
