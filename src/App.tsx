@@ -7,7 +7,6 @@ import { User } from '@supabase/supabase-js';
 import PublicHome from './pages/PublicHome';
 import ResortSearch from './pages/ResortSearch';
 import ResortDetail from './pages/ResortDetail';
-import PartnerDashboard from './pages/PartnerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import TouristInfo from './pages/TouristInfo';
@@ -23,7 +22,7 @@ import ChatWidget from './components/ChatWidget';
 
 function AppContent({ user, role }: { user: User | null, role: string | null }) {
   const location = useLocation();
-  const isDashboard = location.pathname.startsWith('/admin') || location.pathname.startsWith('/partner');
+  const isDashboard = location.pathname.startsWith('/admin');
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans">
@@ -41,10 +40,6 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
           <Route path="/login" element={<Login />} />
           
           {/* Protected Routes */}
-          <Route 
-            path="/partner/*" 
-            element={role === 'partner' ? <PartnerDashboard /> : <Navigate to="/login" />} 
-          />
           <Route 
             path="/admin/*" 
             element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
@@ -69,10 +64,10 @@ export default function App() {
       const mockUser = {
         id: 'demo-id',
         email: 'demo@example.com',
-        user_metadata: { full_name: demoMode === 'admin' ? 'Demo Admin' : 'Demo Partner' }
+        user_metadata: { full_name: 'Demo Admin' }
       } as any;
       setUser(mockUser);
-      setRole(demoMode === 'admin' ? 'super_admin' : 'partner');
+      setRole('super_admin');
       setLoading(false);
       return;
     }

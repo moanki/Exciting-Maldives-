@@ -47,7 +47,7 @@ export default function Navbar({ user, role }: NavbarProps) {
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
               {logo ? (
-                <img src={logo} alt="Exciting Maldives" className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+                <img src={logo} alt="Exciting Maldives" className="h-16 w-auto object-contain" referrerPolicy="no-referrer" />
               ) : (
                 <>
                   <div className="relative w-12 h-12 flex items-center justify-center">
@@ -96,9 +96,6 @@ export default function Navbar({ user, role }: NavbarProps) {
             
             {user ? (
               <div className="flex items-center space-x-6">
-                {role === 'partner' && (
-                  <Link to="/partner" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Partner Portal</Link>
-                )}
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
                   <Link to="/admin" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Admin</Link>
                 )}
@@ -111,12 +108,14 @@ export default function Navbar({ user, role }: NavbarProps) {
                 </button>
               </div>
             ) : (
-              <Link 
-                to="/login" 
+              <a 
+                href="https://b2b.excitingmv.com/" 
+                target="_blank"
+                rel="noopener noreferrer"
                 className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
               >
                 Partner Login
-              </Link>
+              </a>
             )}
           </div>
 
@@ -147,12 +146,11 @@ export default function Navbar({ user, role }: NavbarProps) {
             ))}
             {user ? (
               <>
-                {role === 'partner' && <Link to="/partner" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Portal</Link>}
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && <Link to="/admin" className="block px-3 py-2 text-base font-medium text-brand-teal">Admin</Link>}
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700">Logout</button>
               </>
             ) : (
-              <Link to="/login" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</Link>
+              <a href="https://b2b.excitingmv.com/" target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</a>
             )}
           </div>
         </div>

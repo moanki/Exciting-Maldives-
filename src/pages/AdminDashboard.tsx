@@ -918,6 +918,17 @@ function AdminPageCustomization() {
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  const safeArray = (val: any) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  };
+
   useEffect(() => {
     fetchSettings();
     fetchResorts();
@@ -1261,14 +1272,14 @@ function AdminPageCustomization() {
               <section>
                 <h3 className="text-xl font-serif text-brand-navy mb-6">Navigation Items</h3>
                 <div className="space-y-4">
-                  {(settings.navbar || []).map((item: any, idx: number) => (
+                  {safeArray(settings.navbar).map((item: any, idx: number) => (
                     <div key={idx} className="flex gap-4 items-center bg-brand-paper/30 p-4 rounded-2xl">
                       <div className="flex-1">
                         <TextInput 
                           label="Page" 
                           value={item.label} 
                           onChange={(val) => {
-                            const newNav = [...settings.navbar];
+                            const newNav = [...safeArray(settings.navbar)];
                             newNav[idx].label = val;
                             saveSetting('navbar', newNav);
                           }} 
@@ -1281,7 +1292,7 @@ function AdminPageCustomization() {
                         <select
                           value={item.path}
                           onChange={(e) => {
-                            const newNav = [...settings.navbar];
+                            const newNav = [...safeArray(settings.navbar)];
                             newNav[idx].path = e.target.value;
                             saveSetting('navbar', newNav);
                           }}
@@ -1292,7 +1303,7 @@ function AdminPageCustomization() {
                           <option value="/map">Map (/map)</option>
                           <option value="/tourist-info">Tourist Info (/tourist-info)</option>
                           <option value="/become-partner">Become a Partner (/become-partner)</option>
-                          {(settings.custom_pages || []).map((p: any) => (
+                          {safeArray(settings.custom_pages).map((p: any) => (
                             <option key={p.slug} value={`/${p.slug}`}>
                               {p.title} (/{p.slug})
                             </option>
@@ -1301,7 +1312,7 @@ function AdminPageCustomization() {
                       </div>
                       <button 
                         onClick={() => {
-                          const newNav = settings.navbar.filter((_: any, i: number) => i !== idx);
+                          const newNav = safeArray(settings.navbar).filter((_: any, i: number) => i !== idx);
                           saveSetting('navbar', newNav);
                         }}
                         className="mt-6 p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
@@ -1311,7 +1322,7 @@ function AdminPageCustomization() {
                     </div>
                   ))}
                   <button 
-                    onClick={() => saveSetting('navbar', [...(settings.navbar || []), { label: 'New Item', path: '/' }])}
+                    onClick={() => saveSetting('navbar', [...safeArray(settings.navbar), { label: 'New Item', path: '/' }])}
                     className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
                   >
                     <Plus size={16} /> Add Navigation Item
@@ -1357,11 +1368,11 @@ function AdminPageCustomization() {
           {activeTab === 'pages' && (
             <div className="space-y-6">
               <h3 className="text-xl font-serif text-brand-navy mb-6">Custom Pages</h3>
-              {(settings.custom_pages || []).map((page: any, idx: number) => (
+              {safeArray(settings.custom_pages).map((page: any, idx: number) => (
                 <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
                   <button 
                     onClick={() => {
-                      const newPages = settings.custom_pages.filter((_: any, i: number) => i !== idx);
+                      const newPages = safeArray(settings.custom_pages).filter((_: any, i: number) => i !== idx);
                       saveSetting('custom_pages', newPages);
                     }}
                     className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
@@ -1373,7 +1384,7 @@ function AdminPageCustomization() {
                       label="Page Title" 
                       value={page.title} 
                       onChange={(val) => {
-                        const newPages = [...settings.custom_pages];
+                        const newPages = [...safeArray(settings.custom_pages)];
                         newPages[idx].title = val;
                         saveSetting('custom_pages', newPages);
                       }} 
@@ -1382,7 +1393,7 @@ function AdminPageCustomization() {
                       label="Slug (e.g. about-us)" 
                       value={page.slug} 
                       onChange={(val) => {
-                        const newPages = [...settings.custom_pages];
+                        const newPages = [...safeArray(settings.custom_pages)];
                         newPages[idx].slug = val.toLowerCase().replace(/ /g, '-');
                         saveSetting('custom_pages', newPages);
                       }} 
@@ -1392,7 +1403,7 @@ function AdminPageCustomization() {
                     label="Page Content (HTML/Text)" 
                     value={page.content} 
                     onChange={(val) => {
-                      const newPages = [...settings.custom_pages];
+                      const newPages = [...safeArray(settings.custom_pages)];
                       newPages[idx].content = val;
                       saveSetting('custom_pages', newPages);
                     }} 
@@ -1400,7 +1411,7 @@ function AdminPageCustomization() {
                 </div>
               ))}
               <button 
-                onClick={() => saveSetting('custom_pages', [...(settings.custom_pages || []), { title: 'New Page', slug: 'new-page', content: '' }])}
+                onClick={() => saveSetting('custom_pages', [...safeArray(settings.custom_pages), { title: 'New Page', slug: 'new-page', content: '' }])}
                 className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
               >
                 <Plus size={16} /> Create New Page
@@ -1487,11 +1498,11 @@ function AdminPageCustomization() {
                   Reset to Defaults
                 </button>
               </div>
-              {(settings.why_us || []).map((pillar: any, idx: number) => (
+              {safeArray(settings.why_us).map((pillar: any, idx: number) => (
                 <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
                   <button 
                     onClick={() => {
-                      const newPillars = settings.why_us.filter((_: any, i: number) => i !== idx);
+                      const newPillars = safeArray(settings.why_us).filter((_: any, i: number) => i !== idx);
                       saveSetting('why_us', newPillars);
                     }}
                     className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
@@ -1502,7 +1513,7 @@ function AdminPageCustomization() {
                     label="Pillar Title" 
                     value={pillar.title} 
                     onChange={(val) => {
-                      const newPillars = [...settings.why_us];
+                      const newPillars = [...safeArray(settings.why_us)];
                       newPillars[idx].title = val;
                       saveSetting('why_us', newPillars);
                     }} 
@@ -1511,7 +1522,7 @@ function AdminPageCustomization() {
                     label="Pillar Description" 
                     value={pillar.description} 
                     onChange={(val) => {
-                      const newPillars = [...settings.why_us];
+                      const newPillars = [...safeArray(settings.why_us)];
                       newPillars[idx].description = val;
                       saveSetting('why_us', newPillars);
                     }} 
@@ -1519,7 +1530,7 @@ function AdminPageCustomization() {
                 </div>
               ))}
               <button 
-                onClick={() => saveSetting('why_us', [...(settings.why_us || []), { title: 'New Pillar', description: '' }])}
+                onClick={() => saveSetting('why_us', [...safeArray(settings.why_us), { title: 'New Pillar', description: '' }])}
                 className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
               >
                 <Plus size={16} /> Add Pillar
@@ -1532,12 +1543,12 @@ function AdminPageCustomization() {
               <h3 className="text-xl font-serif text-brand-navy mb-6">Featured Resorts</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {resorts.map(resort => {
-                  const isFeatured = (settings.featured_retreats || []).includes(resort.id);
+                  const isFeatured = safeArray(settings.featured_retreats).includes(resort.id);
                   return (
                     <button
                       key={resort.id}
                       onClick={() => {
-                        const current = settings.featured_retreats || [];
+                        const current = safeArray(settings.featured_retreats);
                         const next = isFeatured 
                           ? current.filter((id: string) => id !== resort.id)
                           : [...current, resort.id];
@@ -1617,49 +1628,49 @@ function AdminPageCustomization() {
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30 mb-4">Important Links</h4>
                     <div className="space-y-4">
-                      {(settings.footer?.important_links || []).map((link: any, idx: number) => (
+                      {safeArray(settings.footer?.important_links).map((link: any, idx: number) => (
                         <div key={idx} className="flex gap-2">
                           <TextInput value={link.label} onChange={(val) => {
-                            const newLinks = [...settings.footer.important_links];
+                            const newLinks = [...safeArray(settings.footer?.important_links)];
                             newLinks[idx].label = val;
                             saveSetting('footer', { ...settings.footer, important_links: newLinks });
                           }} />
                           <TextInput value={link.path} onChange={(val) => {
-                            const newLinks = [...settings.footer.important_links];
+                            const newLinks = [...safeArray(settings.footer?.important_links)];
                             newLinks[idx].path = val;
                             saveSetting('footer', { ...settings.footer, important_links: newLinks });
                           }} />
                           <button onClick={() => {
-                            const newLinks = settings.footer.important_links.filter((_: any, i: number) => i !== idx);
+                            const newLinks = safeArray(settings.footer?.important_links).filter((_: any, i: number) => i !== idx);
                             saveSetting('footer', { ...settings.footer, important_links: newLinks });
                           }} className="p-2 text-brand-coral"><Trash2 size={14} /></button>
                         </div>
                       ))}
-                      <button onClick={() => saveSetting('footer', { ...settings.footer, important_links: [...(settings.footer?.important_links || []), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
+                      <button onClick={() => saveSetting('footer', { ...settings.footer, important_links: [...safeArray(settings.footer?.important_links), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
                     </div>
                   </div>
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30 mb-4">Legal & Media</h4>
                     <div className="space-y-4">
-                      {(settings.footer?.legal_links || []).map((link: any, idx: number) => (
+                      {safeArray(settings.footer?.legal_links).map((link: any, idx: number) => (
                         <div key={idx} className="flex gap-2">
                           <TextInput value={link.label} onChange={(val) => {
-                            const newLinks = [...settings.footer.legal_links];
+                            const newLinks = [...safeArray(settings.footer?.legal_links)];
                             newLinks[idx].label = val;
                             saveSetting('footer', { ...settings.footer, legal_links: newLinks });
                           }} />
                           <TextInput value={link.path} onChange={(val) => {
-                            const newLinks = [...settings.footer.legal_links];
+                            const newLinks = [...safeArray(settings.footer?.legal_links)];
                             newLinks[idx].path = val;
                             saveSetting('footer', { ...settings.footer, legal_links: newLinks });
                           }} />
                           <button onClick={() => {
-                            const newLinks = settings.footer.legal_links.filter((_: any, i: number) => i !== idx);
+                            const newLinks = safeArray(settings.footer?.legal_links).filter((_: any, i: number) => i !== idx);
                             saveSetting('footer', { ...settings.footer, legal_links: newLinks });
                           }} className="p-2 text-brand-coral"><Trash2 size={14} /></button>
                         </div>
                       ))}
-                      <button onClick={() => saveSetting('footer', { ...settings.footer, legal_links: [...(settings.footer?.legal_links || []), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
+                      <button onClick={() => saveSetting('footer', { ...settings.footer, legal_links: [...safeArray(settings.footer?.legal_links), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
                     </div>
                   </div>
                 </div>

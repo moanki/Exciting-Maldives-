@@ -48,7 +48,7 @@ export default function Login() {
         if (adminData) {
           navigate('/admin');
         } else {
-          navigate('/partner');
+          setError('Access denied. Admin only.');
         }
       }
     } catch (err: any) {
@@ -67,7 +67,7 @@ export default function Login() {
       >
         <div className="p-8 md:p-12">
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-serif mb-2 text-brand-navy">Partner Portal</h2>
+            <h2 className="text-3xl font-serif mb-2 text-brand-navy">Admin Login</h2>
             <p className="text-brand-navy/50 text-[10px] uppercase tracking-[0.3em] font-bold font-sans">Welcome back to Exciting Maldives</p>
           </div>
 
@@ -135,22 +135,13 @@ export default function Login() {
             <Chrome size={18} /> Google Account
           </button>
 
-          <div className="mt-8 grid grid-cols-2 gap-4">
-            <button 
-              onClick={() => {
-                localStorage.setItem('demo_mode', 'partner');
-                window.location.href = '/partner';
-              }}
-              className="bg-brand-teal/10 text-brand-teal py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all font-sans"
-            >
-              Demo Partner
-            </button>
+          <div className="mt-8 flex justify-center">
             <button 
               onClick={() => {
                 localStorage.setItem('demo_mode', 'admin');
                 window.location.href = '/admin';
               }}
-              className="bg-brand-navy/10 text-brand-navy py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy hover:text-white transition-all font-sans"
+              className="bg-brand-navy/10 text-brand-navy py-3 px-8 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy hover:text-white transition-all font-sans"
             >
               Demo Admin
             </button>

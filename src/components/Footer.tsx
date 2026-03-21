@@ -33,7 +33,7 @@ export default function Footer() {
       { label: 'Resorts', path: '/resorts' },
       { label: 'Maldives Map', path: '/map' },
       { label: 'Tourist Info', path: '/tourist-info' },
-      { label: 'Partner Portal', path: '/login' }
+      { label: 'Partner Login', path: 'https://b2b.excitingmv.com/' }
     ],
     legal_links: settings.footer?.legal_links || [
       { label: 'Privacy Policy', path: '/legal' },
@@ -53,7 +53,7 @@ export default function Footer() {
           <div className="space-y-8">
             <Link to="/" className="flex items-center gap-3">
               {logos.white ? (
-                <img src={logos.white} alt="Exciting Maldives" className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+                <img src={logos.white} alt="Exciting Maldives" className="h-16 w-auto object-contain" referrerPolicy="no-referrer" />
               ) : (
                 <div className="flex flex-col leading-none">
                   <span className="text-xl font-serif font-bold tracking-[0.1em] text-white uppercase">
@@ -86,7 +86,13 @@ export default function Footer() {
             <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Important Links</h4>
             <ul className="space-y-4 text-sm font-sans text-white/60">
               {(footer.important_links || []).map((link: any, idx: number) => (
-                <li key={idx}><Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link></li>
+                <li key={idx}>
+                  {link.path.startsWith('http') ? (
+                    <a href={link.path} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">{link.label}</a>
+                  ) : (
+                    <Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -96,7 +102,13 @@ export default function Footer() {
             <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Legal & Media</h4>
             <ul className="space-y-4 text-sm font-sans text-white/60">
               {(footer.legal_links || []).map((link: any, idx: number) => (
-                <li key={idx}><Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link></li>
+                <li key={idx}>
+                  {link.path.startsWith('http') ? (
+                    <a href={link.path} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">{link.label}</a>
+                  ) : (
+                    <Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link>
+                  )}
+                </li>
               ))}
             </ul>
           </div>

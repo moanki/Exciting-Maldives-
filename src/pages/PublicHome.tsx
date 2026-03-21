@@ -56,7 +56,7 @@ export default function PublicHome() {
   const partner = settings.partner || {
     title: "Partner with the Maldives' Leading B2B Experts",
     summary: "Gain access to exclusive rates, real-time availability, and AI-powered sales tools designed to elevate your travel business.",
-    agent_url: "/login",
+    agent_url: "https://b2b.excitingmv.com/",
     guide_url: "/tourist-info"
   };
 
