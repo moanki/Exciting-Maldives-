@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/ai';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,6 +21,7 @@ export default function AdminDashboard() {
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} />
           <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} />
           <SidebarLink to="/admin/agents" icon={<Users size={18} />} label="Agents" active={location.pathname.startsWith('/admin/agents')} />
+          <SidebarLink to="/admin/customization" icon={<Palette size={18} />} label="Page Customization" active={location.pathname.startsWith('/admin/customization')} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} />
         </nav>
       </aside>
@@ -32,6 +33,7 @@ export default function AdminDashboard() {
           <Route path="/resorts" element={<AdminResorts />} />
           <Route path="/bookings" element={<AdminBookings />} />
           <Route path="/agents" element={<AdminAgents />} />
+          <Route path="/customization" element={<AdminPageCustomization />} />
           <Route path="/resources" element={<AdminResources />} />
         </Routes>
       </main>
@@ -296,6 +298,77 @@ function AdminOverview() {
         ];
         const { error: bookingError } = await supabase.from('booking_requests').insert(demoRequests);
         if (bookingError) throw bookingError;
+      }
+
+      setSeedStatus('Seeding site settings...');
+      const initialSettings = [
+        {
+          key: 'logos',
+          value: {
+            primary: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-primary.png',
+            white: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-white.png',
+            black: 'https://ais-pre-y3ndb5ovco74k3lwrzfovr-197064912503.asia-east1.run.app/logo-black.png'
+          }
+        },
+        {
+          key: 'navbar',
+          value: [
+            { label: 'Home', path: '/' },
+            { label: 'Resorts', path: '/resorts' },
+            { label: 'About Us', path: '/about' },
+            { label: 'Contact', path: '/contact' }
+          ]
+        },
+        {
+          key: 'hero',
+          value: {
+            title: 'EXPERIENCE THE EXTRAORDINARY',
+            subtitle: 'Curated Luxury Escapes in the Heart of the Maldives'
+          }
+        },
+        {
+          key: 'introduction',
+          value: {
+            title: 'YOUR MALDIVES EXPERTS',
+            summary: 'With over a decade of experience in luxury travel, Exciting Maldives brings you the most exclusive resorts and personalized service in the worlds most beautiful destination.'
+          }
+        },
+        {
+          key: 'why_us',
+          value: [
+            { title: 'EXPERT KNOWLEDGE', description: 'Our team has personally visited and vetted every resort we recommend.' },
+            { title: 'EXCLUSIVE OFFERS', description: 'Access special rates and perks not available anywhere else.' },
+            { title: 'PERSONAL SERVICE', description: 'Dedicated travel consultants to handle every detail of your journey.' }
+          ]
+        },
+        {
+          key: 'partner',
+          value: {
+            title: 'BECOME A PARTNER',
+            summary: 'Join our network of elite travel agents and gain access to the best of the Maldives.',
+            agent_url: '/agent-registration',
+            guide_url: '/travel-guide'
+          }
+        },
+        {
+          key: 'footer',
+          value: {
+            contact: {
+              email: 'hello@excitingmaldives.com',
+              phone: '+960 123 4567',
+              address: 'H. Malé, Republic of Maldives'
+            },
+            social: {
+              instagram: 'https://instagram.com/excitingmaldives',
+              linkedin: 'https://linkedin.com/company/excitingmaldives',
+              facebook: 'https://facebook.com/excitingmaldives'
+            }
+          }
+        }
+      ];
+
+      for (const setting of initialSettings) {
+        await supabase.from('site_settings').upsert(setting, { onConflict: 'key' });
       }
 
       setSeedStatus('Success! Sample data seeded.');
@@ -617,6 +690,515 @@ function AdminAgents() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function AdminPageCustomization() {
+  const [activeTab, setActiveTab] = useState('nav');
+  const [settings, setSettings] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [resorts, setResorts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchSettings();
+    fetchResorts();
+  }, []);
+
+  const fetchSettings = async () => {
+    const { data, error } = await supabase.from('site_settings').select('*');
+    if (data) {
+      const settingsMap = data.reduce((acc: any, curr: any) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {});
+      setSettings(settingsMap);
+    }
+    setLoading(false);
+  };
+
+  const fetchResorts = async () => {
+    const { data } = await supabase.from('resorts').select('id, name');
+    if (data) setResorts(data);
+  };
+
+  const saveSetting = async (key: string, value: any) => {
+    setSaving(true);
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert({ key, value }, { onConflict: 'key' });
+    
+    if (!error) {
+      setSettings({ ...settings, [key]: value });
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div></div>;
+
+  return (
+    <div className="max-w-5xl">
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-3xl font-serif text-brand-navy">Page Customization</h1>
+        {saving && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-teal animate-pulse">Saving changes...</span>}
+      </div>
+
+      <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
+        {[
+          { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
+          { id: 'pages', label: 'Custom Pages', icon: <FileText size={14} /> },
+          { id: 'hero', label: 'Hero & Intro', icon: <Image size={14} /> },
+          { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
+          { id: 'retreats', label: 'Featured Retreats', icon: <Hotel size={14} /> },
+          { id: 'partner', label: 'Partner Section', icon: <Users size={14} /> },
+          { id: 'footer', label: 'Footer', icon: <Settings size={14} /> }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+              activeTab === tab.id ? 'bg-white text-brand-teal shadow-sm' : 'text-brand-navy/40 hover:text-brand-navy'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="bg-white p-8 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5"
+        >
+          {activeTab === 'nav' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Navigation Items</h3>
+                <div className="space-y-4">
+                  {(settings.navbar || []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex gap-4 items-center bg-brand-paper/30 p-4 rounded-2xl">
+                      <TextInput 
+                        label="Label" 
+                        value={item.label} 
+                        onChange={(val) => {
+                          const newNav = [...settings.navbar];
+                          newNav[idx].label = val;
+                          saveSetting('navbar', newNav);
+                        }} 
+                      />
+                      <TextInput 
+                        label="Path" 
+                        value={item.path} 
+                        onChange={(val) => {
+                          const newNav = [...settings.navbar];
+                          newNav[idx].path = val;
+                          saveSetting('navbar', newNav);
+                        }} 
+                      />
+                      <button 
+                        onClick={() => {
+                          const newNav = settings.navbar.filter((_: any, i: number) => i !== idx);
+                          saveSetting('navbar', newNav);
+                        }}
+                        className="mt-6 p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => saveSetting('navbar', [...(settings.navbar || []), { label: 'New Item', path: '/' }])}
+                    className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Add Navigation Item
+                  </button>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Website Logos</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <LogoInput 
+                    label="Primary Logo" 
+                    value={settings.logos?.primary} 
+                    onChange={(val) => saveSetting('logos', { ...settings.logos, primary: val })} 
+                  />
+                  <LogoInput 
+                    label="White Logo" 
+                    value={settings.logos?.white} 
+                    onChange={(val) => saveSetting('logos', { ...settings.logos, white: val })} 
+                  />
+                  <LogoInput 
+                    label="Black Logo" 
+                    value={settings.logos?.black} 
+                    onChange={(val) => saveSetting('logos', { ...settings.logos, black: val })} 
+                  />
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'pages' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Custom Pages</h3>
+              {(settings.custom_pages || []).map((page: any, idx: number) => (
+                <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
+                  <button 
+                    onClick={() => {
+                      const newPages = settings.custom_pages.filter((_: any, i: number) => i !== idx);
+                      saveSetting('custom_pages', newPages);
+                    }}
+                    className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <TextInput 
+                      label="Page Title" 
+                      value={page.title} 
+                      onChange={(val) => {
+                        const newPages = [...settings.custom_pages];
+                        newPages[idx].title = val;
+                        saveSetting('custom_pages', newPages);
+                      }} 
+                    />
+                    <TextInput 
+                      label="Slug (e.g. about-us)" 
+                      value={page.slug} 
+                      onChange={(val) => {
+                        const newPages = [...settings.custom_pages];
+                        newPages[idx].slug = val.toLowerCase().replace(/ /g, '-');
+                        saveSetting('custom_pages', newPages);
+                      }} 
+                    />
+                  </div>
+                  <TextAreaInput 
+                    label="Page Content (HTML/Text)" 
+                    value={page.content} 
+                    onChange={(val) => {
+                      const newPages = [...settings.custom_pages];
+                      newPages[idx].content = val;
+                      saveSetting('custom_pages', newPages);
+                    }} 
+                  />
+                </div>
+              ))}
+              <button 
+                onClick={() => saveSetting('custom_pages', [...(settings.custom_pages || []), { title: 'New Page', slug: 'new-page', content: '' }])}
+                className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> Create New Page
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'hero' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Hero Banner</h3>
+                <div className="space-y-6">
+                  <TextInput 
+                    label="Main Title" 
+                    value={settings.hero?.title} 
+                    onChange={(val) => saveSetting('hero', { ...settings.hero, title: val })} 
+                  />
+                  <TextAreaInput 
+                    label="Subtitle" 
+                    value={settings.hero?.subtitle} 
+                    onChange={(val) => saveSetting('hero', { ...settings.hero, subtitle: val })} 
+                  />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Introduction Section</h3>
+                <div className="space-y-6">
+                  <TextInput 
+                    label="Intro Title" 
+                    value={settings.introduction?.title} 
+                    onChange={(val) => saveSetting('introduction', { ...settings.introduction, title: val })} 
+                  />
+                  <TextAreaInput 
+                    label="Intro Summary" 
+                    value={settings.introduction?.summary} 
+                    onChange={(val) => saveSetting('introduction', { ...settings.introduction, summary: val })} 
+                  />
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'why' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Why Us Pillars</h3>
+              {(settings.why_us || []).map((pillar: any, idx: number) => (
+                <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
+                  <button 
+                    onClick={() => {
+                      const newPillars = settings.why_us.filter((_: any, i: number) => i !== idx);
+                      saveSetting('why_us', newPillars);
+                    }}
+                    className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <TextInput 
+                    label="Pillar Title" 
+                    value={pillar.title} 
+                    onChange={(val) => {
+                      const newPillars = [...settings.why_us];
+                      newPillars[idx].title = val;
+                      saveSetting('why_us', newPillars);
+                    }} 
+                  />
+                  <TextAreaInput 
+                    label="Pillar Description" 
+                    value={pillar.description} 
+                    onChange={(val) => {
+                      const newPillars = [...settings.why_us];
+                      newPillars[idx].description = val;
+                      saveSetting('why_us', newPillars);
+                    }} 
+                  />
+                </div>
+              ))}
+              <button 
+                onClick={() => saveSetting('why_us', [...(settings.why_us || []), { title: 'New Pillar', description: '' }])}
+                className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> Add Pillar
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'retreats' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Featured Resorts</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {resorts.map(resort => {
+                  const isFeatured = (settings.featured_retreats || []).includes(resort.id);
+                  return (
+                    <button
+                      key={resort.id}
+                      onClick={() => {
+                        const current = settings.featured_retreats || [];
+                        const next = isFeatured 
+                          ? current.filter((id: string) => id !== resort.id)
+                          : [...current, resort.id];
+                        saveSetting('featured_retreats', next);
+                      }}
+                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                        isFeatured ? 'bg-brand-teal/5 border-brand-teal text-brand-teal' : 'bg-white border-brand-navy/5 text-brand-navy/60 hover:border-brand-navy/20'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-widest font-sans">{resort.name}</span>
+                      {isFeatured ? <Check size={16} /> : <Plus size={16} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'partner' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Become a Partner</h3>
+              <TextInput 
+                label="Section Title" 
+                value={settings.partner?.title} 
+                onChange={(val) => saveSetting('partner', { ...settings.partner, title: val })} 
+              />
+              <TextAreaInput 
+                label="Summary" 
+                value={settings.partner?.summary} 
+                onChange={(val) => saveSetting('partner', { ...settings.partner, summary: val })} 
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <TextInput 
+                  label="Become an Agent URL" 
+                  value={settings.partner?.agent_url} 
+                  onChange={(val) => saveSetting('partner', { ...settings.partner, agent_url: val })} 
+                  icon={<Link2 size={14} />}
+                />
+                <TextInput 
+                  label="Travel Guide URL" 
+                  value={settings.partner?.guide_url} 
+                  onChange={(val) => saveSetting('partner', { ...settings.partner, guide_url: val })} 
+                  icon={<Link2 size={14} />}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'footer' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Contact Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <TextInput 
+                    label="Email" 
+                    value={settings.footer?.contact?.email} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, email: val } })} 
+                    icon={<Mail size={14} />}
+                  />
+                  <TextInput 
+                    label="Phone" 
+                    value={settings.footer?.contact?.phone} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, phone: val } })} 
+                    icon={<Phone size={14} />}
+                  />
+                  <TextInput 
+                    label="Address" 
+                    value={settings.footer?.contact?.address} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, contact: { ...settings.footer.contact, address: val } })} 
+                    icon={<MapPin size={14} />}
+                  />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Social Media</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <TextInput 
+                    label="Instagram" 
+                    value={settings.footer?.social?.instagram} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, instagram: val } })} 
+                    icon={<Instagram size={14} />}
+                  />
+                  <TextInput 
+                    label="LinkedIn" 
+                    value={settings.footer?.social?.linkedin} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, linkedin: val } })} 
+                    icon={<Linkedin size={14} />}
+                  />
+                  <TextInput 
+                    label="Facebook" 
+                    value={settings.footer?.social?.facebook} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, facebook: val } })} 
+                    icon={<Facebook size={14} />}
+                  />
+                  <TextInput 
+                    label="Twitter" 
+                    value={settings.footer?.social?.twitter} 
+                    onChange={(val) => saveSetting('footer', { ...settings.footer, social: { ...settings.footer.social, twitter: val } })} 
+                    icon={<Twitter size={14} />}
+                  />
+                </div>
+              </section>
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Footer Link Columns</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30 mb-4">Important Links</h4>
+                    <div className="space-y-4">
+                      {(settings.footer?.important_links || []).map((link: any, idx: number) => (
+                        <div key={idx} className="flex gap-2">
+                          <TextInput value={link.label} onChange={(val) => {
+                            const newLinks = [...settings.footer.important_links];
+                            newLinks[idx].label = val;
+                            saveSetting('footer', { ...settings.footer, important_links: newLinks });
+                          }} />
+                          <TextInput value={link.path} onChange={(val) => {
+                            const newLinks = [...settings.footer.important_links];
+                            newLinks[idx].path = val;
+                            saveSetting('footer', { ...settings.footer, important_links: newLinks });
+                          }} />
+                          <button onClick={() => {
+                            const newLinks = settings.footer.important_links.filter((_: any, i: number) => i !== idx);
+                            saveSetting('footer', { ...settings.footer, important_links: newLinks });
+                          }} className="p-2 text-brand-coral"><Trash2 size={14} /></button>
+                        </div>
+                      ))}
+                      <button onClick={() => saveSetting('footer', { ...settings.footer, important_links: [...(settings.footer?.important_links || []), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30 mb-4">Legal & Media</h4>
+                    <div className="space-y-4">
+                      {(settings.footer?.legal_links || []).map((link: any, idx: number) => (
+                        <div key={idx} className="flex gap-2">
+                          <TextInput value={link.label} onChange={(val) => {
+                            const newLinks = [...settings.footer.legal_links];
+                            newLinks[idx].label = val;
+                            saveSetting('footer', { ...settings.footer, legal_links: newLinks });
+                          }} />
+                          <TextInput value={link.path} onChange={(val) => {
+                            const newLinks = [...settings.footer.legal_links];
+                            newLinks[idx].path = val;
+                            saveSetting('footer', { ...settings.footer, legal_links: newLinks });
+                          }} />
+                          <button onClick={() => {
+                            const newLinks = settings.footer.legal_links.filter((_: any, i: number) => i !== idx);
+                            saveSetting('footer', { ...settings.footer, legal_links: newLinks });
+                          }} className="p-2 text-brand-coral"><Trash2 size={14} /></button>
+                        </div>
+                      ))}
+                      <button onClick={() => saveSetting('footer', { ...settings.footer, legal_links: [...(settings.footer?.legal_links || []), { label: 'New Link', path: '/' }] })} className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">+ Add Link</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function TextInput({ label, value, onChange, icon }: any) {
+  return (
+    <div className="flex-1">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">{label}</label>
+      <div className="relative">
+        {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-navy/30">{icon}</div>}
+        <input
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy ${icon ? 'pl-10' : ''}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TextAreaInput({ label, value, onChange }: any) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">{label}</label>
+      <textarea
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        rows={4}
+        className="w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy resize-none"
+      />
+    </div>
+  );
+}
+
+function LogoInput({ label, value, onChange }: any) {
+  return (
+    <div className="bg-brand-paper/30 p-4 rounded-2xl">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-4 font-sans">{label}</label>
+      <div className="bg-white p-4 rounded-xl mb-4 flex items-center justify-center h-24 overflow-hidden border border-brand-navy/5">
+        {value ? (
+          <img src={value} alt={label} className="max-h-full object-contain" referrerPolicy="no-referrer" />
+        ) : (
+          <div className="text-brand-navy/10"><Image size={32} /></div>
+        )}
+      </div>
+      <input
+        type="text"
+        placeholder="Logo URL"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-white border-none rounded-lg px-3 py-2 text-[10px] focus:ring-1 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy"
+      />
     </div>
   );
 }

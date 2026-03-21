@@ -13,9 +13,11 @@ import Login from './pages/Login';
 import TouristInfo from './pages/TouristInfo';
 import MaldivesMap from './pages/MaldivesMap';
 import Legal from './pages/Legal';
+import CustomPage from './pages/CustomPage';
 
 // Components
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import ChatWidget from './components/ChatWidget';
 
 export default function App() {
@@ -131,6 +133,7 @@ export default function App() {
             <Route path="/tourist-info" element={<TouristInfo />} />
             <Route path="/map" element={<MaldivesMap />} />
             <Route path="/legal" element={<Legal />} />
+            <Route path="/p/:slug" element={<CustomPage />} />
             <Route path="/login" element={<Login />} />
             
             {/* Protected Routes */}
@@ -144,6 +147,7 @@ export default function App() {
             />
           </Routes>
         </main>
+        <Footer />
         <ChatWidget />
       </div>
     </Router>

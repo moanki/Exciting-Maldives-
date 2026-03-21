@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
 import { Menu, X, User as UserIcon, LogOut } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface NavbarProps {
   user: User | null;
@@ -11,7 +11,22 @@ interface NavbarProps {
 
 export default function Navbar({ user, role }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [settings, setSettings] = useState<any>({});
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from('site_settings').select('*');
+      if (data) {
+        const settingsMap = data.reduce((acc: any, curr: any) => {
+          acc[curr.key] = curr.value;
+          return acc;
+        }, {});
+        setSettings(settingsMap);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleLogout = async () => {
     localStorage.removeItem('demo_mode');
@@ -20,48 +35,67 @@ export default function Navbar({ user, role }: NavbarProps) {
     window.location.reload(); // Force reload to clear state
   };
 
+  const navItems = settings.navbar || [
+    { label: 'Resorts', path: '/resorts' },
+    { label: 'Map', path: '/map' },
+    { label: 'Info', path: '/tourist-info' }
+  ];
+
+  const logo = settings.logos?.primary;
+
   return (
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-brand-navy/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
-              <div className="relative w-12 h-12 flex items-center justify-center">
-                {/* Recreated Shell Icon from Brand Guidelines */}
-                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
-                  <defs>
-                    <linearGradient id="brandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#3fabb6" />
-                      <stop offset="100%" stopColor="#d9af89" />
-                    </linearGradient>
-                  </defs>
-                  {/* Fan-like shell segments */}
-                  <path d="M50 85 C50 85 20 75 10 50 C10 25 30 15 50 15 C70 15 90 25 90 50 C80 75 50 85 50 85 Z" fill="none" stroke="url(#brandGradient)" strokeWidth="0.5" opacity="0.2" />
-                  <g fill="url(#brandGradient)">
-                    <path d="M50 80 L45 30 A25 25 0 0 1 55 30 Z" />
-                    <path d="M50 80 L30 35 A30 30 0 0 1 40 28 Z" transform="rotate(-15 50 80)" />
-                    <path d="M50 80 L15 45 A35 35 0 0 1 25 35 Z" transform="rotate(-35 50 80)" />
-                    <path d="M50 80 L70 35 A30 30 0 0 0 60 28 Z" transform="rotate(15 50 80)" />
-                    <path d="M50 80 L85 45 A35 35 0 0 0 75 35 Z" transform="rotate(35 50 80)" />
-                  </g>
-                </svg>
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-xl font-serif font-bold tracking-[0.1em] text-brand-navy uppercase">
-                  Exciting
-                </span>
-                <span className="text-[10px] font-sans font-bold tracking-[0.5em] text-brand-teal uppercase ml-0.5">
-                  Maldives
-                </span>
-              </div>
+              {logo ? (
+                <img src={logo} alt="Exciting Maldives" className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+              ) : (
+                <>
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    {/* Recreated Shell Icon from Brand Guidelines */}
+                    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
+                      <defs>
+                        <linearGradient id="brandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#3fabb6" />
+                          <stop offset="100%" stopColor="#d9af89" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M50 85 C50 85 20 75 10 50 C10 25 30 15 50 15 C70 15 90 25 90 50 C80 75 50 85 50 85 Z" fill="none" stroke="url(#brandGradient)" strokeWidth="0.5" opacity="0.2" />
+                      <g fill="url(#brandGradient)">
+                        <path d="M50 80 L45 30 A25 25 0 0 1 55 30 Z" />
+                        <path d="M50 80 L30 35 A30 30 0 0 1 40 28 Z" transform="rotate(-15 50 80)" />
+                        <path d="M50 80 L15 45 A35 35 0 0 1 25 35 Z" transform="rotate(-35 50 80)" />
+                        <path d="M50 80 L70 35 A30 30 0 0 0 60 28 Z" transform="rotate(15 50 80)" />
+                        <path d="M50 80 L85 45 A35 35 0 0 0 75 35 Z" transform="rotate(35 50 80)" />
+                      </g>
+                    </svg>
+                  </div>
+                  <div className="flex flex-col leading-none">
+                    <span className="text-xl font-serif font-bold tracking-[0.1em] text-brand-navy uppercase">
+                      Exciting
+                    </span>
+                    <span className="text-[10px] font-sans font-bold tracking-[0.5em] text-brand-teal uppercase ml-0.5">
+                      Maldives
+                    </span>
+                  </div>
+                </>
+              )}
             </Link>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/resorts" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Resorts</Link>
-            <Link to="/map" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Map</Link>
-            <Link to="/tourist-info" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors">Info</Link>
+            {navItems.map((item: any, idx: number) => (
+              <Link 
+                key={idx} 
+                to={item.path} 
+                className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors"
+              >
+                {item.label}
+              </Link>
+            ))}
             
             {user ? (
               <div className="flex items-center space-x-6">
@@ -105,17 +139,23 @@ export default function Navbar({ user, role }: NavbarProps) {
       {isOpen && (
         <div className="md:hidden bg-white border-b border-gray-200">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link to="/resorts" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-[#5A5A40]">Resorts</Link>
-            <Link to="/map" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-[#5A5A40]">Map</Link>
-            <Link to="/tourist-info" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-[#5A5A40]">Info</Link>
+            {navItems.map((item: any, idx: number) => (
+              <Link 
+                key={idx} 
+                to={item.path} 
+                className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-brand-teal"
+              >
+                {item.label}
+              </Link>
+            ))}
             {user ? (
               <>
-                {role === 'agent' && <Link to="/agent" className="block px-3 py-2 text-base font-medium text-[#5A5A40]">Agent Portal</Link>}
-                {['super_admin', 'sales', 'content_manager'].includes(role || '') && <Link to="/admin" className="block px-3 py-2 text-base font-medium text-[#5A5A40]">Admin</Link>}
+                {role === 'agent' && <Link to="/agent" className="block px-3 py-2 text-base font-medium text-brand-teal">Agent Portal</Link>}
+                {['super_admin', 'sales', 'content_manager'].includes(role || '') && <Link to="/admin" className="block px-3 py-2 text-base font-medium text-brand-teal">Admin</Link>}
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700">Logout</button>
               </>
             ) : (
-              <Link to="/login" className="block px-3 py-2 text-base font-medium text-[#5A5A40]">Agent Login</Link>
+              <Link to="/login" className="block px-3 py-2 text-base font-medium text-brand-teal">Agent Login</Link>
             )}
           </div>
         </div>
