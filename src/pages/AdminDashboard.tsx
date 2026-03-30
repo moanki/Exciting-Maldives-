@@ -33,7 +33,8 @@ export default function AdminDashboard() {
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} />
           <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} />
           <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partner Management" active={location.pathname.startsWith('/admin/partners')} />
-          <SidebarLink to="/admin/customization" icon={<Palette size={18} />} label="Page Customization" active={location.pathname.startsWith('/admin/customization')} />
+          <SidebarLink to="/admin/page-manager" icon={<Palette size={18} />} label="Page Manager" active={location.pathname.startsWith('/admin/page-manager')} />
+          <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} />
         </nav>
       </aside>
@@ -76,7 +77,8 @@ export default function AdminDashboard() {
             <Route path="/resorts" element={<AdminResorts />} />
             <Route path="/bookings" element={<AdminBookings />} />
             <Route path="/partners" element={<AdminPartners />} />
-            <Route path="/customization" element={<AdminPageCustomization />} />
+            <Route path="/page-manager" element={<AdminPageManager />} />
+            <Route path="/password-manager" element={<AdminPasswordManager />} />
             <Route path="/resources" element={<AdminResources />} />
           </Routes>
         </main>
@@ -85,20 +87,103 @@ export default function AdminDashboard() {
   );
 }
 
-function AdminResources() {
+function AdminPasswordManager() {
   const [resources, setResources] = useState<any[]>([]);
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAddingProtected, setIsAddingProtected] = useState(false);
 
   useEffect(() => {
     const fetchResources = async () => {
-      const { data, error } = await supabase
-        .from('resources')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data } = await supabase.from('protected_resources').select('*');
+      if (data) setResources(data);
+    };
+    fetchResources();
+  }, []);
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-3xl font-serif text-brand-navy">Password Manager</h1>
+        <button 
+          onClick={() => setIsAddingProtected(true)}
+          className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
+        >
+          <Plus size={16} /> Add Protected Resource
+        </button>
+      </div>
       
-      if (data) {
-        setResources(data);
-      }
+      {isAddingProtected && (
+        <ProtectedResourceModal 
+          onClose={() => setIsAddingProtected(false)} 
+          onAdd={() => {
+            setIsAddingProtected(false);
+            const fetchResources = async () => {
+              const { data } = await supabase.from('protected_resources').select('*');
+              if (data) setResources(data);
+            };
+            fetchResources();
+          }} 
+        />
+      )}
+
+      <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-brand-paper border-b border-brand-navy/5">
+            <tr>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Title</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Password</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">File URL</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-brand-paper">
+            {resources.map(resource => (
+              <tr key={resource.id} className="hover:bg-brand-paper/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-navy font-sans">{resource.title}</td>
+                <td className="px-6 py-4 text-brand-navy/60 font-sans">{resource.passwords?.join(', ') || resource.password}</td>
+                <td className="px-6 py-4 text-brand-navy/60 font-sans">
+                  {resource.file_url ? (
+                    <a href={resource.file_url} target="_blank" rel="noopener noreferrer" className="text-brand-teal hover:underline">View File</a>
+                  ) : 'No file'}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex gap-2">
+                    <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                    <button 
+                      onClick={async () => {
+                        const { error } = await supabase.from('protected_resources').delete().eq('id', resource.id);
+                        if (!error) {
+                          const { data } = await supabase.from('protected_resources').select('*');
+                          if (data) setResources(data);
+                        }
+                      }}
+                      className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminResources() {
+  const [resources, setResources] = useState<any[]>([]);
+  const [protectedResources, setProtectedResources] = useState<any[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isAddingProtected, setIsAddingProtected] = useState(false);
+
+  useEffect(() => {
+    const fetchResources = async () => {
+      const { data: resData } = await supabase.from('resources').select('*');
+      const { data: protData } = await supabase.from('protected_resources').select('*');
+      
+      if (resData) setResources(resData);
+      if (protData) setProtectedResources(protData);
     };
     fetchResources();
   }, []);
@@ -107,15 +192,39 @@ function AdminResources() {
     <div>
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-3xl font-serif text-brand-navy">Resource Library</h1>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20"
-        >
-          <Plus size={16} /> Add Resource
-        </button>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20"
+          >
+            <Plus size={16} /> Add Resource
+          </button>
+          <button 
+            onClick={() => setIsAddingProtected(true)}
+            className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
+          >
+            <Plus size={16} /> Add Protected Resource
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {isAddingProtected && (
+        <ProtectedResourceModal 
+          onClose={() => setIsAddingProtected(false)} 
+          onAdd={() => {
+            setIsAddingProtected(false);
+            // Re-fetch resources
+            const fetchResources = async () => {
+              const { data: protData } = await supabase.from('protected_resources').select('*');
+              if (protData) setProtectedResources(protData);
+            };
+            fetchResources();
+          }} 
+        />
+      )}
+
+      <h2 className="text-xl font-serif text-brand-navy mb-6">Public Resources</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
         {resources.map(resource => (
           <div key={resource.id} className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 hover:shadow-2xl transition-all">
             <div className="bg-brand-paper w-12 h-12 rounded-2xl flex items-center justify-center mb-4 text-brand-teal">
@@ -128,6 +237,37 @@ function AdminResources() {
               <div className="flex gap-2">
                 <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
                 <button className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h2 className="text-xl font-serif text-brand-navy mb-6">Protected Resources</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {protectedResources.map(resource => (
+          <div key={resource.id} className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 hover:shadow-2xl transition-all">
+            <div className="bg-brand-paper w-12 h-12 rounded-2xl flex items-center justify-center mb-4 text-brand-teal">
+              <Shield size={24} />
+            </div>
+            <h3 className="text-xl font-serif text-brand-navy mb-2">{resource.title}</h3>
+            <p className="text-[10px] text-brand-navy/30 uppercase tracking-widest font-bold mb-4 font-sans">Protected</p>
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] text-brand-navy/30 font-bold font-sans">{resource.passwords?.length || 0} Passwords</span>
+              <div className="flex gap-2">
+                <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                <button 
+                  onClick={async () => {
+                    const { error } = await supabase.from('protected_resources').delete().eq('id', resource.id);
+                    if (!error) {
+                      const { data } = await supabase.from('protected_resources').select('*');
+                      if (data) setProtectedResources(data);
+                    }
+                  }}
+                  className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
           </div>
@@ -148,6 +288,66 @@ function SidebarLink({ to, icon, label, active }: any) {
       {icon}
       <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
     </Link>
+  );
+}
+
+function ProtectedResourceModal({ onClose, onAdd }: any) {
+  const [title, setTitle] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [passwords, setPasswords] = useState('');
+
+  const handleSubmit = async () => {
+    if (!title || !file || !passwords) return;
+    
+    // Upload file
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const { error: uploadError, data } = await supabase.storage
+      .from('documents')
+      .upload(`protected/${fileName}`, file);
+    
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(`protected/${fileName}`);
+
+    // Save to DB
+    const { error } = await supabase
+      .from('protected_resources')
+      .insert({
+        title,
+        file_url: publicUrl,
+        passwords: passwords.split(',').map(p => p.trim())
+      });
+    
+    if (!error) {
+      onAdd();
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-navy/20 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-lg rounded-[32px] p-8 shadow-2xl">
+        <h3 className="text-xl font-serif text-brand-navy mb-6">Add Protected Resource</h3>
+        <div className="space-y-4">
+          <TextInput label="Title" value={title} onChange={setTitle} />
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File</label>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm font-sans" />
+          </div>
+          <TextInput label="Passwords (comma separated)" value={passwords} onChange={setPasswords} />
+          <div className="flex gap-4 mt-8">
+            <button onClick={onClose} className="flex-1 px-6 py-3 bg-brand-paper rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy/10 transition-all">Cancel</button>
+            <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Add Resource</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -246,6 +446,15 @@ create table if not exists public.resources (
   type text not null,
   size text,
   file_url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6.5 Protected Resources
+create table if not exists public.protected_resources (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  file_url text not null,
+  passwords text[] not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -663,9 +872,18 @@ function AdminResorts() {
                 <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{resort.atoll}</td>
                 <td className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 font-sans">{resort.category}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${resort.is_featured ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-paper text-brand-navy/30'}`}>
+                  <button 
+                    onClick={async () => {
+                      const { error } = await supabase
+                        .from('resorts')
+                        .update({ is_featured: !resort.is_featured })
+                        .eq('id', resort.id);
+                      if (!error) fetchResorts();
+                    }}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${resort.is_featured ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-paper text-brand-navy/30'}`}
+                  >
                     {resort.is_featured ? 'Featured' : 'Standard'}
-                  </span>
+                  </button>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
@@ -835,81 +1053,56 @@ ${partner.message || 'No message provided.'}
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-3xl font-serif text-brand-navy">Partner Management</h1>
+        <h1 className="text-3xl font-serif text-brand-navy">Partner Requests</h1>
         <button 
           onClick={downloadCSV}
-          className="flex items-center gap-2 px-6 py-3 bg-brand-navy text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all shadow-lg shadow-brand-navy/10"
+          className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
         >
-          <Upload size={14} />
-          Download All (CSV)
+          Download CSV
         </button>
       </div>
       <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-brand-paper border-b border-brand-navy/5">
             <tr>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Partner / Company</th>
-              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Contact Details</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Name</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Company</th>
               <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Status</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Date</th>
               <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-brand-paper">
             {partners.map(partner => (
               <tr key={partner.id} className="hover:bg-brand-paper/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="font-medium text-brand-navy font-sans">{partner.full_name}</div>
-                  <div className="text-[10px] text-brand-navy/40 font-bold uppercase tracking-widest mt-1">{partner.company_name}</div>
-                  {partner.website && (
-                    <a href={partner.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-teal hover:underline mt-1 block font-sans">
-                      {partner.website}
-                    </a>
-                  )}
+                <td className="px-6 py-4 font-medium text-brand-navy font-sans">
+                  {partner.full_name}
+                  <div className="text-xs text-brand-navy/60 font-normal">{partner.email}</div>
                 </td>
+                <td className="px-6 py-4 text-brand-navy/60 font-sans">{partner.company_name}</td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2 text-brand-navy/60 font-sans text-sm">
-                    <Mail size={12} className="text-brand-teal" />
-                    {partner.email}
-                  </div>
-                  <div className="flex items-center gap-2 text-brand-navy/60 font-sans text-sm mt-1">
-                    <Phone size={12} className="text-brand-teal" />
-                    {partner.phone}
-                  </div>
+                  <select 
+                    value={partner.status}
+                    onChange={(e) => updateStatus(partner.id, e.target.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider font-sans border-0 outline-none ${
+                      partner.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      partner.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
                 </td>
+                <td className="px-6 py-4 text-brand-navy/60 font-sans">{new Date(partner.created_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans ${
-                    partner.status === 'active' ? 'bg-green-50 text-green-600' : 
-                    partner.status === 'pending' ? 'bg-brand-beige/20 text-brand-beige' : 'bg-brand-coral/10 text-brand-coral'
-                  }`}>
-                    {partner.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    {partner.status === 'pending' && (
-                      <button 
-                        onClick={() => updateStatus(partner.id, 'active')}
-                        className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-all"
-                        title="Approve"
-                      >
-                        <Check size={16} />
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => updateStatus(partner.id, partner.status === 'active' ? 'deactivated' : 'active')}
-                      className="p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
-                      title={partner.status === 'active' ? 'Deactivate' : 'Activate'}
-                    >
-                      {partner.status === 'active' ? <X size={16} /> : <Check size={16} />}
-                    </button>
-                    <button 
-                      onClick={() => downloadIndividual(partner)}
-                      className="p-2 text-brand-navy/40 hover:text-brand-teal rounded-lg transition-all"
-                      title="Download Details"
-                    >
-                      <Upload size={16} />
-                    </button>
-                  </div>
+                  <button 
+                    onClick={() => downloadIndividual(partner)}
+                    className="text-brand-teal hover:text-brand-navy text-xs font-bold uppercase tracking-widest font-sans"
+                  >
+                    Download Details
+                  </button>
                 </td>
               </tr>
             ))}
@@ -920,7 +1113,7 @@ ${partner.message || 'No message provided.'}
   );
 }
 
-function AdminPageCustomization() {
+function AdminPageManager() {
   const [activeTab, setActiveTab] = useState('nav');
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
@@ -948,9 +1141,15 @@ function AdminPageCustomization() {
 
   const fetchSettings = async () => {
     try {
+      console.log('Fetching site settings...');
+      if (!supabase) {
+        console.error('Supabase client is not initialized!');
+        return;
+      }
       const { data, error } = await supabase.from('site_settings').select('*');
       
       if (error) {
+        console.error('Supabase error fetching settings:', error);
         // If table doesn't exist (PGRST205), we just return defaults silently
         if (error.code !== 'PGRST205') {
           console.error('Error fetching settings:', error);
@@ -971,7 +1170,7 @@ function AdminPageCustomization() {
         setLoading(false);
         return;
       }
-
+      console.log('Settings fetched successfully:', data);
       if (data) {
         // Load published settings first
         const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
@@ -1044,8 +1243,19 @@ function AdminPageCustomization() {
   };
 
   const fetchResorts = async () => {
-    const { data } = await supabase.from('resorts').select('id, name');
+    const { data } = await supabase.from('resorts').select('id, name, is_featured');
     if (data) setResorts(data);
+  };
+
+  const toggleFeatured = async (resort: any) => {
+    const { error } = await supabase
+      .from('resorts')
+      .update({ is_featured: !resort.is_featured })
+      .eq('id', resort.id);
+    
+    if (!error) {
+      fetchResorts();
+    }
   };
 
   const fetchHistory = async (key: string) => {
@@ -1380,55 +1590,96 @@ function AdminPageCustomization() {
 
           {activeTab === 'pages' && (
             <div className="space-y-6">
-              <h3 className="text-xl font-serif text-brand-navy mb-6">Custom Pages</h3>
-              {safeArray(settings.custom_pages).map((page: any, idx: number) => (
-                <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
-                  <button 
-                    onClick={() => {
-                      const newPages = safeArray(settings.custom_pages).filter((_: any, i: number) => i !== idx);
-                      saveSetting('custom_pages', newPages);
-                    }}
-                    className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <TextInput 
-                      label="Page Title" 
-                      value={page.title} 
-                      onChange={(val) => {
-                        const newPages = [...safeArray(settings.custom_pages)];
-                        newPages[idx].title = val;
-                        saveSetting('custom_pages', newPages);
-                      }} 
-                    />
-                    <TextInput 
-                      label="Slug (e.g. about-us)" 
-                      value={page.slug} 
-                      onChange={(val) => {
-                        const newPages = [...safeArray(settings.custom_pages)];
-                        newPages[idx].slug = val.toLowerCase().replace(/ /g, '-');
-                        saveSetting('custom_pages', newPages);
-                      }} 
-                    />
-                  </div>
-                  <TextAreaInput 
-                    label="Page Content (HTML/Text)" 
-                    value={page.content} 
-                    onChange={(val) => {
-                      const newPages = [...safeArray(settings.custom_pages)];
-                      newPages[idx].content = val;
-                      saveSetting('custom_pages', newPages);
-                    }} 
-                  />
-                </div>
-              ))}
-              <button 
-                onClick={() => saveSetting('custom_pages', [...safeArray(settings.custom_pages), { title: 'New Page', slug: 'new-page', content: '' }])}
-                className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
-              >
-                <Plus size={16} /> Create New Page
-              </button>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-serif text-brand-navy">Page Manager</h3>
+                <button 
+                  onClick={() => saveSetting('custom_pages', [...safeArray(settings.custom_pages), { title: 'New Page', slug: 'new-page', content: '', status: 'active' }])}
+                  className="py-3 px-6 bg-brand-navy text-white rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2"
+                >
+                  <Plus size={16} /> Add New Page
+                </button>
+              </div>
+              <div className="bg-white rounded-3xl border border-brand-navy/10 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-brand-navy/10 bg-brand-paper/30">
+                      <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-brand-navy/50">Page Name</th>
+                      <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-brand-navy/50">Path</th>
+                      <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-brand-navy/50">Status</th>
+                      <th className="py-4 px-6 text-[10px] font-bold uppercase tracking-widest text-brand-navy/50">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { title: 'Home', slug: '', isBuiltIn: true },
+                      { title: 'Resorts', slug: 'resorts', isBuiltIn: true },
+                      { title: 'Tourist Info', slug: 'tourist-info', isBuiltIn: true },
+                      { title: 'Map', slug: 'map', isBuiltIn: true },
+                      { title: 'Legal', slug: 'legal', isBuiltIn: true },
+                      { title: 'Become Partner', slug: 'become-partner', isBuiltIn: true },
+                      { title: 'Login', slug: 'login', isBuiltIn: true },
+                      ...safeArray(settings.custom_pages).map((p: any, i: number) => ({ ...p, isBuiltIn: false, originalIndex: i }))
+                    ].map((page: any, idx: number) => {
+                      const isActive = page.isBuiltIn 
+                        ? (settings.builtin_pages_status?.[page.slug] !== false)
+                        : (page.status !== 'inactive');
+                      
+                      return (
+                        <tr key={idx} className="border-b border-brand-navy/5 hover:bg-brand-paper/10">
+                          <td className="py-4 px-6 text-sm font-sans text-brand-navy flex items-center gap-2">
+                            {page.title}
+                            {page.isBuiltIn && <span className="text-[10px] bg-brand-navy/5 text-brand-navy/50 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Built-in</span>}
+                          </td>
+                          <td className="py-4 px-6 text-sm font-sans text-brand-navy">/{page.slug}</td>
+                          <td className="py-4 px-6 text-sm font-sans text-brand-navy">
+                            <button 
+                              onClick={() => {
+                                if (page.isBuiltIn) {
+                                  const currentStatus = settings.builtin_pages_status || {};
+                                  saveSetting('builtin_pages_status', {
+                                    ...currentStatus,
+                                    [page.slug]: !isActive
+                                  });
+                                } else {
+                                  const newPages = [...safeArray(settings.custom_pages)];
+                                  newPages[page.originalIndex].status = isActive ? 'inactive' : 'active';
+                                  saveSetting('custom_pages', newPages);
+                                }
+                              }}
+                              className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-brand-coral/10 text-brand-coral hover:bg-brand-coral/20'}`}
+                            >
+                              {isActive ? 'Active' : 'Inactive'}
+                            </button>
+                          </td>
+                          <td className="py-4 px-6 flex gap-2">
+                            {!page.isBuiltIn && (
+                              <>
+                                <button 
+                                  onClick={() => {
+                                    console.log('Edit page', page);
+                                  }}
+                                  className="text-brand-teal hover:text-brand-teal/80 text-sm font-bold uppercase tracking-widest"
+                                >
+                                  Edit
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const newPages = safeArray(settings.custom_pages).filter((_: any, i: number) => i !== page.originalIndex);
+                                    saveSetting('custom_pages', newPages);
+                                  }}
+                                  className="text-brand-coral hover:text-brand-coral/80 text-sm font-bold uppercase tracking-widest"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -1455,6 +1706,26 @@ function AdminPageCustomization() {
                     value={settings.hero?.title} 
                     onChange={(val) => saveSetting('hero', { ...settings.hero, title: val })} 
                   />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">Title Color</label>
+                      <input
+                        type="color"
+                        value={settings.hero?.title_color || '#ffffff'}
+                        onChange={(e) => saveSetting('hero', { ...settings.hero, title_color: e.target.value })}
+                        className="w-full h-12 rounded-xl cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">Explore Button Color</label>
+                      <input
+                        type="color"
+                        value={settings.hero?.button_color || '#008080'}
+                        onChange={(e) => saveSetting('hero', { ...settings.hero, button_color: e.target.value })}
+                        className="w-full h-12 rounded-xl cursor-pointer"
+                      />
+                    </div>
+                  </div>
                   <TextAreaInput 
                     label="Subtitle" 
                     value={settings.hero?.subtitle} 
@@ -1556,23 +1827,16 @@ function AdminPageCustomization() {
               <h3 className="text-xl font-serif text-brand-navy mb-6">Featured Resorts</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {resorts.map(resort => {
-                  const isFeatured = safeArray(settings.featured_retreats).includes(resort.id);
                   return (
                     <button
                       key={resort.id}
-                      onClick={() => {
-                        const current = safeArray(settings.featured_retreats);
-                        const next = isFeatured 
-                          ? current.filter((id: string) => id !== resort.id)
-                          : [...current, resort.id];
-                        saveSetting('featured_retreats', next);
-                      }}
+                      onClick={() => toggleFeatured(resort)}
                       className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                        isFeatured ? 'bg-brand-teal/5 border-brand-teal text-brand-teal' : 'bg-white border-brand-navy/5 text-brand-navy/60 hover:border-brand-navy/20'
+                        resort.is_featured ? 'bg-brand-teal/5 border-brand-teal text-brand-teal' : 'bg-white border-brand-navy/5 text-brand-navy/60 hover:border-brand-navy/20'
                       }`}
                     >
                       <span className="text-[10px] font-bold uppercase tracking-widest font-sans">{resort.name}</span>
-                      {isFeatured ? <Check size={16} /> : <Plus size={16} />}
+                      {resort.is_featured ? <Check size={16} /> : <Plus size={16} />}
                     </button>
                   );
                 })}

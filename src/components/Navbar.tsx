@@ -13,6 +13,7 @@ interface NavbarProps {
 export default function Navbar({ user, role }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<any>({});
+  const [logoLoaded, setLogoLoaded] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -33,9 +34,18 @@ export default function Navbar({ user, role }: NavbarProps) {
   };
 
   const navItems = settings.navbar || [
+    { label: 'Home', path: '/' },
+    { label: 'Home1', path: '/home1' },
+    { label: 'Home2', path: '/home2' },
+    { label: 'Home3', path: '/home3' },
+    { label: 'Home4', path: '/home4' },
+    { label: 'Home5', path: '/home5' },
+    { label: 'Destinations', path: '/destinations' },
+    { label: 'Experiences', path: '/experiences' },
+    { label: 'Packages', path: '/packages' },
     { label: 'Resorts', path: '/resorts' },
-    { label: 'Map', path: '/map' },
-    { label: 'Info', path: '/tourist-info' }
+    { label: 'About', path: '/about' },
+    { label: 'Contact', path: '/contact' }
   ];
 
   const logo = settings.logos?.primary;
@@ -47,8 +57,15 @@ export default function Navbar({ user, role }: NavbarProps) {
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
               {logo ? (
-                <img src={logo} alt="Exciting Maldives" className="h-16 w-auto object-contain" referrerPolicy="no-referrer" />
-              ) : (
+                <img 
+                  src={logo} 
+                  alt="Exciting Maldives" 
+                  className={`h-16 w-auto object-contain transition-opacity duration-500 ${logoLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                  onLoad={() => setLogoLoaded(true)}
+                  referrerPolicy="no-referrer" 
+                />
+              ) : null}
+              {(!logo || !logoLoaded) && (
                 <>
                   <div className="relative w-12 h-12 flex items-center justify-center">
                     {/* Recreated Shell Icon from Brand Guidelines */}
@@ -108,14 +125,22 @@ export default function Navbar({ user, role }: NavbarProps) {
                 </button>
               </div>
             ) : (
-              <a 
-                href="https://b2b.excitingmv.com/" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
-              >
-                Partner Login
-              </a>
+              <div className="flex items-center space-x-4">
+                <Link 
+                  to="/login"
+                  className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors"
+                >
+                  Admin Login
+                </Link>
+                <a 
+                  href="https://b2b.excitingmv.com/" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
+                >
+                  Partner Login
+                </a>
+              </div>
             )}
           </div>
 
@@ -150,7 +175,10 @@ export default function Navbar({ user, role }: NavbarProps) {
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700">Logout</button>
               </>
             ) : (
-              <a href="https://b2b.excitingmv.com/" target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</a>
+              <>
+                <Link to="/login" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-brand-teal">Admin Login</Link>
+                <a href="https://b2b.excitingmv.com/" target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</a>
+              </>
             )}
           </div>
         </div>
