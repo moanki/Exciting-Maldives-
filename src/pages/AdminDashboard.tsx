@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,40 +20,63 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function AdminDashboard() {
   const location = useLocation();
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex min-h-screen bg-brand-paper/10">
+    <div className="flex min-h-screen bg-brand-paper/10 relative">
+      {/* Mobile Menu Button */}
+      <button 
+        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-brand-navy text-white rounded-lg shadow-lg"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+      >
+        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-brand-navy text-white p-6 flex flex-col shadow-2xl">
-        <div className="mb-12">
+      <aside className={`
+        fixed md:sticky top-0 left-0 h-screen w-64 bg-brand-navy text-white p-6 flex flex-col shadow-2xl z-40
+        transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="mb-12 mt-12 md:mt-0">
           <h2 className="text-xl font-serif font-bold tracking-[0.2em] text-brand-beige">ADMIN CENTER</h2>
         </div>
         
-        <nav className="flex-1 space-y-2">
-          <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} />
-          <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} />
-          <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} />
-          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partner Management" active={location.pathname.startsWith('/admin/partners')} />
-          <SidebarLink to="/admin/page-manager" icon={<Palette size={18} />} label="Page Manager" active={location.pathname.startsWith('/admin/page-manager')} />
-          <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} />
-          <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} />
+        <nav className="flex-1 space-y-2 overflow-y-auto">
+          <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partner Management" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager" icon={<Palette size={18} />} label="Page Manager" active={location.pathname.startsWith('/admin/page-manager')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
         </nav>
       </aside>
 
+      {/* Overlay for mobile */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden w-full">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-brand-navy/5 flex items-center justify-between px-10 shrink-0">
+        <header className="h-20 bg-white border-b border-brand-navy/5 flex items-center justify-between px-4 md:px-10 shrink-0 ml-12 md:ml-0">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-brand-paper rounded-xl flex items-center justify-center text-brand-teal">
+            <div className="hidden md:flex w-10 h-10 bg-brand-paper rounded-xl items-center justify-center text-brand-teal">
               <Shield size={20} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-brand-navy uppercase tracking-widest">Admin Control Center</h2>
-              <p className="text-[10px] text-brand-navy/40 font-medium">System Management & Content Control</p>
+              <h2 className="text-xs md:text-sm font-bold text-brand-navy uppercase tracking-widest">Admin Control Center</h2>
+              <p className="hidden md:block text-[10px] text-brand-navy/40 font-medium">System Management & Content Control</p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end">
+          <div className="flex items-center gap-4 md:gap-6">
+            <div className="hidden sm:flex flex-col items-end">
               <span className="text-xs font-bold text-brand-navy">Administrator</span>
               <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">Super Admin</span>
             </div>
@@ -63,7 +86,7 @@ export default function AdminDashboard() {
                 supabase.auth.signOut();
                 window.location.href = '/';
               }}
-              className="p-3 bg-brand-paper rounded-xl text-brand-navy/40 hover:text-brand-coral hover:bg-brand-coral/5 transition-all"
+              className="p-2 md:p-3 bg-brand-paper rounded-xl text-brand-navy/40 hover:text-brand-coral hover:bg-brand-coral/5 transition-all"
             >
               <LogOut size={18} />
             </button>
@@ -71,12 +94,13 @@ export default function AdminDashboard() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-10 bg-brand-paper/30">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30">
           <Routes>
             <Route path="/" element={<AdminOverview />} />
             <Route path="/resorts" element={<AdminResorts />} />
             <Route path="/bookings" element={<AdminBookings />} />
             <Route path="/partners" element={<AdminPartners />} />
+            <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager" element={<AdminPageManager />} />
             <Route path="/password-manager" element={<AdminPasswordManager />} />
             <Route path="/resources" element={<AdminResources />} />
@@ -277,10 +301,11 @@ function AdminResources() {
   );
 }
 
-function SidebarLink({ to, icon, label, active }: any) {
+function SidebarLink({ to, icon, label, active, onClick }: any) {
   return (
     <Link 
       to={to} 
+      onClick={onClick}
       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-sans ${
         active ? 'bg-brand-teal text-white shadow-lg shadow-brand-teal/20' : 'text-white/40 hover:text-white hover:bg-white/5'
       }`}
@@ -511,6 +536,8 @@ create policy "Public insert agents" on public.agents for insert with check (tru
 create policy "Admin manage agents" on public.agents for all using (true);
 create policy "Agents read own record" on public.agents for select using (auth.uid() = id);
 create policy "Public read profiles" on public.profiles for select using (true);
+
+create policy "Public manage messages" on public.messages for all using (true);
 
 -- Enable Realtime for messages
 alter publication supabase_realtime add table messages;`;
@@ -1113,6 +1140,181 @@ ${partner.message || 'No message provided.'}
   );
 }
 
+function AdminChats() {
+  const [chats, setChats] = useState<any[]>([]);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputText, setInputText] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchChats();
+    
+    // Subscribe to ALL messages to update chat list in real-time
+    const channel = supabase
+      .channel('admin_chats')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        fetchChats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedChat) {
+      fetchMessages(selectedChat);
+      
+      const channel = supabase
+        .channel(`chat:${selectedChat}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `chat_id=eq.${selectedChat}`
+        }, (payload) => {
+          setMessages(prev => [...prev, payload.new]);
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [selectedChat]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const fetchChats = async () => {
+    const { data } = await supabase
+      .from('messages')
+      .select('chat_id, sender_name, created_at')
+      .order('created_at', { ascending: false });
+    
+    if (data) {
+      // Group by chat_id and get latest
+      const uniqueChats = data.reduce((acc: any[], curr: any) => {
+        if (!acc.find(c => c.chat_id === curr.chat_id)) {
+          acc.push(curr);
+        }
+        return acc;
+      }, []);
+      setChats(uniqueChats);
+    }
+  };
+
+  const fetchMessages = async (chatId: string) => {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true });
+    
+    if (data) setMessages(data);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || !selectedChat) return;
+
+    const messageData = {
+      chat_id: selectedChat,
+      text: inputText,
+      sender_id: null, // Admin sender
+      sender_name: 'Admin Support',
+    };
+
+    const { error } = await supabase.from('messages').insert(messageData);
+    if (!error) setInputText('');
+  };
+
+  return (
+    <div className="h-[calc(100vh-180px)] flex gap-6">
+      {/* Chat List */}
+      <div className="w-80 bg-white rounded-[32px] border border-brand-navy/5 shadow-xl overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-brand-navy/5 bg-brand-paper/30">
+          <h3 className="text-sm font-bold text-brand-navy uppercase tracking-widest">Active Conversations</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {chats.map(chat => (
+            <button
+              key={chat.chat_id}
+              onClick={() => setSelectedChat(chat.chat_id)}
+              className={`w-full p-6 text-left border-b border-brand-navy/5 transition-all hover:bg-brand-paper/50 ${selectedChat === chat.chat_id ? 'bg-brand-paper border-l-4 border-l-brand-teal' : ''}`}
+            >
+              <div className="flex justify-between items-start mb-1">
+                <span className="text-sm font-bold text-brand-navy">{chat.sender_name}</span>
+                <span className="text-[10px] text-brand-navy/30 font-medium">{new Date(chat.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold">ID: {chat.chat_id.slice(0, 8)}...</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat Window */}
+      <div className="flex-1 bg-white rounded-[32px] border border-brand-navy/5 shadow-xl overflow-hidden flex flex-col">
+        {selectedChat ? (
+          <>
+            <div className="p-6 border-b border-brand-navy/5 bg-brand-paper/30 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-brand-navy">{chats.find(c => c.chat_id === selectedChat)?.sender_name || 'Visitor'}</h3>
+                  <p className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">Online</p>
+                </div>
+              </div>
+            </div>
+
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 bg-brand-paper/10">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.sender_name === 'Admin Support' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] p-4 rounded-3xl text-sm font-sans ${
+                    msg.sender_name === 'Admin Support' 
+                      ? 'bg-brand-navy text-white rounded-tr-none shadow-lg' 
+                      : 'bg-white text-brand-navy rounded-tl-none shadow-md border border-brand-navy/5'
+                  }`}>
+                    {msg.text}
+                    <div className={`text-[8px] mt-2 opacity-50 ${msg.sender_name === 'Admin Support' ? 'text-right' : 'text-left'}`}>
+                      {new Date(msg.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendMessage} className="p-6 bg-white border-t border-brand-navy/5 flex gap-4">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Type your response..."
+                className="flex-1 bg-brand-paper/50 border-none rounded-2xl px-6 py-4 text-sm font-sans focus:ring-2 focus:ring-brand-teal/20 transition-all"
+              />
+              <button type="submit" className="bg-brand-teal text-white p-4 rounded-2xl hover:bg-brand-navy transition-all shadow-lg shadow-brand-teal/20">
+                <Send size={20} />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-brand-navy/20">
+            <MessageSquare size={64} className="mb-4 opacity-10" />
+            <p className="text-sm font-serif italic">Select a conversation to start chatting</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AdminPageManager() {
   const [activeTab, setActiveTab] = useState('nav');
   const [settings, setSettings] = useState<any>({});
@@ -1158,6 +1360,11 @@ function AdminPageManager() {
           navbar: [{ label: 'Resorts', path: '/resorts' }, { label: 'Map', path: '/map' }, { label: 'Info', path: '/tourist-info' }],
           hero: { title: 'The Art of Maldivian Luxury', subtitle: 'Bespoke Destination Management for Travel Professionals', banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080', banner_type: 'image' },
           introduction: { title: 'Bespoke Destination Management', summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.' },
+          ceo_message: { name: 'CEO Name', message: '', photo_url: '' },
+          our_story: { title: 'Our Story', content: '' },
+          awards: { title: 'Prestigious Awards', summary: '', items: [] },
+          ctas: { partner_title: 'Become a Partner', partner_btn: 'Request Form', guide_title: 'Travel Guide', guide_btn: 'View Guide' },
+          whatsapp: { enabled: false, number: '' },
           why_us: [
             { title: 'Authentic Connections', description: 'We focus on fostering genuine relationships with our B2B partners by understanding their needs and providing personalized solutions.' },
             { title: 'Curated Luxury', description: 'Our strategy centers on curating unique luxury experiences that showcase the beauty and culture of the Maldives.' },
@@ -1208,6 +1415,30 @@ function AdminPageManager() {
           introduction: {
             title: 'Bespoke Destination Management',
             summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.'
+          },
+          ceo_message: {
+            name: 'CEO Name',
+            message: 'Welcome to Exciting Maldives. We are dedicated to providing the best Maldivian experiences.',
+            photo_url: ''
+          },
+          our_story: {
+            title: 'Our Story',
+            content: 'Exciting Maldives began with a vision to showcase the true beauty of our islands...'
+          },
+          awards: {
+            title: 'Prestigious Awards',
+            summary: 'Recognized for excellence in luxury travel and destination management.',
+            items: []
+          },
+          ctas: {
+            partner_title: 'Become a Partner',
+            partner_btn: 'Request Form',
+            guide_title: 'Travel Guide',
+            guide_btn: 'View Guide'
+          },
+          whatsapp: {
+            enabled: false,
+            number: ''
           },
           why_us: [
             { title: 'Local Expertise', description: 'Deeply rooted in the Maldives with unparalleled local knowledge.' },
@@ -1414,11 +1645,15 @@ function AdminPageManager() {
       <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
         {[
           { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
-          { id: 'pages', label: 'Custom Pages', icon: <FileText size={14} /> },
           { id: 'hero', label: 'Hero & Intro', icon: <Image size={14} /> },
+          { id: 'ceo', label: 'CEO Message', icon: <Users size={14} /> },
+          { id: 'story', label: 'Our Story', icon: <FileText size={14} /> },
+          { id: 'awards', label: 'Awards', icon: <Gem size={14} /> },
           { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
-          { id: 'retreats', label: 'Featured Retreats', icon: <Hotel size={14} /> },
-          { id: 'footer', label: 'Footer', icon: <Settings size={14} /> }
+          { id: 'retreats', label: 'Retreats', icon: <Hotel size={14} /> },
+          { id: 'ctas', label: 'CTAs', icon: <Zap size={14} /> },
+          { id: 'footer', label: 'Footer', icon: <Settings size={14} /> },
+          { id: 'whatsapp', label: 'WhatsApp', icon: <Phone size={14} /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1731,6 +1966,19 @@ function AdminPageManager() {
                     value={settings.hero?.subtitle} 
                     onChange={(val) => saveSetting('hero', { ...settings.hero, subtitle: val })} 
                   />
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">Title Font</label>
+                    <select
+                      value={settings.hero?.title_font || 'font-serif'}
+                      onChange={(e) => saveSetting('hero', { ...settings.hero, title_font: e.target.value })}
+                      className="w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm font-sans text-brand-navy focus:ring-2 focus:ring-brand-teal/20 transition-all"
+                    >
+                      <option value="font-serif">Serif (Elegant)</option>
+                      <option value="font-sans">Sans (Modern)</option>
+                      <option value="font-mono">Mono (Technical)</option>
+                      <option value="font-display">Display (Bold)</option>
+                    </select>
+                  </div>
                 </div>
               </section>
               <section>
@@ -1845,8 +2093,268 @@ function AdminPageManager() {
           )}
 
 
+          {activeTab === 'ceo' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">CEO's Message</h3>
+                <div className="space-y-6">
+                  <LogoInput 
+                    label="CEO Photo" 
+                    value={settings.ceo_message?.photo_url} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'ceo');
+                      if (url) saveSetting('ceo_message', { ...settings.ceo_message, photo_url: url });
+                    }}
+                    onChange={(val: string) => saveSetting('ceo_message', { ...settings.ceo_message, photo_url: val })} 
+                  />
+                  <TextInput 
+                    label="CEO Name" 
+                    value={settings.ceo_message?.name} 
+                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, name: val })} 
+                  />
+                  <TextAreaInput 
+                    label="Message" 
+                    value={settings.ceo_message?.message} 
+                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, message: val })} 
+                  />
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'story' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Our Story</h3>
+                <div className="space-y-6">
+                  <TextInput 
+                    label="Section Title" 
+                    value={settings.our_story?.title} 
+                    onChange={(val) => saveSetting('our_story', { ...settings.our_story, title: val })} 
+                  />
+                  <TextAreaInput 
+                    label="Story Content" 
+                    value={settings.our_story?.content} 
+                    onChange={(val) => saveSetting('our_story', { ...settings.our_story, content: val })} 
+                  />
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'awards' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Prestigious Awards</h3>
+                <div className="space-y-6">
+                  <TextInput 
+                    label="Section Title" 
+                    value={settings.awards?.title} 
+                    onChange={(val) => saveSetting('awards', { ...settings.awards, title: val })} 
+                  />
+                  <TextAreaInput 
+                    label="Summary" 
+                    value={settings.awards?.summary} 
+                    onChange={(val) => saveSetting('awards', { ...settings.awards, summary: val })} 
+                  />
+                  
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Award Badges & Logos</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {safeArray(settings.awards?.items).map((item: any, idx: number) => (
+                        <div key={idx} className="relative group">
+                          <img src={item.url} alt="Award" className="w-full aspect-square object-contain bg-brand-paper rounded-2xl p-4" />
+                          <button 
+                            onClick={() => {
+                              const newItems = safeArray(settings.awards?.items).filter((_: any, i: number) => i !== idx);
+                              saveSetting('awards', { ...settings.awards, items: newItems });
+                            }}
+                            className="absolute top-2 right-2 p-1 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadFile(file, 'awards');
+                              if (url) {
+                                const newItems = [...safeArray(settings.awards?.items), { url }];
+                                saveSetting('awards', { ...settings.awards, items: newItems });
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="aspect-square border-2 border-dashed border-brand-navy/10 rounded-2xl flex flex-col items-center justify-center text-brand-navy/20 hover:border-brand-teal hover:text-brand-teal transition-all"
+                      >
+                        <Plus size={24} />
+                        <span className="text-[8px] font-bold uppercase tracking-widest mt-2">Add Award</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'ctas' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Call to Action Sections</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="p-6 bg-brand-paper/30 rounded-3xl space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Become a Partner</h4>
+                    <TextInput 
+                      label="Title" 
+                      value={settings.ctas?.partner_title} 
+                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, partner_title: val })} 
+                    />
+                    <TextInput 
+                      label="Button Text" 
+                      value={settings.ctas?.partner_btn} 
+                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, partner_btn: val })} 
+                    />
+                  </div>
+                  <div className="p-6 bg-brand-paper/30 rounded-3xl space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Travel Guide</h4>
+                    <TextInput 
+                      label="Title" 
+                      value={settings.ctas?.guide_title} 
+                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, guide_title: val })} 
+                    />
+                    <TextInput 
+                      label="Button Text" 
+                      value={settings.ctas?.guide_btn} 
+                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, guide_btn: val })} 
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'whatsapp' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">WhatsApp Integration</h3>
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4 p-6 bg-brand-paper/30 rounded-3xl">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-brand-navy">Enable WhatsApp Button</h4>
+                      <p className="text-xs text-brand-navy/40">Show a WhatsApp floating button on the website</p>
+                    </div>
+                    <button 
+                      onClick={() => saveSetting('whatsapp', { ...settings.whatsapp, enabled: !settings.whatsapp?.enabled })}
+                      className={`w-12 h-6 rounded-full transition-all relative ${settings.whatsapp?.enabled ? 'bg-brand-teal' : 'bg-brand-navy/20'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.whatsapp?.enabled ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+                  <TextInput 
+                    label="WhatsApp Number (with country code, e.g., 9601234567)" 
+                    value={settings.whatsapp?.number} 
+                    onChange={(val) => saveSetting('whatsapp', { ...settings.whatsapp, number: val })} 
+                    icon={<Phone size={14} />}
+                  />
+                </div>
+              </section>
+            </div>
+          )}
+
           {activeTab === 'footer' && (
             <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Memberships & Footer Awards</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Membership Logos</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      {safeArray(settings.footer?.memberships).map((item: any, idx: number) => (
+                        <div key={idx} className="relative group">
+                          <img src={item.url} alt="Membership" className="w-full aspect-square object-contain bg-brand-paper rounded-xl p-2" />
+                          <button 
+                            onClick={() => {
+                              const newItems = safeArray(settings.footer?.memberships).filter((_: any, i: number) => i !== idx);
+                              saveSetting('footer', { ...settings.footer, memberships: newItems });
+                            }}
+                            className="absolute -top-2 -right-2 p-1 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadFile(file, 'footer');
+                              if (url) {
+                                const newItems = [...safeArray(settings.footer?.memberships || []), { url }];
+                                saveSetting('footer', { ...settings.footer, memberships: newItems });
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="aspect-square border-2 border-dashed border-brand-navy/10 rounded-xl flex items-center justify-center text-brand-navy/20 hover:border-brand-teal hover:text-brand-teal transition-all"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Award Badges</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      {safeArray(settings.footer?.awards).map((item: any, idx: number) => (
+                        <div key={idx} className="relative group">
+                          <img src={item.url} alt="Award" className="w-full aspect-square object-contain bg-brand-paper rounded-xl p-2" />
+                          <button 
+                            onClick={() => {
+                              const newItems = safeArray(settings.footer?.awards).filter((_: any, i: number) => i !== idx);
+                              saveSetting('footer', { ...settings.footer, awards: newItems });
+                            }}
+                            className="absolute -top-2 -right-2 p-1 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadFile(file, 'footer');
+                              if (url) {
+                                const newItems = [...safeArray(settings.footer?.awards || []), { url }];
+                                saveSetting('footer', { ...settings.footer, awards: newItems });
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="aspect-square border-2 border-dashed border-brand-navy/10 rounded-xl flex items-center justify-center text-brand-navy/20 hover:border-brand-teal hover:text-brand-teal transition-all"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
               <section>
                 <h3 className="text-xl font-serif text-brand-navy mb-6">Contact Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

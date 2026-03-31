@@ -23,6 +23,9 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ChatWidget from './components/ChatWidget';
 
+import { Phone } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
 function AppContent({ user, role }: { user: User | null, role: string | null }) {
   const location = useLocation();
   const isDashboard = location.pathname.startsWith('/admin');
@@ -69,6 +72,22 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
       </main>
       {!isDashboard && <Footer />}
       {!isDashboard && <ChatWidget />}
+
+      {/* WhatsApp Floating Button */}
+      {!isDashboard && settings.whatsapp?.enabled && settings.whatsapp?.number && (
+        <motion.a
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          href={`https://wa.me/${settings.whatsapp.number.replace(/\D/g, '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-24 right-6 w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl z-50 hover:bg-[#128C7E] transition-colors"
+        >
+          <Phone size={28} fill="currentColor" />
+        </motion.a>
+      )}
     </div>
   );
 }

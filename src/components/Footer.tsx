@@ -40,7 +40,9 @@ export default function Footer() {
       { label: 'Terms of Service', path: '/legal' },
       { label: 'Media Kit', path: '/legal' },
       { label: 'Meet the Team', path: '/legal' }
-    ]
+    ],
+    memberships: settings.footer?.memberships || [],
+    awards: settings.footer?.awards || []
   };
 
   const logos = settings.logos || {};
@@ -54,16 +56,7 @@ export default function Footer() {
             <Link to="/" className="flex items-center gap-3">
               {logos.white ? (
                 <img src={logos.white} alt="Exciting Maldives" className="h-16 w-auto object-contain" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="flex flex-col leading-none">
-                  <span className="text-xl font-serif font-bold tracking-[0.1em] text-white uppercase">
-                    Exciting
-                  </span>
-                  <span className="text-[10px] font-sans font-bold tracking-[0.5em] text-brand-teal uppercase ml-0.5">
-                    Maldives
-                  </span>
-                </div>
-              )}
+              ) : null}
             </Link>
             <div className="space-y-4 text-white/60 text-sm font-sans">
               <div className="flex items-center gap-3">
@@ -140,6 +133,34 @@ export default function Footer() {
             </div>
           </div>
         </div>
+
+        {/* Memberships & Awards */}
+        {(footer.memberships.length > 0 || footer.awards.length > 0) && (
+          <div className="mb-20 pt-12 border-t border-white/5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+              {footer.memberships.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Our Memberships</h4>
+                  <div className="flex flex-wrap gap-8 items-center opacity-40 hover:opacity-100 transition-opacity duration-500">
+                    {footer.memberships.map((m: any, i: number) => (
+                      <img key={i} src={m.url} alt="Membership" className="h-10 w-auto object-contain grayscale hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {footer.awards.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Our Recognition</h4>
+                  <div className="flex flex-wrap gap-8 items-center opacity-40 hover:opacity-100 transition-opacity duration-500">
+                    {footer.awards.map((a: any, i: number) => (
+                      <img key={i} src={a.url} alt="Award" className="h-12 w-auto object-contain grayscale hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] font-sans font-bold uppercase tracking-[0.3em] text-white/30">
           <p>© {new Date().getFullYear()} Exciting Maldives. All Rights Reserved.</p>

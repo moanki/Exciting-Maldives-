@@ -35,11 +35,6 @@ export default function Navbar({ user, role }: NavbarProps) {
 
   const navItems = settings.navbar || [
     { label: 'Home', path: '/' },
-    { label: 'Home1', path: '/home1' },
-    { label: 'Home2', path: '/home2' },
-    { label: 'Home3', path: '/home3' },
-    { label: 'Home4', path: '/home4' },
-    { label: 'Home5', path: '/home5' },
     { label: 'Destinations', path: '/destinations' },
     { label: 'Experiences', path: '/experiences' },
     { label: 'Packages', path: '/packages' },
@@ -65,37 +60,6 @@ export default function Navbar({ user, role }: NavbarProps) {
                   referrerPolicy="no-referrer" 
                 />
               ) : null}
-              {(!logo || !logoLoaded) && (
-                <>
-                  <div className="relative w-12 h-12 flex items-center justify-center">
-                    {/* Recreated Shell Icon from Brand Guidelines */}
-                    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
-                      <defs>
-                        <linearGradient id="brandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#3fabb6" />
-                          <stop offset="100%" stopColor="#d9af89" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M50 85 C50 85 20 75 10 50 C10 25 30 15 50 15 C70 15 90 25 90 50 C80 75 50 85 50 85 Z" fill="none" stroke="url(#brandGradient)" strokeWidth="0.5" opacity="0.2" />
-                      <g fill="url(#brandGradient)">
-                        <path d="M50 80 L45 30 A25 25 0 0 1 55 30 Z" />
-                        <path d="M50 80 L30 35 A30 30 0 0 1 40 28 Z" transform="rotate(-15 50 80)" />
-                        <path d="M50 80 L15 45 A35 35 0 0 1 25 35 Z" transform="rotate(-35 50 80)" />
-                        <path d="M50 80 L70 35 A30 30 0 0 0 60 28 Z" transform="rotate(15 50 80)" />
-                        <path d="M50 80 L85 45 A35 35 0 0 0 75 35 Z" transform="rotate(35 50 80)" />
-                      </g>
-                    </svg>
-                  </div>
-                  <div className="flex flex-col leading-none">
-                    <span className="text-xl font-serif font-bold tracking-[0.1em] text-brand-navy uppercase">
-                      Exciting
-                    </span>
-                    <span className="text-[10px] font-sans font-bold tracking-[0.5em] text-brand-teal uppercase ml-0.5">
-                      Maldives
-                    </span>
-                  </div>
-                </>
-              )}
             </Link>
           </div>
 
