@@ -1,46 +1,16 @@
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
 import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Handshake, Gem, Zap, MessageSquare, X, Send, Mail } from 'lucide-react';
+import { Handshake, Gem, Zap, MessageSquare, X, Send, Mail, Globe, Award, Hotel, Plane, UserCheck, Calendar, Smile, ArrowRight, ShieldCheck, Database, BarChart3, Clock } from 'lucide-react';
 import { supabase } from '../supabase';
 import FeaturedRetreatsCarousel from '../components/FeaturedRetreatsCarousel';
-import { getColorSync } from 'colorthief';
 import { getSiteSettings } from '../lib/settings';
-
-function ResortItem({ resort, i }: { resort: any; i: number }) {
-  const ref = useRef(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
-  const y = useTransform(scrollYProgress, [0, 1], [0, 200]);
-  const textY = useTransform(scrollYProgress, [0, 1], [0, -100]);
-  const scale = useTransform(scrollYProgress, [0, 1], [0.9, 1.1]);
-
-  return (
-    <div ref={ref} className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-      <motion.div style={{ y: textY }} className={`order-2 ${i % 2 === 0 ? 'md:order-1' : 'md:order-2'}`}>
-        <h3 className="text-3xl font-serif mb-4">{resort.name}</h3>
-        <p className="text-gray-600 mb-6">{resort.description}</p>
-        <Link to={`/resorts/${resort.id}`}>
-          <button className="bg-[#1a1a1a] text-white px-6 py-2 rounded-full">View Resort</button>
-        </Link>
-      </motion.div>
-      <motion.div style={{ y, scale }} className={`order-1 ${i % 2 === 0 ? 'md:order-2' : 'md:order-1'} overflow-hidden rounded-3xl`}>
-        <img 
-          src={resort.images?.[0] || 'https://picsum.photos/seed/resort/800/600'} 
-          alt={resort.name} 
-          className="w-full h-full object-cover shadow-2xl"
-          referrerPolicy="no-referrer"
-        />
-      </motion.div>
-    </div>
-  );
-}
 
 export default function Home() {
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
-  const y = useTransform(scrollYProgress, [0, 1], ['0%', '50%']);
+  const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
-  const [whyUsPillars, setWhyUsPillars] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
   const [isNewsletterOpen, setIsNewsletterOpen] = useState(false);
@@ -53,277 +23,350 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
 
-  const [heroData, setHeroData] = useState({
-    title: 'Exciting Maldives',
-    subtitle: 'Bespoke Destination Management',
-    banner_url: '',
-    title_color: '#ffffff',
-    button_color: '#008080',
-    title_font: 'font-serif'
-  });
-
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      
-      // Fetch Site Settings using the helper
       const settingsData = await getSiteSettings();
       setSettings(settingsData);
       
-      if (settingsData.hero) {
-        setHeroData({
-          title: settingsData.hero.title || 'Exciting Maldives',
-          subtitle: settingsData.hero.subtitle || 'Bespoke Destination Management',
-          banner_url: settingsData.hero.banner_url || 'https://picsum.photos/seed/maldives/1920/1080',
-          title_color: settingsData.hero.title_color || '#ffffff',
-          button_color: settingsData.hero.button_color || '#008080',
-          title_font: settingsData.hero.title_font || 'font-serif'
-        });
-
-        // Automatic color detection
-        const img = new Image();
-        img.src = settingsData.hero.banner_url || 'https://picsum.photos/seed/maldives/1920/1080';
-        img.crossOrigin = "Anonymous";
-        img.onload = () => {
-          const color = getColorSync(img);
-          if (color) {
-            const hex = color.hex();
-            
-            // Only update if user hasn't set a color
-            if (!settingsData.hero.title_color) {
-              setHeroData(prev => ({ ...prev, title_color: hex, button_color: hex }));
-            }
-          }
-        };
-      }
-
-      if (settingsData.why_us) {
-        setWhyUsPillars(settingsData.why_us);
-      }
-
-      // Fetch Featured Resorts
       const { data, error } = await supabase
         .from('resorts')
         .select('*')
         .eq('is_featured', true);
       
       if (error || !data || data.length === 0) {
-        // Fallback if is_featured column is missing or no featured resorts
         const fallback = await supabase.from('resorts').select('*').limit(10);
-        if (fallback.data) {
-          setFeaturedResorts(fallback.data);
-        }
+        if (fallback.data) setFeaturedResorts(fallback.data);
       } else {
         setFeaturedResorts(data);
       }
-
       setIsLoading(false);
     };
     fetchData();
   }, []);
 
+  const iconMap: any = {
+    Hotel: <Hotel size={24} />,
+    Plane: <Plane size={24} />,
+    UserCheck: <UserCheck size={24} />,
+    Calendar: <Calendar size={24} />,
+    Smile: <Smile size={24} />,
+    Zap: <Zap size={24} />
+  };
+
   return (
-    <div ref={containerRef} className="relative min-h-screen bg-[#f5f2ed] text-[#1a1a1a]">
-      {/* Banner */}
+    <div ref={containerRef} className="relative min-h-screen bg-brand-paper text-brand-navy selection:bg-brand-teal/20">
+      {/* Section 1: Hero (Dream) */}
       <section className="relative h-screen flex flex-col items-center justify-center overflow-hidden">
-        {/* Hero Banner Image */}
         <motion.div style={{ y }} className="absolute inset-0 z-0">
-          {!isLoading && (
-            <img 
-              src={heroData.banner_url} 
-              alt="Maldives" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          )}
-          {/* Fade effect at the bottom of the banner */}
-          <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#f5f2ed] to-transparent z-10"></div>
+          <img 
+            src={settings.hero?.banner_url || 'https://picsum.photos/seed/maldives-luxury/1920/1080'} 
+            alt="Luxury Maldives" 
+            className="w-full h-full object-cover brightness-[0.85]"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-navy/40 via-transparent to-brand-paper z-10"></div>
         </motion.div>
         
-        {/* Hero Title and Search */}
-        <div className="relative z-20 text-center text-white px-4">
-          <h1 className={`text-5xl md:text-7xl mb-6 ${heroData.title_font}`} style={{ color: heroData.title_color }}>{heroData.title}</h1>
-          <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto" style={{ color: heroData.title_color }}>{heroData.subtitle}</p>
+        <div className="relative z-20 text-center text-white px-4 max-w-6xl mx-auto space-y-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="space-y-6"
+          >
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif leading-[1.1] tracking-tight">
+              {settings.hero?.title}
+            </h1>
+            <p className="text-lg md:text-2xl font-sans max-w-3xl mx-auto text-white/90 leading-relaxed font-light">
+              {settings.hero?.subtitle}
+            </p>
+          </motion.div>
           
-          <div className="bg-white/10 backdrop-blur-md p-2 rounded-full flex items-center border border-white/20 shadow-2xl max-w-4xl mx-auto">
-            <input 
-              type="text" 
-              placeholder="Explore..." 
-              className="bg-transparent px-8 py-6 outline-none text-white placeholder-white/80 w-full text-lg" 
-            />
-            <button className="text-white px-12 py-6 rounded-full font-semibold text-lg hover:opacity-90 transition-colors whitespace-nowrap" style={{ backgroundColor: heroData.button_color }}>
-              Explore
-            </button>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
+          >
+            <Link to="/become-partner">
+              <button className="bg-brand-teal text-white px-12 py-5 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-white hover:text-brand-navy transition-all duration-500 shadow-2xl">
+                Partner With Us
+              </button>
+            </Link>
+            <Link to="/resorts">
+              <button className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-12 py-5 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-white hover:text-brand-navy transition-all duration-500">
+                Explore Resorts
+              </button>
+            </Link>
+          </motion.div>
         </div>
       </section>
 
-      {/* Section 1: Introduction */}
-      <section className="py-20 px-10 max-w-4xl mx-auto text-center">
-        <h2 className="text-4xl font-serif mb-6 text-brand-navy">{settings.introduction?.title || 'Bespoke Destination Management'}</h2>
-        <p className="text-lg text-gray-700 leading-relaxed">
-          {settings.introduction?.summary || 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.'}
-        </p>
-      </section>
-
-      {/* Section 3: Featured Retreats */}
-      <section className="py-20 px-10 bg-[#f5f2ed] overflow-hidden">
-        <h2 className="text-4xl font-serif text-center mb-12">Featured Retreats</h2>
-        <FeaturedRetreatsCarousel resorts={featuredResorts} />
-      </section>
-
-      {/* Section: CEO Message */}
-      {settings.ceo_message?.message && (
-        <section className="py-24 px-10 bg-white">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-            <div className="relative">
-              <div className="absolute -top-4 -left-4 w-24 h-24 bg-brand-teal/10 rounded-full blur-2xl"></div>
-              {settings.ceo_message.photo_url ? (
-                <img 
-                  src={settings.ceo_message.photo_url} 
-                  alt={settings.ceo_message.name} 
-                  className="w-full aspect-[3/4] object-cover rounded-[2rem] shadow-2xl relative z-10"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full aspect-[3/4] bg-brand-paper/50 rounded-[2rem] shadow-2xl relative z-10"></div>
-              )}
-              <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-brand-coral/5 rounded-full blur-3xl"></div>
-            </div>
-            <div className="space-y-8">
-              <div className="inline-block px-4 py-2 bg-brand-teal/5 text-brand-teal text-[10px] font-bold uppercase tracking-widest rounded-full">
-                Leadership Message
-              </div>
-              <h2 className="text-4xl md:text-5xl font-serif text-brand-navy leading-tight">
-                A Message from our CEO
-              </h2>
-              <div className="relative">
-                <span className="absolute -top-8 -left-4 text-8xl text-brand-teal/10 font-serif">"</span>
-                <p className="text-xl text-gray-700 leading-relaxed italic relative z-10">
-                  {settings.ceo_message.message}
-                </p>
-              </div>
-              <div>
-                <h4 className="text-2xl font-serif text-brand-navy">{settings.ceo_message.name}</h4>
-                <p className="text-brand-teal font-bold text-xs uppercase tracking-widest mt-1">Chief Executive Officer</p>
-              </div>
-            </div>
+      {/* Section 2: Featured Luxury Resorts (Visual) - MOVED UP */}
+      <section className="py-32 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 md:px-10 mb-16 flex flex-col md:flex-row justify-between items-end gap-8">
+          <div className="space-y-4 max-w-2xl">
+            <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Curated Portfolio</div>
+            <h2 className="text-4xl md:text-6xl font-serif">Featured Luxury Resorts</h2>
           </div>
-        </section>
-      )}
+          <Link to="/resorts" className="text-[11px] font-bold uppercase tracking-widest text-brand-navy hover:text-brand-teal transition-all flex items-center gap-2 group">
+            View All Resorts <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+        </div>
+        <div className="px-6 md:px-10">
+          <FeaturedRetreatsCarousel resorts={featuredResorts} />
+        </div>
+      </section>
 
-      {/* Section: Our Story */}
-      {settings.our_story?.content && (
-        <section className="py-24 px-10 bg-brand-paper/30">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <h2 className="text-4xl md:text-5xl font-serif text-brand-navy">{settings.our_story.title || 'Our Story'}</h2>
-            <div className="w-20 h-1 bg-brand-teal/30 mx-auto rounded-full"></div>
-            <p className="text-xl text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {settings.our_story.content}
+      {/* Section 3: Why Exciting Maldives (Trust) */}
+      <section id="about" className="py-32 px-6 md:px-10 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="space-y-8">
+            <div className="inline-block px-4 py-2 bg-brand-teal/5 text-brand-teal text-[10px] font-bold uppercase tracking-widest rounded-full">
+              Our Positioning
+            </div>
+            <h2 className="text-4xl md:text-6xl font-serif leading-tight">
+              {settings.introduction?.title}
+            </h2>
+            <p className="text-xl text-gray-600 leading-relaxed font-light">
+              {settings.introduction?.summary}
             </p>
           </div>
-        </section>
-      )}
-
-      {/* Section: Prestigious Awards */}
-      {settings.awards?.title && (
-        <section className="py-24 px-10 bg-white">
-          <div className="max-w-7xl mx-auto text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-serif text-brand-navy mb-6">{settings.awards.title}</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">{settings.awards.summary}</p>
-          </div>
-          <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 items-center justify-items-center opacity-60 hover:opacity-100 transition-opacity duration-500">
-            {settings.awards.items?.map((award: any, i: number) => (
-              <motion.img 
+          <div className="grid grid-cols-1 gap-8">
+            {settings.why_us?.map((item: any, i: number) => (
+              <motion.div 
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, x: 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                src={award.url} 
-                alt="Award Badge" 
-                className="h-24 md:h-32 object-contain grayscale hover:grayscale-0 transition-all duration-300"
-                referrerPolicy="no-referrer"
-              />
+                className="p-8 bg-white rounded-[2.5rem] luxury-shadow border border-brand-navy/5 group hover:border-brand-teal/20 transition-all duration-500"
+              >
+                <div className="flex gap-6 items-start">
+                  <div className="w-14 h-14 bg-brand-teal/5 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-brand-teal group-hover:text-white transition-all duration-500">
+                    {i === 0 ? <Gem size={24} /> : i === 1 ? <ShieldCheck size={24} /> : <BarChart3 size={24} />}
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-serif font-bold text-brand-navy">{item.title}</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed font-sans">{item.description}</p>
+                  </div>
+                </div>
+              </motion.div>
             ))}
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
-      {/* Section 2: Core Values (Why Us) */}
-      <section className="py-24 px-10 bg-brand-paper/20">
+      {/* Section: CEO Message & Our Story */}
+      <section className="py-32 px-6 md:px-10 bg-brand-paper/30">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-serif text-brand-navy mb-4">Why Choose Us</h2>
-            <p className="text-gray-600">The pillars of our excellence in Maldivian hospitality</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {whyUsPillars.map((item, i) => (
-              <div key={i} className="p-8 bg-white rounded-[2rem] shadow-sm border border-brand-paper/50 hover:shadow-xl transition-all duration-500 group">
-                <div className="w-12 h-12 bg-brand-teal/5 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-brand-teal group-hover:text-white transition-all duration-500">
-                  <Zap className="w-6 h-6" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+            {/* CEO Message */}
+            <div className="space-y-10">
+              <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Leadership Vision</div>
+              <div className="relative p-12 bg-white rounded-[3rem] luxury-shadow">
+                <div className="absolute -top-6 -left-6 w-20 h-20 bg-brand-teal text-white rounded-full flex items-center justify-center shadow-xl">
+                  <MessageSquare size={32} />
                 </div>
-                <h3 className="text-xl font-serif font-bold mb-4 text-brand-navy">{item.title}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
+                <div className="space-y-8">
+                  <p className="text-2xl font-serif italic text-brand-navy leading-relaxed">
+                    "{settings.ceo_message?.message}"
+                  </p>
+                  <div className="flex items-center gap-4">
+                    {settings.ceo_message?.photo_url && (
+                      <img 
+                        src={settings.ceo_message.photo_url} 
+                        alt={settings.ceo_message.name} 
+                        className="w-16 h-16 rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <div>
+                      <h4 className="text-lg font-serif font-bold text-brand-navy">{settings.ceo_message?.name}</h4>
+                      <p className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">Chief Executive Officer</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Our Story */}
+            <div className="space-y-10">
+              <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Our Journey</div>
+              <div className="space-y-8">
+                <h2 className="text-4xl md:text-5xl font-serif leading-tight">{settings.our_story?.title}</h2>
+                <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
+                  {settings.our_story?.content?.split('\n').map((para: string, i: number) => (
+                    <p key={i}>{para}</p>
+                  ))}
+                </div>
+                <div className="pt-4">
+                  <Link to="/about" className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-brand-navy hover:text-brand-teal transition-all group">
+                    Learn More About Us <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: Platform Excellence (Tech) */}
+      <section id="platform" className="py-32 px-6 md:px-10 bg-brand-navy text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-brand-teal/5 blur-[120px] rounded-full -mr-1/4"></div>
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            <div className="space-y-10">
+              <div className="space-y-6">
+                <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Digital Infrastructure</div>
+                <h2 className="text-4xl md:text-6xl font-serif leading-tight">Platform Excellence</h2>
+                <p className="text-xl text-white/60 font-light leading-relaxed">
+                  We empower our partners with cutting-edge technology, ensuring seamless operational coordination across the Maldives.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                {settings.platform_excellence?.map((item: any, i: number) => (
+                  <div key={i} className="space-y-4 p-6 bg-white/5 rounded-3xl border border-white/10 hover:bg-white/10 transition-all duration-300">
+                    <div className="w-10 h-10 bg-brand-teal/20 rounded-xl flex items-center justify-center text-brand-teal">
+                      {i === 0 ? <Database size={20} /> : i === 1 ? <Clock size={20} /> : i === 2 ? <Zap size={20} /> : <Globe size={20} />}
+                    </div>
+                    <h4 className="text-lg font-serif font-bold">{item.title}</h4>
+                    <p className="text-xs text-white/40 leading-relaxed">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="relative">
+              <div className="aspect-square bg-gradient-to-br from-brand-teal/20 to-transparent rounded-full absolute inset-0 blur-3xl"></div>
+              <img 
+                src="https://picsum.photos/seed/tech/1000/1000" 
+                alt="Platform Excellence" 
+                className="relative z-10 rounded-[3rem] shadow-2xl border border-white/10"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 5: Global Markets (Credibility) */}
+      <section className="py-32 px-6 md:px-10 bg-brand-paper">
+        <div className="max-w-7xl mx-auto text-center space-y-16">
+          <div className="space-y-6">
+            <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Our Reach</div>
+            <h2 className="text-4xl md:text-6xl font-serif">Global Markets</h2>
+            <p className="text-xl text-gray-500 max-w-2xl mx-auto font-light">
+              Trusted by global travel partners across Russia, CIS, Europe, and the Middle East.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            {settings.global_markets?.map((market: any, i: number) => (
+              <div key={i} className="p-10 bg-white rounded-[3rem] luxury-shadow border border-brand-navy/5 space-y-6 group hover:-translate-y-2 transition-all duration-500">
+                <div className="w-20 h-20 bg-brand-paper rounded-full flex items-center justify-center mx-auto text-brand-navy group-hover:bg-brand-navy group-hover:text-white transition-all duration-500">
+                  <Globe size={32} />
+                </div>
+                <h3 className="text-2xl font-serif font-bold">{market.name}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{market.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Section 4: Calls to Action */}
-      <section className="py-24 px-10 bg-white">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-          <motion.div 
-            whileHover={{ y: -10 }}
-            className="relative overflow-hidden rounded-[2.5rem] p-12 bg-brand-navy text-white group"
-          >
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-teal/10 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-brand-teal/20 transition-all duration-700"></div>
-            <div className="relative z-10 space-y-6">
-              <Handshake className="w-12 h-12 text-brand-teal" />
-              <h3 className="text-3xl md:text-4xl font-serif">{settings.ctas?.partner_title || 'Become a Partner'}</h3>
-              <p className="text-brand-paper/60 text-lg max-w-md">Join our exclusive network of travel professionals and access bespoke Maldivian experiences.</p>
-              <Link to="/become-partner" className="inline-block">
-                <button className="bg-brand-teal text-white px-10 py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:bg-white hover:text-brand-navy transition-all duration-300">
-                  {settings.ctas?.partner_btn || 'Request Form'}
-                </button>
-              </Link>
+      {/* Section 6: Awards & Recognition (Trust) */}
+      <section className="py-32 px-6 md:px-10 bg-white border-y border-brand-navy/5">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            <div className="space-y-8">
+              <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Industry Authority</div>
+              <h2 className="text-4xl md:text-5xl font-serif leading-tight">{settings.awards?.title}</h2>
+              <p className="text-xl text-gray-500 font-light leading-relaxed">{settings.awards?.summary}</p>
+              <div className="flex items-center gap-6 p-6 bg-brand-paper rounded-3xl border border-brand-navy/5">
+                <div className="w-16 h-16 bg-brand-gold/10 rounded-2xl flex items-center justify-center text-brand-gold">
+                  <Award size={32} />
+                </div>
+                <div>
+                  <h4 className="text-xl font-serif font-bold text-brand-navy">{settings.awards?.items?.[0]?.label}</h4>
+                  <p className="text-xs text-brand-gold font-bold uppercase tracking-widest mt-1">{settings.awards?.items?.[0]?.year}</p>
+                </div>
+              </div>
             </div>
-          </motion.div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-8 items-center justify-items-center opacity-40 hover:opacity-100 transition-opacity duration-700">
+              {/* Fallback award logos if none in settings */}
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <img 
+                  key={i}
+                  src={`https://picsum.photos/seed/award-${i}/200/200`} 
+                  alt="Award" 
+                  className="h-20 md:h-24 object-contain grayscale hover:grayscale-0 transition-all duration-500"
+                  referrerPolicy="no-referrer"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
-          <motion.div 
-            whileHover={{ y: -10 }}
-            className="relative overflow-hidden rounded-[2.5rem] p-12 bg-brand-teal text-white group"
-          >
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full -ml-32 -mb-32 blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
-            <div className="relative z-10 space-y-6">
-              <Zap className="w-12 h-12 text-brand-paper" />
-              <h3 className="text-3xl md:text-4xl font-serif">{settings.ctas?.guide_title || 'Travel Guide'}</h3>
-              <p className="text-brand-paper/80 text-lg max-w-md">Everything you need to know about traveling to the Maldives, from visa info to local customs.</p>
-              <Link to="/tourist-info" className="inline-block">
-                <button className="bg-brand-navy text-white px-10 py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:bg-white hover:text-brand-navy transition-all duration-300">
-                  {settings.ctas?.guide_btn || 'View Guide'}
-                </button>
-              </Link>
+      {/* Section 7: Services (Visual) */}
+      <section className="py-32 px-6 md:px-10 bg-brand-paper">
+        <div className="max-w-7xl mx-auto space-y-16">
+          <div className="text-center space-y-6">
+            <div className="text-brand-teal text-[10px] font-bold uppercase tracking-[0.3em]">Our Expertise</div>
+            <h2 className="text-4xl md:text-6xl font-serif">Comprehensive DMC Services</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            {settings.services?.map((service: any, i: number) => (
+              <div key={i} className="p-8 bg-white rounded-[2.5rem] luxury-shadow border border-brand-navy/5 text-center space-y-6 group hover:bg-brand-navy hover:text-white transition-all duration-500">
+                <div className="w-16 h-16 bg-brand-teal/5 rounded-2xl flex items-center justify-center mx-auto text-brand-teal group-hover:bg-white/10 group-hover:text-white transition-all duration-500">
+                  {iconMap[service.icon] || <Zap size={24} />}
+                </div>
+                <h3 className="text-sm font-bold uppercase tracking-widest leading-tight">{service.title}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 8: Partner Invitation (Action) */}
+      <section className="py-32 px-6 md:px-10 bg-white">
+        <div className="max-w-7xl mx-auto luxury-gradient rounded-[4rem] p-12 md:p-24 text-white text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <div className="relative z-10 space-y-10 max-w-3xl mx-auto">
+            <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto backdrop-blur-md">
+              <Handshake size={40} />
             </div>
-          </motion.div>
+            <div className="space-y-6">
+              <h2 className="text-4xl md:text-7xl font-serif leading-tight">Partner with Exciting Maldives</h2>
+              <p className="text-xl text-white/80 font-light leading-relaxed">
+                Empower your portfolio with curated Maldivian luxury and dedicated destination management expertise ensuring flawless execution.
+              </p>
+            </div>
+            <Link to="/become-partner" className="inline-block">
+              <button className="bg-white text-brand-navy px-16 py-6 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-brand-gold hover:text-white transition-all duration-500 shadow-2xl">
+                Become a Partner
+              </button>
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Newsletter Section */}
-      <section className="py-24 px-10 bg-brand-paper/30">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <div className="w-16 h-16 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto">
-            <Mail className="w-8 h-8 text-brand-teal" />
+      <section className="py-32 px-6 md:px-10 bg-brand-paper/50">
+        <div className="max-w-4xl mx-auto text-center space-y-10">
+          <div className="w-20 h-20 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto">
+            <Mail className="w-10 h-10 text-brand-teal" />
           </div>
-          <h2 className="text-4xl font-serif text-brand-navy">Stay in the Loop</h2>
-          <p className="text-lg text-gray-600 max-w-xl mx-auto">
-            Subscribe to our newsletter to receive the latest updates, promotions and news from the Maldives.
-          </p>
+          <div className="space-y-4">
+            <h2 className="text-4xl font-serif text-brand-navy">Stay Informed</h2>
+            <p className="text-xl text-gray-500 font-light max-w-xl mx-auto leading-relaxed">
+              Subscribe to our B2B newsletter for the latest resort openings, exclusive seasonal offers, and Maldivian travel intelligence.
+            </p>
+          </div>
           <button 
             onClick={() => setIsNewsletterOpen(true)}
-            className="bg-brand-navy text-white px-12 py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:bg-brand-teal transition-all duration-300 shadow-xl"
+            className="bg-brand-navy text-white px-16 py-6 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-brand-teal transition-all duration-500 shadow-2xl"
           >
-            Subscribe to Newsletter
+            Subscribe to Intelligence
           </button>
         </div>
       </section>
@@ -337,85 +380,84 @@ export default function Home() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsNewsletterOpen(false)}
-              className="absolute inset-0 bg-brand-navy/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-brand-navy/80 backdrop-blur-md"
             />
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.95, opacity: 0, y: 30 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0, y: 30 }}
+              className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden"
             >
               <button 
                 onClick={() => setIsNewsletterOpen(false)}
-                className="absolute top-6 right-6 p-2 text-brand-navy/20 hover:text-brand-coral transition-colors z-10"
+                className="absolute top-8 right-8 p-2 text-brand-navy/20 hover:text-brand-teal transition-colors z-10"
               >
                 <X size={24} />
               </button>
 
-              <div className="p-12">
+              <div className="p-16">
                 {!isSubscribed ? (
-                  <div className="space-y-8">
-                    <div className="text-center space-y-2">
-                      <h3 className="text-3xl font-serif text-brand-navy">Be the first to know</h3>
-                      <p className="text-sm text-gray-500">Subscribe to our newsletter to receive the latest updates, promotions and news.</p>
+                  <div className="space-y-10">
+                    <div className="text-center space-y-4">
+                      <h3 className="text-4xl font-serif text-brand-navy leading-tight">Be the first to know</h3>
+                      <p className="text-gray-500 font-light">Subscribe to our B2B newsletter for Maldivian travel intelligence.</p>
                     </div>
 
                     <form onSubmit={async (e) => {
                       e.preventDefault();
                       setIsSubmitting(true);
-                      // Simulate API call
                       await new Promise(r => setTimeout(r, 1500));
                       setIsSubscribed(true);
                       setIsSubmitting(false);
-                    }} className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 ml-4">Full Name</label>
+                    }} className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-navy/40 ml-6">Full Name</label>
                         <input 
                           required
                           type="text" 
                           value={newsletterForm.name}
                           onChange={(e) => setNewsletterForm({...newsletterForm, name: e.target.value})}
-                          className="w-full bg-brand-paper/50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
+                          className="w-full bg-brand-paper border-none rounded-full px-8 py-5 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
                           placeholder="Your Name"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 ml-4">Email Address</label>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-navy/40 ml-6">Email Address</label>
                         <input 
                           required
                           type="email" 
                           value={newsletterForm.email}
                           onChange={(e) => setNewsletterForm({...newsletterForm, email: e.target.value})}
-                          className="w-full bg-brand-paper/50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
+                          className="w-full bg-brand-paper border-none rounded-full px-8 py-5 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
                           placeholder="email@example.com"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 ml-4">Company</label>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-navy/40 ml-6">Company</label>
                           <input 
                             type="text" 
                             value={newsletterForm.company}
                             onChange={(e) => setNewsletterForm({...newsletterForm, company: e.target.value})}
-                            className="w-full bg-brand-paper/50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
-                            placeholder="Company Name"
+                            className="w-full bg-brand-paper border-none rounded-full px-8 py-5 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
+                            placeholder="Company"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 ml-4">Country</label>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-navy/40 ml-6">Country</label>
                           <input 
                             type="text" 
                             value={newsletterForm.country}
                             onChange={(e) => setNewsletterForm({...newsletterForm, country: e.target.value})}
-                            className="w-full bg-brand-paper/50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
-                            placeholder="Your Country"
+                            className="w-full bg-brand-paper border-none rounded-full px-8 py-5 text-sm focus:ring-2 focus:ring-brand-teal/20 outline-none transition-all"
+                            placeholder="Country"
                           />
                         </div>
                       </div>
                       <button 
                         disabled={isSubmitting}
                         type="submit"
-                        className="w-full bg-brand-teal text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-brand-navy transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
+                        className="w-full bg-brand-navy text-white py-6 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-brand-teal transition-all duration-500 flex items-center justify-center gap-3 disabled:opacity-50 shadow-xl"
                       >
                         {isSubmitting ? (
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -431,18 +473,18 @@ export default function Home() {
                   <motion.div 
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="text-center space-y-6 py-12"
+                    className="text-center space-y-8 py-12"
                   >
-                    <div className="w-20 h-20 bg-brand-teal text-white rounded-full flex items-center justify-center mx-auto shadow-xl shadow-brand-teal/20">
-                      <Zap size={40} />
+                    <div className="w-24 h-24 bg-brand-teal text-white rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-brand-teal/20">
+                      <Zap size={48} />
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-3xl font-serif text-brand-navy">Welcome Aboard!</h3>
-                      <p className="text-gray-500">You've successfully subscribed to our newsletter. Get ready for some Maldivian magic in your inbox.</p>
+                    <div className="space-y-4">
+                      <h3 className="text-4xl font-serif text-brand-navy leading-tight">Welcome Aboard!</h3>
+                      <p className="text-gray-500 font-light leading-relaxed">You've successfully subscribed to our B2B intelligence newsletter. Get ready for Maldivian excellence in your inbox.</p>
                     </div>
                     <button 
                       onClick={() => setIsNewsletterOpen(false)}
-                      className="text-brand-teal font-bold uppercase tracking-widest text-xs hover:underline"
+                      className="text-brand-teal font-bold uppercase tracking-widest text-[11px] hover:underline"
                     >
                       Close Window
                     </button>

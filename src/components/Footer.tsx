@@ -48,125 +48,102 @@ export default function Footer() {
   const logos = settings.logos || {};
 
   return (
-    <footer className="bg-brand-navy text-white pt-24 pb-12 px-4">
+    <footer className="bg-brand-navy text-white pt-32 pb-12 px-6 md:px-10">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 mb-24">
           {/* Brand & Contact */}
-          <div className="space-y-8">
-            <Link to="/" className="flex items-center gap-3">
+          <div className="space-y-10">
+            <Link to="/" className="inline-block">
               {logos.white ? (
-                <img src={logos.white} alt="Exciting Maldives" className="h-16 w-auto object-contain" referrerPolicy="no-referrer" />
-              ) : null}
+                <img src={logos.white} alt="Exciting Maldives" className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="text-2xl font-serif tracking-tighter">Exciting Maldives</span>
+              )}
             </Link>
-            <div className="space-y-4 text-white/60 text-sm font-sans">
-              <div className="flex items-center gap-3">
-                <MapPin size={16} className="text-brand-teal" />
-                <span>{footer.contact.address}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone size={16} className="text-brand-teal" />
-                <span>{footer.contact.phone}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Mail size={16} className="text-brand-teal" />
-                <span>{footer.contact.email}</span>
+            <div className="space-y-6 text-white/50 text-sm font-sans leading-relaxed">
+              <p className="max-w-xs">
+                The B2B Gateway to Luxury Travel in the Maldives. Connecting global travel professionals with exceptional experiences.
+              </p>
+              <div className="space-y-4 pt-4 border-t border-white/10">
+                <div className="flex items-start gap-4">
+                  <MapPin size={18} className="text-brand-teal shrink-0 mt-0.5" />
+                  <span>{footer.contact.address}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Phone size={18} className="text-brand-teal shrink-0" />
+                  <span>{footer.contact.phone}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Mail size={18} className="text-brand-teal shrink-0" />
+                  <span>{footer.contact.email}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Important Links */}
+          {/* Quick Links */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Important Links</h4>
-            <ul className="space-y-4 text-sm font-sans text-white/60">
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-10">Quick Links</h4>
+            <ul className="space-y-5 text-sm font-sans text-white/50">
               {(footer.important_links || []).map((link: any, idx: number) => (
                 <li key={idx}>
                   {link.path.startsWith('http') ? (
-                    <a href={link.path} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">{link.label}</a>
+                    <a href={link.path} target="_blank" rel="noopener noreferrer" className="hover:text-white hover:translate-x-1 inline-block transition-all duration-300">{link.label}</a>
                   ) : (
-                    <Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link>
+                    <Link to={link.path} className="hover:text-white hover:translate-x-1 inline-block transition-all duration-300">{link.label}</Link>
                   )}
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Legal & Media */}
+          {/* Market Presence */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Legal & Media</h4>
-            <ul className="space-y-4 text-sm font-sans text-white/60">
-              {(footer.legal_links || []).map((link: any, idx: number) => (
-                <li key={idx}>
-                  {link.path.startsWith('http') ? (
-                    <a href={link.path} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">{link.label}</a>
-                  ) : (
-                    <Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link>
-                  )}
-                </li>
-              ))}
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-10">Market Presence</h4>
+            <ul className="space-y-5 text-sm font-sans text-white/50">
+              <li>Russia & CIS</li>
+              <li>Europe & UK</li>
+              <li>Middle East (GCC)</li>
+              <li>Asia Pacific</li>
+              <li>North America</li>
             </ul>
           </div>
 
-          {/* Social Media */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Follow Us</h4>
-            <div className="flex gap-4">
-              {footer.social.facebook && (
-                <a href={footer.social.facebook} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-brand-teal hover:border-brand-teal transition-all">
-                  <Facebook size={18} />
-                </a>
-              )}
-              {footer.social.instagram && (
-                <a href={footer.social.instagram} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-brand-teal hover:border-brand-teal transition-all">
-                  <Instagram size={18} />
-                </a>
-              )}
-              {footer.social.twitter && (
-                <a href={footer.social.twitter} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-brand-teal hover:border-brand-teal transition-all">
-                  <Twitter size={18} />
-                </a>
-              )}
-              {footer.social.linkedin && (
-                <a href={footer.social.linkedin} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-brand-teal hover:border-brand-teal transition-all">
-                  <Linkedin size={18} />
-                </a>
-              )}
+          {/* Social & Legal */}
+          <div className="space-y-12">
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-10">Follow Our Journey</h4>
+              <div className="flex gap-4">
+                {[
+                  { icon: Facebook, url: footer.social.facebook },
+                  { icon: Instagram, url: footer.social.instagram },
+                  { icon: Twitter, url: footer.social.twitter },
+                  { icon: Linkedin, url: footer.social.linkedin }
+                ].map((social, i) => social.url && (
+                  <a key={i} href={social.url} target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center hover:bg-white hover:text-brand-navy hover:border-white transition-all duration-500">
+                    <social.icon size={20} />
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Legal</h4>
+              <ul className="space-y-4 text-xs font-sans text-white/40">
+                {(footer.legal_links || []).map((link: any, idx: number) => (
+                  <li key={idx}>
+                    <Link to={link.path} className="hover:text-white transition-colors">{link.label}</Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
 
-        {/* Memberships & Awards */}
-        {(footer.memberships.length > 0 || footer.awards.length > 0) && (
-          <div className="mb-20 pt-12 border-t border-white/5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              {footer.memberships.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Our Memberships</h4>
-                  <div className="flex flex-wrap gap-8 items-center opacity-40 hover:opacity-100 transition-opacity duration-500">
-                    {footer.memberships.map((m: any, i: number) => (
-                      <img key={i} src={m.url} alt="Membership" className="h-10 w-auto object-contain grayscale hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {footer.awards.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-8">Our Recognition</h4>
-                  <div className="flex flex-wrap gap-8 items-center opacity-40 hover:opacity-100 transition-opacity duration-500">
-                    {footer.awards.map((a: any, i: number) => (
-                      <img key={i} src={a.url} alt="Award" className="h-12 w-auto object-contain grayscale hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] font-sans font-bold uppercase tracking-[0.3em] text-white/30">
-          <p>© {new Date().getFullYear()} Exciting Maldives. All Rights Reserved.</p>
-          <div className="flex gap-8">
-            <Link to="/legal" className="hover:text-white transition-colors">Privacy</Link>
-            <Link to="/legal" className="hover:text-white transition-colors">Terms</Link>
+        <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 text-[10px] font-sans font-bold uppercase tracking-[0.4em] text-white/20">
+          <p>© {new Date().getFullYear()} Exciting Maldives. A Premium B2B Travel Ecosystem.</p>
+          <div className="flex gap-10">
+            <Link to="/legal" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link to="/legal" className="hover:text-white transition-colors">Terms of Service</Link>
             <Link to="/legal" className="hover:text-white transition-colors">Cookies</Link>
           </div>
         </div>

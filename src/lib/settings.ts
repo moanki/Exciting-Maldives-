@@ -44,30 +44,61 @@ export async function getSiteSettings(isPreview: boolean = false) {
     // 3. Apply defaults for missing critical sections
     const defaults = {
       hero: {
-        title: 'The Art of Maldivian Luxury',
-        subtitle: 'Bespoke Destination Management for Travel Professionals',
+        title: 'Curating the Maldives for the World’s Leading Travel Professionals',
+        subtitle: 'Exclusive resort partnerships, seamless destination management, and real-time booking intelligence.',
         banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
         banner_type: 'image'
       },
       introduction: {
-        title: 'Bespoke Destination Management',
-        summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.'
+        title: 'The B2B Gateway to Luxury Travel in the Maldives',
+        summary: 'A destination management and digital distribution platform connecting global travel professionals with the Maldives’ most exceptional resorts and experiences.'
       },
       why_us: [
-        { title: 'Authentic Connections', description: 'We focus on fostering genuine relationships with our B2B partners by understanding their needs and providing personalized solutions.' },
-        { title: 'Curated Luxury', description: 'Our strategy centers on curating unique luxury experiences that showcase the beauty and culture of the Maldives.' },
-        { title: 'Streamlined Collaboration', description: 'We aim to enhance collaboration that simplify the booking process and improve communication, ensuring seamless service delivery.' },
-        { title: 'Tailored Support', description: 'We offer dedicated support to our partners, providing them with the insights and resources needed to effectively promote our offerings.' }
+        { title: 'Curated Luxury Portfolio', description: 'Hand-selected partnerships with the Maldives’ most exceptional resorts.' },
+        { title: 'Operational Excellence', description: 'Seamless coordination, logistics, and concierge-level destination management.' },
+        { title: 'Real-Time Intelligence', description: 'Dynamic pricing, instant quotations, and live availability.' }
+      ],
+      platform_excellence: [
+        { title: 'Real-Time Quotations & Dynamic Pricing', description: 'Instant access to the most competitive rates in the market.' },
+        { title: '24/7 Reservation Portal', description: 'Manage your bookings anytime, anywhere with our intuitive interface.' },
+        { title: 'Live Offer Repository', description: 'Stay updated with the latest seasonal offers and exclusive deals.' },
+        { title: 'SAMO & Master Tour Integration', description: 'Seamlessly sync with industry-standard management systems.' }
+      ],
+      global_markets: [
+        { name: 'Russia & CIS', description: 'Dedicated support for one of our strongest market segments.' },
+        { name: 'Europe', description: 'Deep connections across the UK, Germany, and Western Europe.' },
+        { name: 'Middle East', description: 'Specialized services for high-net-worth travelers from the GCC.' }
+      ],
+      awards: {
+        title: 'Awards & Recognition',
+        summary: 'Trusted by the industry, recognized for excellence.',
+        items: [
+          { label: 'TTM Top Producer', year: '4 Consecutive Years' }
+        ]
+      },
+      services: [
+        { title: 'Accommodation & Booking', icon: 'Hotel' },
+        { title: 'Transportation & Transfers', icon: 'Plane' },
+        { title: 'Concierge Services', icon: 'UserCheck' },
+        { title: 'Event Management', icon: 'Calendar' },
+        { title: 'Meet & Greet', icon: 'Smile' }
       ],
       navbar: [
+        { label: 'Home', path: '/' },
         { label: 'Resorts', path: '/resorts' },
-        { label: 'Map', path: '/map' },
-        { label: 'Info', path: '/tourist-info' }
+        { label: 'Experiences', path: '/experiences' },
+        { label: 'Platform', path: '/#platform' },
+        { label: 'About', path: '/#about' },
+        { label: 'Partner With Us', path: '/become-partner' }
       ],
       footer: {
         contact: { email: 'info@excitingmaldives.com', phone: '+960 123 4567', address: 'Male, Maldives' },
         social: { instagram: '', linkedin: '', facebook: '', twitter: '' },
-        important_links: [{ label: 'Resorts', path: '/resorts' }],
+        important_links: [
+          { label: 'Resorts', path: '/resorts' },
+          { label: 'Experiences', path: '/experiences' },
+          { label: 'Partner With Us', path: '/become-partner' }
+        ],
         legal_links: [{ label: 'Privacy Policy', path: '/legal' }]
       }
     };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,8 +45,7 @@ export default function AdminDashboard() {
         <nav className="flex-1 space-y-2 overflow-y-auto">
           <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/bookings" icon={<FileText size={18} />} label="Bookings" active={location.pathname.startsWith('/admin/bookings')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partner Management" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/page-manager" icon={<Palette size={18} />} label="Page Manager" active={location.pathname.startsWith('/admin/page-manager')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
@@ -98,7 +97,6 @@ export default function AdminDashboard() {
           <Routes>
             <Route path="/" element={<AdminOverview />} />
             <Route path="/resorts" element={<AdminResorts />} />
-            <Route path="/bookings" element={<AdminBookings />} />
             <Route path="/partners" element={<AdminPartners />} />
             <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager" element={<AdminPageManager />} />
@@ -621,8 +619,8 @@ alter publication supabase_realtime add table messages;`;
         {
           key: 'hero:published',
           value: {
-            title: 'The Art of Maldivian Luxury',
-            subtitle: 'Bespoke Destination Management for Travel Professionals',
+            title: 'The B2B Gateway to Luxury Travel in the Maldives',
+            subtitle: 'A destination management and digital distribution platform connecting global travel professionals with the Maldives’ most exceptional resorts and experiences.',
             banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
             banner_type: 'image'
           }
@@ -637,9 +635,11 @@ alter publication supabase_realtime add table messages;`;
         {
           key: 'navbar:published',
           value: [
+            { label: 'Home', path: '/' },
             { label: 'Resorts', path: '/resorts' },
-            { label: 'Map', path: '/map' },
-            { label: 'Info', path: '/tourist-info' }
+            { label: 'Experiences', path: '/experiences' },
+            { label: 'Platform', path: '/platform' },
+            { label: 'About', path: '/about' }
           ]
         },
         {
@@ -647,8 +647,15 @@ alter publication supabase_realtime add table messages;`;
           value: {
             contact: { email: 'info@excitingmaldives.com', phone: '+960 123 4567', address: 'Male, Maldives' },
             social: { instagram: '', linkedin: '', facebook: '', twitter: '' },
-            important_links: [{ label: 'Resorts', path: '/resorts' }],
-            legal_links: [{ label: 'Privacy Policy', path: '/legal' }]
+            important_links: [
+              { label: 'Resorts', path: '/resorts' },
+              { label: 'Experiences', path: '/experiences' },
+              { label: 'Platform', path: '/platform' }
+            ],
+            legal_links: [
+              { label: 'Privacy Policy', path: '/legal' },
+              { label: 'Terms of Service', path: '/terms' }
+            ]
           }
         }
       ];
@@ -814,8 +821,18 @@ function StatCard({ icon, label, value, color }: any) {
 function AdminResorts() {
   const [resorts, setResorts] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingResort, setEditingResort] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [aiProcessing, setAiProcessing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    atoll: '',
+    category: '',
+    description: '',
+    image_url: '',
+    price_range: '',
+    is_featured: false
+  });
 
   useEffect(() => {
     fetchResorts();
@@ -843,7 +860,6 @@ function AdminResorts() {
       const base64 = (reader.result as string).split(',')[1];
       try {
         const extracted = await extractResortDataFromPDF(base64);
-        // Pre-fill form with extracted data (simplified for demo)
         const { error } = await supabase
           .from('resorts')
           .insert({
@@ -863,6 +879,51 @@ function AdminResorts() {
     reader.readAsDataURL(file);
   };
 
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    if (editingResort) {
+      const { error } = await supabase
+        .from('resorts')
+        .update(formData)
+        .eq('id', editingResort.id);
+      if (error) alert(error.message);
+    } else {
+      const { error } = await supabase
+        .from('resorts')
+        .insert(formData);
+      if (error) alert(error.message);
+    }
+    
+    setEditingResort(null);
+    setIsAdding(false);
+    setFormData({ name: '', atoll: '', category: '', description: '', image_url: '', price_range: '', is_featured: false });
+    fetchResorts();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this resort?')) {
+      const { error } = await supabase.from('resorts').delete().eq('id', id);
+      if (error) alert(error.message);
+      else fetchResorts();
+    }
+  };
+
+  const startEdit = (resort: any) => {
+    setEditingResort(resort);
+    setFormData({
+      name: resort.name || '',
+      atoll: resort.atoll || '',
+      category: resort.category || '',
+      description: resort.description || '',
+      image_url: resort.image_url || '',
+      price_range: resort.price_range || '',
+      is_featured: resort.is_featured || false
+    });
+    setIsAdding(true);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
@@ -873,7 +934,11 @@ function AdminResorts() {
             <input type="file" className="hidden" accept=".pdf" onChange={handleFileUpload} disabled={aiProcessing} />
           </label>
           <button 
-            onClick={() => setIsAdding(true)}
+            onClick={() => {
+              setEditingResort(null);
+              setFormData({ name: '', atoll: '', category: '', description: '', image_url: '', price_range: '', is_featured: false });
+              setIsAdding(true);
+            }}
             className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
           >
             <Plus size={16} /> Manual Add
@@ -914,8 +979,8 @@ function AdminResorts() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
-                    <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
-                    <button className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
+                    <button onClick={() => startEdit(resort)} className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                    <button onClick={() => handleDelete(resort.id)} className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
                   </div>
                 </td>
               </tr>
@@ -923,76 +988,62 @@ function AdminResorts() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
 
-function AdminBookings() {
-  const [bookings, setBookings] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchBookings = async () => {
-      const { data, error } = await supabase
-        .from('booking_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (data) {
-        setBookings(data);
-      }
-    };
-    fetchBookings();
-  }, []);
-
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase
-      .from('booking_requests')
-      .update({ status })
-      .eq('id', id);
-    
-    if (!error) {
-      setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
-    }
-  };
-
-  return (
-    <div>
-      <h1 className="text-3xl font-serif mb-10 text-brand-navy">Booking Requests</h1>
-      <div className="space-y-4">
-        {bookings.map(booking => (
-          <div key={booking.id} className="bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 flex items-center justify-between hover:shadow-2xl transition-all">
-            <div className="flex items-center gap-6">
-              <div className="bg-brand-paper p-4 rounded-2xl text-brand-teal">
-                <FileText size={24} />
+      <AnimatePresence>
+        {isAdding && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAdding(false)}
+              className="absolute inset-0 bg-brand-navy/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 30 }}
+              className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-12">
+                <h2 className="text-3xl font-serif text-brand-navy mb-8">{editingResort ? 'Edit Resort' : 'Add New Resort'}</h2>
+                <form onSubmit={handleSave} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-6">
+                    <TextInput label="Resort Name" value={formData.name} onChange={(v) => setFormData({...formData, name: v})} placeholder="e.g. Soneva Jani" />
+                    <TextInput label="Atoll" value={formData.atoll} onChange={(v) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Ultra-Luxury" />
+                    <TextInput label="Price Range" value={formData.price_range} onChange={(v) => setFormData({...formData, price_range: v})} placeholder="e.g. $$$$" />
+                  </div>
+                  <TextInput label="Image URL" value={formData.image_url} onChange={(v) => setFormData({...formData, image_url: v})} placeholder="https://..." />
+                  <TextAreaInput label="Description" value={formData.description} onChange={(v) => setFormData({...formData, description: v})} placeholder="Brief overview of the resort..." />
+                  
+                  <div className="flex justify-end gap-4 pt-6">
+                    <button 
+                      type="button"
+                      onClick={() => setIsAdding(false)}
+                      className="px-8 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 hover:text-brand-navy transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      className="bg-brand-navy text-white px-10 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all shadow-xl shadow-brand-navy/20"
+                    >
+                      {editingResort ? 'Update Resort' : 'Add Resort'}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div>
-                <h3 className="text-xl font-serif text-brand-navy">{booking.resort_name}</h3>
-                <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">
-                  {booking.check_in} - {booking.check_out} • {booking.guests} Guests • {booking.room_type}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <select 
-                value={booking.status}
-                onChange={(e) => updateStatus(booking.id, e.target.value)}
-                className="bg-brand-paper border-none rounded-xl text-[10px] font-bold uppercase tracking-widest px-4 py-2 focus:ring-0 font-sans text-brand-navy"
-              >
-                <option value="new">New</option>
-                <option value="in_progress">In Progress</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <button className="bg-brand-navy text-white p-2 rounded-full hover:bg-brand-teal transition-colors shadow-lg shadow-brand-navy/10">
-                <MessageSquare size={16} />
-              </button>
-            </div>
+            </motion.div>
           </div>
-        ))}
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
 
 function AdminPartners() {
   const [partners, setPartners] = useState<any[]>([]);
@@ -1397,9 +1448,11 @@ function AdminPageManager() {
         // Apply defaults for missing critical sections to ensure UI is populated
         const finalSettings = {
           navbar: [
+            { label: 'Home', path: '/' },
             { label: 'Resorts', path: '/resorts' },
-            { label: 'Map', path: '/map' },
-            { label: 'Info', path: '/tourist-info' }
+            { label: 'Experiences', path: '/experiences' },
+            { label: 'Platform', path: '/platform' },
+            { label: 'About', path: '/about' }
           ],
           logos: {
             primary: '',
@@ -1642,30 +1695,36 @@ function AdminPageManager() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-fit">
-        {[
-          { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
-          { id: 'hero', label: 'Hero & Intro', icon: <Image size={14} /> },
-          { id: 'ceo', label: 'CEO Message', icon: <Users size={14} /> },
-          { id: 'story', label: 'Our Story', icon: <FileText size={14} /> },
-          { id: 'awards', label: 'Awards', icon: <Gem size={14} /> },
-          { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
-          { id: 'retreats', label: 'Retreats', icon: <Hotel size={14} /> },
-          { id: 'ctas', label: 'CTAs', icon: <Zap size={14} /> },
-          { id: 'footer', label: 'Footer', icon: <Settings size={14} /> },
-          { id: 'whatsapp', label: 'WhatsApp', icon: <Phone size={14} /> }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-              activeTab === tab.id ? 'bg-white text-brand-teal shadow-sm' : 'text-brand-navy/40 hover:text-brand-navy'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex gap-2 mb-8 bg-brand-paper/50 p-1 rounded-2xl w-full overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 min-w-max">
+          {[
+            { id: 'nav', label: 'Nav & Logo', icon: <Globe size={14} /> },
+            { id: 'pages', label: 'Pages', icon: <FileText size={14} /> },
+            { id: 'hero', label: 'Hero & Intro', icon: <Image size={14} /> },
+            { id: 'ceo', label: 'CEO Message', icon: <Users size={14} /> },
+            { id: 'story', label: 'Our Story', icon: <FileText size={14} /> },
+            { id: 'excellence', label: 'Excellence', icon: <Zap size={14} /> },
+            { id: 'market', label: 'Markets', icon: <Globe size={14} /> },
+            { id: 'services', label: 'Services', icon: <Handshake size={14} /> },
+            { id: 'awards', label: 'Awards', icon: <Gem size={14} /> },
+            { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
+            { id: 'retreats', label: 'Retreats', icon: <Hotel size={14} /> },
+            { id: 'ctas', label: 'CTAs', icon: <Zap size={14} /> },
+            { id: 'footer', label: 'Footer', icon: <Settings size={14} /> },
+            { id: 'whatsapp', label: 'WhatsApp', icon: <Phone size={14} /> }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 md:px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                activeTab === tab.id ? 'bg-white text-brand-teal shadow-sm' : 'text-brand-navy/40 hover:text-brand-navy'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mb-6 flex justify-end">
@@ -2092,6 +2151,151 @@ function AdminPageManager() {
             </div>
           )}
 
+
+          {activeTab === 'excellence' && (
+            <div className="space-y-8">
+              <h3 className="text-xl font-serif text-brand-navy">Platform Excellence</h3>
+              <div className="space-y-6">
+                {safeArray(settings.platform_excellence).map((item: any, idx: number) => (
+                  <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
+                    <TextInput 
+                      label="Title" 
+                      value={item.title} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.platform_excellence)];
+                        newItems[idx].title = val;
+                        saveSetting('platform_excellence', newItems);
+                      }} 
+                    />
+                    <TextAreaInput 
+                      label="Description" 
+                      value={item.description} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.platform_excellence)];
+                        newItems[idx].description = val;
+                        saveSetting('platform_excellence', newItems);
+                      }} 
+                    />
+                    <button 
+                      onClick={() => {
+                        const newItems = safeArray(settings.platform_excellence).filter((_: any, i: number) => i !== idx);
+                        saveSetting('platform_excellence', newItems);
+                      }}
+                      className="text-brand-coral text-[10px] font-bold uppercase tracking-widest"
+                    >
+                      Remove Item
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => saveSetting('platform_excellence', [...safeArray(settings.platform_excellence), { title: 'New Feature', description: '' }])}
+                  className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add Excellence Feature
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'market' && (
+            <div className="space-y-8">
+              <h3 className="text-xl font-serif text-brand-navy">Global Markets</h3>
+              <div className="space-y-6">
+                {safeArray(settings.global_markets).map((item: any, idx: number) => (
+                  <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
+                    <TextInput 
+                      label="Market Name" 
+                      value={item.name} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.global_markets)];
+                        newItems[idx].name = val;
+                        saveSetting('global_markets', newItems);
+                      }} 
+                    />
+                    <TextAreaInput 
+                      label="Description" 
+                      value={item.description} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.global_markets)];
+                        newItems[idx].description = val;
+                        saveSetting('global_markets', newItems);
+                      }} 
+                    />
+                    <button 
+                      onClick={() => {
+                        const newItems = safeArray(settings.global_markets).filter((_: any, i: number) => i !== idx);
+                        saveSetting('global_markets', newItems);
+                      }}
+                      className="text-brand-coral text-[10px] font-bold uppercase tracking-widest"
+                    >
+                      Remove Market
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => saveSetting('global_markets', [...safeArray(settings.global_markets), { name: 'New Market', description: '' }])}
+                  className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add Global Market
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'services' && (
+            <div className="space-y-8">
+              <h3 className="text-xl font-serif text-brand-navy">DMC Services</h3>
+              <div className="space-y-6">
+                {safeArray(settings.services).map((item: any, idx: number) => (
+                  <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
+                    <TextInput 
+                      label="Service Title" 
+                      value={item.title} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.services)];
+                        newItems[idx].title = val;
+                        saveSetting('services', newItems);
+                      }} 
+                    />
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">Icon</label>
+                      <select
+                        value={item.icon}
+                        onChange={(e) => {
+                          const newItems = [...safeArray(settings.services)];
+                          newItems[idx].icon = e.target.value;
+                          saveSetting('services', newItems);
+                        }}
+                        className="w-full bg-white border border-brand-navy/10 rounded-xl px-4 py-3 text-sm font-sans text-brand-navy focus:outline-none focus:border-brand-teal transition-all"
+                      >
+                        <option value="Hotel">Hotel</option>
+                        <option value="Plane">Plane</option>
+                        <option value="UserCheck">UserCheck</option>
+                        <option value="Calendar">Calendar</option>
+                        <option value="Smile">Smile</option>
+                        <option value="Zap">Zap</option>
+                      </select>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const newItems = safeArray(settings.services).filter((_: any, i: number) => i !== idx);
+                        saveSetting('services', newItems);
+                      }}
+                      className="text-brand-coral text-[10px] font-bold uppercase tracking-widest"
+                    >
+                      Remove Service
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => saveSetting('services', [...safeArray(settings.services), { title: 'New Service', icon: 'Zap' }])}
+                  className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add DMC Service
+                </button>
+              </div>
+            </div>
+          )}
 
           {activeTab === 'ceo' && (
             <div className="space-y-8">

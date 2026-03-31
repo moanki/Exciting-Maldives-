@@ -35,75 +35,74 @@ export default function Navbar({ user, role }: NavbarProps) {
 
   const navItems = settings.navbar || [
     { label: 'Home', path: '/' },
-    { label: 'Destinations', path: '/destinations' },
-    { label: 'Experiences', path: '/experiences' },
-    { label: 'Packages', path: '/packages' },
     { label: 'Resorts', path: '/resorts' },
-    { label: 'About', path: '/about' },
-    { label: 'Contact', path: '/contact' }
+    { label: 'Experiences', path: '/experiences' },
+    { label: 'Platform', path: '/#platform' },
+    { label: 'About', path: '/#about' }
   ];
 
   const logo = settings.logos?.primary;
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-brand-navy/5">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20">
+    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-brand-navy/5">
+      <div className="max-w-7xl mx-auto px-6 md:px-10">
+        <div className="flex justify-between h-24">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
               {logo ? (
                 <img 
                   src={logo} 
                   alt="Exciting Maldives" 
-                  className={`h-16 w-auto object-contain transition-opacity duration-500 ${logoLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                  className={`h-10 w-auto object-contain transition-all duration-700 ${logoLoaded ? 'opacity-100' : 'opacity-0'}`} 
                   onLoad={() => setLogoLoaded(true)}
                   referrerPolicy="no-referrer" 
                 />
-              ) : null}
+              ) : (
+                <span className="text-xl font-serif tracking-tighter text-brand-navy">Exciting Maldives</span>
+              )}
             </Link>
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-10">
             {navItems.map((item: any, idx: number) => (
               <Link 
                 key={idx} 
                 to={item.path} 
-                className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors"
+                className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-navy/60 hover:text-brand-teal transition-all duration-300 relative group"
               >
                 {item.label}
+                <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-brand-teal transition-all duration-300 group-hover:w-full"></span>
               </Link>
             ))}
             
             {user ? (
-              <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-6 pl-6 border-l border-brand-navy/10">
                 {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
-                  <Link to="/admin" className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-teal">Admin</Link>
+                  <Link to="/admin" className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal hover:opacity-80 transition-opacity">Admin</Link>
                 )}
                 <button 
                   onClick={handleLogout}
-                  className="p-2 rounded-full hover:bg-brand-paper transition-colors text-brand-navy"
+                  className="p-2.5 rounded-full hover:bg-brand-paper transition-all duration-300 text-brand-navy/40 hover:text-brand-navy"
                   title="Logout"
                 >
                   <LogOut size={18} />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-8 pl-8 border-l border-brand-navy/10">
                 <Link 
                   to="/login"
-                  className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-navy hover:text-brand-teal transition-colors"
+                  className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-navy/40 hover:text-brand-navy transition-all duration-300"
                 >
-                  Admin Login
+                  Login
                 </Link>
-                <a 
-                  href="https://b2b.excitingmv.com/" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-brand-navy text-white px-8 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all shadow-sm"
+                <Link 
+                  to="/become-partner"
+                  className="bg-brand-navy text-white px-8 py-3 rounded-full text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-brand-teal transition-all duration-500 shadow-xl shadow-brand-navy/10"
                 >
-                  Partner Login
-                </a>
+                  Partner With Us
+                </Link>
               </div>
             )}
           </div>
