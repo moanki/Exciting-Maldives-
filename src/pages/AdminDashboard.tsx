@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
@@ -230,6 +230,20 @@ function AdminResources() {
         </div>
       </div>
 
+      {isAdding && (
+        <ResourceModal 
+          onClose={() => setIsAdding(false)} 
+          onAdd={() => {
+            setIsAdding(false);
+            const fetchResources = async () => {
+              const { data: resData } = await supabase.from('resources').select('*');
+              if (resData) setResources(resData);
+            };
+            fetchResources();
+          }} 
+        />
+      )}
+
       {isAddingProtected && (
         <ProtectedResourceModal 
           onClose={() => setIsAddingProtected(false)} 
@@ -314,10 +328,72 @@ function SidebarLink({ to, icon, label, active, onClick }: any) {
   );
 }
 
+function ResourceModal({ onClose, onAdd }: any) {
+  const [title, setTitle] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [type, setType] = useState('PDF');
+
+  const handleSubmit = async () => {
+    if (!title || !file) return;
+    
+    // Upload file
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(`public/${fileName}`, file);
+    
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(`public/${fileName}`);
+
+    // Save to DB
+    const { error } = await supabase
+      .from('resources')
+      .insert({
+        title,
+        type,
+        file_url: publicUrl,
+        size: `${(file.size / 1024 / 1024).toFixed(2)} MB`
+      });
+    
+    if (!error) {
+      onAdd();
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-navy/20 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-lg rounded-[32px] p-8 shadow-2xl">
+        <h3 className="text-xl font-serif text-brand-navy mb-6">Add Resource</h3>
+        <div className="space-y-4">
+          <TextInput label="Title" value={title} onChange={setTitle} />
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File</label>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm font-sans" />
+          </div>
+          <TextInput label="Type (e.g. PDF, DOCX)" value={type} onChange={setType} />
+          <div className="flex gap-4 mt-8">
+            <button onClick={onClose} className="flex-1 px-6 py-3 bg-brand-paper rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy/10 transition-all">Cancel</button>
+            <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Add Resource</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedResourceModal({ onClose, onAdd }: any) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [passwords, setPasswords] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async () => {
     if (!title || !file || !passwords) return;
@@ -363,7 +439,21 @@ function ProtectedResourceModal({ onClose, onAdd }: any) {
             <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File</label>
             <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm font-sans" />
           </div>
-          <TextInput label="Passwords (comma separated)" value={passwords} onChange={setPasswords} />
+          <div className="relative">
+            <TextInput 
+              label="Passwords (comma separated)" 
+              value={passwords} 
+              onChange={setPasswords} 
+              type={showPassword ? 'text' : 'password'} 
+            />
+            <button 
+              type="button" 
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-9 text-brand-navy/30"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           <div className="flex gap-4 mt-8">
             <button onClick={onClose} className="flex-1 px-6 py-3 bg-brand-paper rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy/10 transition-all">Cancel</button>
             <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Add Resource</button>
@@ -2710,14 +2800,14 @@ function AdminPageManager() {
   );
 }
 
-function TextInput({ label, value, onChange, icon }: any) {
+function TextInput({ label, value, onChange, icon, type = 'text' }: any) {
   return (
     <div className="flex-1">
       <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">{label}</label>
       <div className="relative">
         {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-navy/30">{icon}</div>}
         <input
-          type="text"
+          type={type}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           className={`w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy ${icon ? 'pl-10' : ''}`}

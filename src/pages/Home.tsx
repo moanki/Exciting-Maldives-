@@ -3,14 +3,33 @@ import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { getSiteSettings } from '../lib/settings';
-import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, Zap, Check } from 'lucide-react';
+import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, ChevronLeft, Zap, Check } from 'lucide-react';
 
 const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
 
+function Newsletter() {
+  return (
+    <section className="py-[120px] bg-brand-navy text-white">
+      <div className="max-w-3xl mx-auto px-6 text-center space-y-8">
+        <h2 className="text-3xl md:text-5xl font-serif">Stay Inspired</h2>
+        <p className="text-brand-paper/60">Subscribe to our newsletter for exclusive luxury travel insights and curated resort recommendations.</p>
+        <div className="flex gap-4">
+          <input type="email" placeholder="Enter your email" className="flex-1 bg-white/10 border-none rounded-full px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/50" />
+          <button className="bg-brand-teal text-white px-8 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-brand-navy transition-all">Subscribe</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const containerRef = useRef(null);
+  const ceoRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
+  const { scrollYProgress: ceoScrollY } = useScroll({ target: ceoRef });
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const ceoY = useTransform(ceoScrollY, [0, 1], ['-10%', '10%']);
   const scale = useTransform(scrollYProgress, [0, 1], [1, 1.1]);
   
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
@@ -151,51 +170,68 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Resort Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredResorts.map((resort, i) => (
-              <motion.div 
-                key={resort.id || i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="group cursor-pointer"
-              >
-                <Link to={`/resorts/${resort.id}`}>
-                  <div className="relative aspect-[4/5] rounded-[2rem] overflow-hidden mb-6 luxury-shadow">
-                    <img 
-                      src={resort.images?.[0] || `https://picsum.photos/seed/${resort.id}/800/1000`} 
-                      alt={resort.name} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/90 via-brand-navy/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-500"></div>
-                    
-                    <div className="absolute bottom-0 left-0 w-full p-8 flex flex-col justify-end h-full">
-                      <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-500 ease-out">
-                        <div className="flex items-center gap-2 text-brand-teal mb-3">
-                          <MapPin size={14} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">{resort.location || 'Maldives'}</span>
-                        </div>
-                        <h3 className="text-3xl font-serif text-white mb-2">{resort.name}</h3>
-                        <div className="flex items-center gap-4 text-white/80 text-sm font-light mb-6">
-                          <span>{resort.star_rating || 5} Star Luxury</span>
-                          <span className="w-1 h-1 rounded-full bg-white/50"></span>
-                          <span>{resort.villa_count || '50+'} Villas</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
-                          <span className="text-white font-serif italic">From $1,500 / night</span>
-                          <span className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white group-hover:bg-brand-teal transition-colors">
-                            <ArrowRight size={16} />
-                          </span>
+          {/* Resort Cards Carousel */}
+          <div className="relative overflow-hidden">
+            <motion.div 
+              className="flex gap-8"
+              animate={{ x: `-${currentIndex * 350}px` }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
+            >
+              {featuredResorts.map((resort, i) => (
+                <motion.div 
+                  key={resort.id || i}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, delay: i * 0.1 }}
+                  className="group cursor-pointer min-w-[320px] md:min-w-[400px]"
+                >
+                  <Link to={`/resorts/${resort.id}`}>
+                    <div className="relative aspect-[4/5] rounded-[2rem] overflow-hidden mb-6 luxury-shadow">
+                      <img 
+                        src={resort.images?.[0] || `https://picsum.photos/seed/${resort.id}/800/1000`} 
+                        alt={resort.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/90 via-brand-navy/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-500"></div>
+                      
+                      <div className="absolute bottom-0 left-0 w-full p-8 flex flex-col justify-end h-full">
+                        <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-500 ease-out">
+                          <div className="flex items-center gap-2 text-brand-teal mb-3">
+                            <MapPin size={14} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{resort.location || 'Maldives'}</span>
+                          </div>
+                          <h3 className="text-3xl font-serif text-white mb-2">{resort.name}</h3>
+                          <div className="flex items-center justify-between text-white/80 text-sm font-light">
+                            <span>{resort.star_rating || 5} Star Luxury</span>
+                            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-brand-teal transition-colors">
+                              <ArrowRight size={16} />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+                  </Link>
+                </motion.div>
+              ))}
+            </motion.div>
+            
+            {/* Carousel Controls */}
+            <div className="flex justify-center gap-4 mt-8">
+              <button 
+                onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                className="w-12 h-12 rounded-full bg-brand-paper flex items-center justify-center hover:bg-brand-teal hover:text-white transition-all"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button 
+                onClick={() => setCurrentIndex(Math.min(featuredResorts.length - 1, currentIndex + 1))}
+                className="w-12 h-12 rounded-full bg-brand-paper flex items-center justify-center hover:bg-brand-teal hover:text-white transition-all"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -503,17 +539,19 @@ export default function Home() {
       </section>
 
       {/* 8. CEO MESSAGE */}
-      <section className="py-[120px] bg-white">
+      <section ref={ceoRef} className="py-[120px] bg-white overflow-hidden">
         <div className="max-w-5xl mx-auto px-6 md:px-10 text-center space-y-12">
           <h2 className="text-3xl md:text-5xl font-serif text-brand-navy leading-relaxed max-w-4xl mx-auto">
             “{settings.ceo_message?.message || 'Exciting Maldives has become our go-to Maldives partner. Their platform is incredibly intuitive, and their local expertise is unmatched.'}”
           </h2>
           <div className="flex flex-col items-center gap-4">
-            <img 
-              src={settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80"} 
-              alt="CEO" 
-              className="w-20 h-20 rounded-full object-cover luxury-shadow"
-            />
+            <motion.div style={{ y: ceoY }} className="w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden luxury-shadow">
+              <img 
+                src={settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80"} 
+                alt="CEO" 
+                className="w-full h-full object-cover"
+              />
+            </motion.div>
             <div>
               <p className="font-bold text-brand-navy">{settings.ceo_message?.name || 'Sarah Jenkins'}</p>
               <p className="text-[11px] font-bold uppercase tracking-widest text-brand-teal mt-1">CEO & Founder</p>
@@ -521,6 +559,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <Newsletter />
 
       {/* 9. FINAL CTA */}
       <section className="relative py-[160px] flex items-center justify-center overflow-hidden">
