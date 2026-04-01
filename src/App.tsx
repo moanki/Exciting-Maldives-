@@ -83,7 +83,7 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
           href={`https://wa.me/${settings.whatsapp.number.replace(/\D/g, '')}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="fixed bottom-24 right-6 w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl z-50 hover:bg-[#128C7E] transition-colors"
+          className="fixed bottom-24 right-6 w-14 h-14 bg-[#25D366] text-white rounded-lg flex items-center justify-center shadow-2xl z-50 hover:bg-[#128C7E] transition-colors"
         >
           <Phone size={28} fill="currentColor" />
         </motion.a>

@@ -42,7 +42,8 @@ export default function Footer() {
       { label: 'Meet the Team', path: '/legal' }
     ],
     memberships: settings.footer?.memberships || [],
-    awards: settings.footer?.awards || []
+    awards: settings.footer?.awards || [],
+    trust_indicators: settings.footer?.trust_indicators || []
   };
 
   const logos = settings.logos || {};
@@ -55,7 +56,7 @@ export default function Footer() {
           <div className="space-y-10">
             <Link to="/" className="inline-block">
               {logos.white ? (
-                <img src={logos.white} alt="Exciting Maldives" className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+                <img src={logos.white} alt="Exciting Maldives" className="h-28 w-auto object-contain" referrerPolicy="no-referrer" />
               ) : (
                 <span className="text-2xl font-serif tracking-tighter">Exciting Maldives</span>
               )}
@@ -111,6 +112,16 @@ export default function Footer() {
 
           {/* Social & Legal */}
           <div className="space-y-12">
+            {footer.trust_indicators.length > 0 && (
+              <div>
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-10">Trusted By</h4>
+                <div className="flex flex-wrap gap-6">
+                  {footer.trust_indicators.map((item: any, idx: number) => (
+                    <img key={idx} src={item.logo} alt={item.title} className="h-12 w-auto object-contain" referrerPolicy="no-referrer" />
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-teal mb-10">Follow Our Journey</h4>
               <div className="flex gap-4">

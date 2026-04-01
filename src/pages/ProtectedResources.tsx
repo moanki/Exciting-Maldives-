@@ -13,14 +13,20 @@ export default function ProtectedResources() {
       .from('protected_resources')
       .select('*')
       .eq('id', id)
-      .eq('password', password)
       .single();
 
     if (error || !data) {
-      setError('Invalid password');
-    } else {
+      setError('Resource not found');
+      return;
+    }
+
+    const passwords = data.passwords || (data.password ? [data.password] : []);
+    
+    if (passwords.includes(password)) {
       setResource(data);
       setError('');
+    } else {
+      setError('Invalid password');
     }
   };
 

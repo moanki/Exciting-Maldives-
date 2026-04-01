@@ -42,6 +42,17 @@ export async function getSiteSettings(isPreview: boolean = false) {
       { title: 'Event Management', icon: 'Calendar' },
       { title: 'Meet & Greet', icon: 'Smile' }
     ],
+    trust_indicators: [
+      { title: 'Real-Time Availability' },
+      { title: 'Global Tour Partners' },
+      { title: 'Luxury Travel Access' },
+      { title: 'Maldives Expertise' }
+    ],
+    travel_guide: [
+      { title: 'The Ultimate Seaplane Guide', category: 'Logistics', img: 'https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?auto=format&fit=crop&q=80' },
+      { title: 'Private Island Dining', category: 'Cuisine', img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80' },
+      { title: 'Beneath the Surface', category: 'Exploration', img: 'https://images.unsplash.com/photo-1546026423-cc46426e97b7?auto=format&fit=crop&q=80' }
+    ],
     navbar: [
       { label: 'Home', path: '/' },
       { label: 'Resorts', path: '/resorts' },
@@ -77,14 +88,32 @@ export async function getSiteSettings(isPreview: boolean = false) {
     const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
     publishedSettings.forEach((s: any) => {
       const key = s.key.replace(':published', '');
-      settingsMap[key] = s.value;
+      let value = s.value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed !== null && typeof parsed === 'object') {
+            value = parsed;
+          }
+        } catch (e) {}
+      }
+      settingsMap[key] = value;
     });
 
     if (isPreview) {
       const draftSettings = data.filter((s: any) => s.key.endsWith(':draft'));
       draftSettings.forEach((s: any) => {
         const key = s.key.replace(':draft', '');
-        settingsMap[key] = s.value;
+        let value = s.value;
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed !== null && typeof parsed === 'object') {
+              value = parsed;
+            }
+          } catch (e) {}
+        }
+        settingsMap[key] = value;
       });
     }
 

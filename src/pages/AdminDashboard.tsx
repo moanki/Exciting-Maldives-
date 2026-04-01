@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake } from 'lucide-react';
+import { Routes, Route, Link, useLocation, useParams } from 'react-router-dom';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Twitter, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,7 +47,23 @@ export default function AdminDashboard() {
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/page-manager" icon={<Palette size={18} />} label="Page Manager" active={location.pathname.startsWith('/admin/page-manager')} onClick={() => setIsMobileMenuOpen(false)} />
+          
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/50">Page Manager</p>
+          </div>
+          <SidebarLink to="/admin/page-manager/nav" icon={<Globe size={14} />} label="Navigation & Logos" active={location.pathname.includes('/nav')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/pages" icon={<FileText size={14} />} label="Pages" active={location.pathname.includes('/pages')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/hero" icon={<Image size={14} />} label="Hero & Intro" active={location.pathname.includes('/hero')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/ceo" icon={<Users size={14} />} label="CEO Message" active={location.pathname.includes('/ceo')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/story" icon={<FileText size={14} />} label="Our Story" active={location.pathname.includes('/story')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/excellence" icon={<Zap size={14} />} label="Excellence" active={location.pathname.includes('/excellence')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/market" icon={<Globe size={14} />} label="Markets" active={location.pathname.includes('/market')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/services" icon={<Handshake size={14} />} label="Services" active={location.pathname.includes('/services')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/awards" icon={<Gem size={14} />} label="Awards" active={location.pathname.includes('/awards')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/why-us" icon={<CheckCircle2 size={14} />} label="Why Us" active={location.pathname.includes('/why-us')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/trust" icon={<Shield size={14} />} label="Trust Indicators" active={location.pathname.includes('/trust')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/page-manager/guide" icon={<MapPin size={14} />} label="Travel Guide" active={location.pathname.includes('/guide')} onClick={() => setIsMobileMenuOpen(false)} />
+
           <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
         </nav>
@@ -99,6 +115,7 @@ export default function AdminDashboard() {
             <Route path="/resorts" element={<AdminResorts />} />
             <Route path="/partners" element={<AdminPartners />} />
             <Route path="/chats" element={<AdminChats />} />
+            <Route path="/page-manager/:tab" element={<AdminPageManager />} />
             <Route path="/page-manager" element={<AdminPageManager />} />
             <Route path="/password-manager" element={<AdminPasswordManager />} />
             <Route path="/resources" element={<AdminResources />} />
@@ -463,6 +480,29 @@ function ProtectedResourceModal({ onClose, onAdd }: any) {
     </div>
   );
 }
+
+const uploadFile = async (file: File, folder: string) => {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `${folder}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('site-assets')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('site-assets')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  } catch (error: any) {
+    console.error('Error uploading file:', error.message);
+    return null;
+  }
+};
 
 function AdminOverview() {
   const [seeding, setSeeding] = useState(false);
@@ -922,9 +962,11 @@ function AdminResorts() {
     transfer_type: '',
     description: '',
     images: '',
+    banner_url: '',
     highlights: '',
     meal_plans: '',
-    is_featured: false
+    is_featured: false,
+    room_types: [] as any[]
   });
 
   useEffect(() => {
@@ -1002,7 +1044,20 @@ function AdminResorts() {
       
       setEditingResort(null);
       setIsAdding(false);
-      setFormData({ name: '', atoll: '', location: '', category: '', transfer_type: '', description: '', images: '', highlights: '', meal_plans: '', is_featured: false });
+      setFormData({ 
+        name: '', 
+        atoll: '', 
+        location: '', 
+        category: '', 
+        transfer_type: '', 
+        description: '', 
+        images: '', 
+        banner_url: '', 
+        highlights: '', 
+        meal_plans: '', 
+        is_featured: false, 
+        room_types: [] 
+      });
       fetchResorts();
     } catch (error: any) {
       console.error('Error saving resort:', error.message);
@@ -1034,9 +1089,11 @@ function AdminResorts() {
       transfer_type: resort.transfer_type || '',
       description: resort.description || '',
       images: (resort.images || []).join(', '),
+      banner_url: resort.banner_url || '',
       highlights: (resort.highlights || []).join(', '),
       meal_plans: (resort.meal_plans || []).join(', '),
-      is_featured: resort.is_featured || false
+      is_featured: resort.is_featured || false,
+      room_types: resort.room_types || []
     });
     setIsAdding(true);
   };
@@ -1053,7 +1110,20 @@ function AdminResorts() {
           <button 
             onClick={() => {
               setEditingResort(null);
-              setFormData({ name: '', atoll: '', location: '', category: '', transfer_type: '', description: '', images: '', highlights: '', meal_plans: '', is_featured: false });
+              setFormData({ 
+                name: '', 
+                atoll: '', 
+                location: '', 
+                category: '', 
+                transfer_type: '', 
+                description: '', 
+                images: '', 
+                banner_url: '', 
+                highlights: '', 
+                meal_plans: '', 
+                is_featured: false, 
+                room_types: [] 
+              });
               setIsAdding(true);
             }}
             className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
@@ -1096,7 +1166,7 @@ function AdminResorts() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
-                    <button onClick={() => startEdit(resort)} className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                    <button onClick={() => startEdit(resort)} className="px-4 py-2 bg-brand-teal text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Edit</button>
                     <button onClick={() => handleDelete(resort.id)} className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
                   </div>
                 </td>
@@ -1120,9 +1190,9 @@ function AdminResorts() {
               initial={{ scale: 0.95, opacity: 0, y: 30 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 30 }}
-              className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="p-12">
+              <div className="p-12 overflow-y-auto">
                 <h2 className="text-3xl font-serif text-brand-navy mb-8">{editingResort ? 'Edit Resort' : 'Add New Resort'}</h2>
                 <form onSubmit={handleSave} className="space-y-6">
                   <div className="grid grid-cols-2 gap-6">
@@ -1137,10 +1207,120 @@ function AdminResorts() {
                     <TextInput label="Transfer Type" value={formData.transfer_type} onChange={(v) => setFormData({...formData, transfer_type: v})} placeholder="e.g. Seaplane" />
                     <TextInput label="Meal Plans (comma separated)" value={formData.meal_plans} onChange={(v) => setFormData({...formData, meal_plans: v})} placeholder="e.g. Bed & Breakfast, Half Board" />
                   </div>
-                  <TextInput label="Image URLs (comma separated)" value={formData.images} onChange={(v) => setFormData({...formData, images: v})} placeholder="https://..." />
+                  <div className="space-y-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Main Banner</label>
+                    <div className="flex gap-4 items-center">
+                      {formData.banner_url && (
+                        <img src={formData.banner_url} alt="Banner" className="w-24 h-16 object-cover rounded-lg border border-brand-navy/10" />
+                      )}
+                      <div className="flex-1">
+                        <TextInput value={formData.banner_url} onChange={(v) => setFormData({...formData, banner_url: v})} placeholder="https://..." />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = await uploadFile(file, 'resorts');
+                              if (url) setFormData({...formData, banner_url: url});
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="p-3 bg-brand-paper rounded-xl text-brand-teal hover:bg-brand-teal hover:text-white transition-all"
+                      >
+                        <Plus size={20} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <TextInput label="Gallery Image URLs (comma separated)" value={formData.images} onChange={(v) => setFormData({...formData, images: v})} placeholder="https://..." />
                   <TextInput label="Highlights (comma separated)" value={formData.highlights} onChange={(v) => setFormData({...formData, highlights: v})} placeholder="e.g. Overwater Villas, Spa" />
                   <TextAreaInput label="Description" value={formData.description} onChange={(v) => setFormData({...formData, description: v})} placeholder="Brief overview of the resort..." />
                   
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-xl font-serif text-brand-navy">Room Types</h3>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, room_types: [...formData.room_types, { name: '', max_guests: 2, size: '', photo_url: '' }]})}
+                        className="text-[10px] font-bold text-brand-teal uppercase tracking-widest flex items-center gap-2"
+                      >
+                        <Plus size={14} /> Add Room Type
+                      </button>
+                    </div>
+                    {formData.room_types.map((room, idx) => (
+                      <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4 relative group">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const newRooms = formData.room_types.filter((_, i) => i !== idx);
+                            setFormData({...formData, room_types: newRooms});
+                          }}
+                          className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <div className="grid grid-cols-2 gap-4">
+                          <TextInput label="Room Name" value={room.name} onChange={(v) => {
+                            const newRooms = [...formData.room_types];
+                            newRooms[idx].name = v;
+                            setFormData({...formData, room_types: newRooms});
+                          }} />
+                          <TextInput label="Size" value={room.size} onChange={(v) => {
+                            const newRooms = [...formData.room_types];
+                            newRooms[idx].size = v;
+                            setFormData({...formData, room_types: newRooms});
+                          }} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <TextInput label="Max Guests" type="number" value={room.max_guests} onChange={(v) => {
+                            const newRooms = [...formData.room_types];
+                            newRooms[idx].max_guests = parseInt(v);
+                            setFormData({...formData, room_types: newRooms});
+                          }} />
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Room Photo</label>
+                            <div className="flex gap-2">
+                              <TextInput value={room.photo_url} onChange={(v) => {
+                                const newRooms = [...formData.room_types];
+                                newRooms[idx].photo_url = v;
+                                setFormData({...formData, room_types: newRooms});
+                              }} />
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const input = document.createElement('input');
+                                  input.type = 'file';
+                                  input.accept = 'image/*';
+                                  input.onchange = async (e: any) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const url = await uploadFile(file, 'rooms');
+                                      if (url) {
+                                        const newRooms = [...formData.room_types];
+                                        newRooms[idx].photo_url = url;
+                                        setFormData({...formData, room_types: newRooms});
+                                      }
+                                    }
+                                  };
+                                  input.click();
+                                }}
+                                className="p-2 bg-brand-paper rounded-lg text-brand-teal"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="flex justify-end gap-4 pt-6">
                     <button 
                       type="button"
@@ -1489,7 +1669,14 @@ function AdminChats() {
 }
 
 function AdminPageManager() {
-  const [activeTab, setActiveTab] = useState('nav');
+  const { tab } = useParams();
+  const [activeTab, setActiveTab] = useState(tab || 'nav');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1649,7 +1836,7 @@ function AdminPageManager() {
   };
 
   const fetchResorts = async () => {
-    const { data } = await supabase.from('resorts').select('id, name, is_featured');
+    const { data } = await supabase.from('resorts').select('id, name, is_featured, photos');
     if (data) setResorts(data);
   };
 
@@ -1835,6 +2022,8 @@ function AdminPageManager() {
             { id: 'market', label: 'Markets', icon: <Globe size={14} /> },
             { id: 'services', label: 'Services', icon: <Handshake size={14} /> },
             { id: 'awards', label: 'Awards', icon: <Gem size={14} /> },
+            { id: 'trust', label: 'Trust Indicators', icon: <CheckCircle2 size={14} /> },
+            { id: 'guide', label: 'Travel Guide', icon: <FileText size={14} /> },
             { id: 'why', label: 'Why Us', icon: <Check size={14} /> },
             { id: 'retreats', label: 'Retreats', icon: <Hotel size={14} /> },
             { id: 'ctas', label: 'CTAs', icon: <Zap size={14} /> },
@@ -2186,6 +2375,100 @@ function AdminPageManager() {
             </div>
           )}
 
+          {activeTab === 'trust' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Trust Indicators</h3>
+              <div className="space-y-4">
+                {safeArray(settings.trust_indicators).map((item: any, idx: number) => (
+                  <div key={idx} className="flex gap-4 items-center bg-brand-paper/30 p-4 rounded-2xl">
+                    <div className="flex-1">
+                      <TextInput 
+                        label="Indicator Title" 
+                        value={item.title} 
+                        onChange={(val) => {
+                          const newItems = [...safeArray(settings.trust_indicators)];
+                          newItems[idx].title = val;
+                          saveSetting('trust_indicators', newItems);
+                        }} 
+                      />
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const newItems = safeArray(settings.trust_indicators).filter((_: any, i: number) => i !== idx);
+                        saveSetting('trust_indicators', newItems);
+                      }}
+                      className="mt-6 p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => saveSetting('trust_indicators', [...safeArray(settings.trust_indicators), { title: 'New Indicator' }])}
+                  className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add Trust Indicator
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'guide' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-serif text-brand-navy mb-6">Maldives Travel Guide</h3>
+              <div className="space-y-6">
+                {safeArray(settings.travel_guide).map((post: any, idx: number) => (
+                  <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
+                    <button 
+                      onClick={() => {
+                        const newPosts = safeArray(settings.travel_guide).filter((_: any, i: number) => i !== idx);
+                        saveSetting('travel_guide', newPosts);
+                      }}
+                      className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <TextInput label="Title" value={post.title} onChange={(val) => {
+                        const newPosts = [...safeArray(settings.travel_guide)];
+                        newPosts[idx].title = val;
+                        saveSetting('travel_guide', newPosts);
+                      }} />
+                      <TextInput label="Category" value={post.category} onChange={(val) => {
+                        const newPosts = [...safeArray(settings.travel_guide)];
+                        newPosts[idx].category = val;
+                        saveSetting('travel_guide', newPosts);
+                      }} />
+                    </div>
+                    <LogoInput 
+                      label="Cover Image" 
+                      value={post.img} 
+                      onUpload={async (file: File) => {
+                        const url = await uploadFile(file, 'guide');
+                        if (url) {
+                          const newPosts = [...safeArray(settings.travel_guide)];
+                          newPosts[idx].img = url;
+                          saveSetting('travel_guide', newPosts);
+                        }
+                      }}
+                      onChange={(val: string) => {
+                        const newPosts = [...safeArray(settings.travel_guide)];
+                        newPosts[idx].img = val;
+                        saveSetting('travel_guide', newPosts);
+                      }} 
+                    />
+                  </div>
+                ))}
+                <button 
+                  onClick={() => saveSetting('travel_guide', [...safeArray(settings.travel_guide), { title: 'New Guide', category: 'Travel', img: '' }])}
+                  className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add Travel Guide
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'why' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center mb-6">
@@ -2284,39 +2567,68 @@ function AdminPageManager() {
             <div className="space-y-8">
               <h3 className="text-xl font-serif text-brand-navy">Platform Excellence</h3>
               <div className="space-y-6">
-                {safeArray(settings.platform_excellence).map((item: any, idx: number) => (
+                <TextInput 
+                  label="Main Title" 
+                  value={settings.platform_excellence?.title || ''} 
+                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, title: val })} 
+                />
+                <TextAreaInput 
+                  label="Main Description" 
+                  value={settings.platform_excellence?.description || ''} 
+                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, description: val })} 
+                />
+                <LogoInput 
+                  label="Main Image" 
+                  value={settings.platform_excellence?.image_url || ''} 
+                  onUpload={async (file: File) => {
+                    const url = await uploadFile(file, 'excellence');
+                    if (url) saveSetting('platform_excellence', { ...settings.platform_excellence, image_url: url });
+                  }}
+                  onChange={(val: string) => saveSetting('platform_excellence', { ...settings.platform_excellence, image_url: val })} 
+                />
+                <TextInput 
+                  label="Floating Badge Text" 
+                  value={settings.platform_excellence?.badge_text || ''} 
+                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, badge_text: val })} 
+                />
+                
+                <h4 className="text-lg font-serif text-brand-navy mt-8">Features</h4>
+                {safeArray(settings.platform_excellence?.features).map((item: any, idx: number) => (
                   <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
                     <TextInput 
-                      label="Title" 
+                      label="Feature Title" 
                       value={item.title} 
                       onChange={(val) => {
-                        const newItems = [...safeArray(settings.platform_excellence)];
-                        newItems[idx].title = val;
-                        saveSetting('platform_excellence', newItems);
+                        const newFeatures = [...safeArray(settings.platform_excellence?.features)];
+                        newFeatures[idx].title = val;
+                        saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
                       }} 
                     />
                     <TextAreaInput 
-                      label="Description" 
+                      label="Feature Description" 
                       value={item.description} 
                       onChange={(val) => {
-                        const newItems = [...safeArray(settings.platform_excellence)];
-                        newItems[idx].description = val;
-                        saveSetting('platform_excellence', newItems);
+                        const newFeatures = [...safeArray(settings.platform_excellence?.features)];
+                        newFeatures[idx].description = val;
+                        saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
                       }} 
                     />
                     <button 
                       onClick={() => {
-                        const newItems = safeArray(settings.platform_excellence).filter((_: any, i: number) => i !== idx);
-                        saveSetting('platform_excellence', newItems);
+                        const newFeatures = safeArray(settings.platform_excellence?.features).filter((_: any, i: number) => i !== idx);
+                        saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
                       }}
                       className="text-brand-coral text-[10px] font-bold uppercase tracking-widest"
                     >
-                      Remove Item
+                      Remove Feature
                     </button>
                   </div>
                 ))}
                 <button 
-                  onClick={() => saveSetting('platform_excellence', [...safeArray(settings.platform_excellence), { title: 'New Feature', description: '' }])}
+                  onClick={() => saveSetting('platform_excellence', { 
+                    ...settings.platform_excellence, 
+                    features: [...safeArray(settings.platform_excellence?.features), { title: 'New Feature', description: '' }] 
+                  })}
                   className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={16} /> Add Excellence Feature
@@ -2459,6 +2771,15 @@ function AdminPageManager() {
               <section>
                 <h3 className="text-xl font-serif text-brand-navy mb-6">Our Story</h3>
                 <div className="space-y-6">
+                  <LogoInput 
+                    label="Story Photo" 
+                    value={settings.our_story?.photo_url} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'story');
+                      if (url) saveSetting('our_story', { ...settings.our_story, photo_url: url });
+                    }}
+                    onChange={(val: string) => saveSetting('our_story', { ...settings.our_story, photo_url: val })} 
+                  />
                   <TextInput 
                     label="Section Title" 
                     value={settings.our_story?.title} 
@@ -2496,6 +2817,28 @@ function AdminPageManager() {
                       {safeArray(settings.awards?.items).map((item: any, idx: number) => (
                         <div key={idx} className="relative group">
                           <img src={item.url} alt="Award" className="w-full aspect-square object-contain bg-brand-paper rounded-2xl p-4" />
+                          <button 
+                            onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.accept = 'image/*';
+                              input.onchange = async (e: any) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = await uploadFile(file, 'awards');
+                                  if (url) {
+                                    const newItems = [...safeArray(settings.awards?.items)];
+                                    newItems[idx] = { ...newItems[idx], url };
+                                    saveSetting('awards', { ...settings.awards, items: newItems });
+                                  }
+                                }
+                              };
+                              input.click();
+                            }}
+                            className="absolute top-2 left-2 p-1 bg-brand-teal text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Edit2 size={12} />
+                          </button>
                           <button 
                             onClick={() => {
                               const newItems = safeArray(settings.awards?.items).filter((_: any, i: number) => i !== idx);
@@ -2567,6 +2910,69 @@ function AdminPageManager() {
                       onChange={(val) => saveSetting('ctas', { ...settings.ctas, guide_btn: val })} 
                     />
                   </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'resorts_management' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Resorts Photo Management</h3>
+                <div className="space-y-6">
+                  {resorts.map((resort: any) => (
+                    <div key={resort.id} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
+                      <h4 className="text-sm font-bold text-brand-navy">{resort.name}</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {safeArray(resort.photos).map((photoUrl: string, idx: number) => (
+                          <div key={idx} className="relative group">
+                            <img src={photoUrl} alt="Resort" className="w-full aspect-square object-cover rounded-xl" />
+                            <button 
+                              onClick={async () => {
+                                const newPhotos = safeArray(resort.photos).filter((_: any, i: number) => i !== idx);
+                                const { error } = await supabase
+                                  .from('resorts')
+                                  .update({ photos: newPhotos })
+                                  .eq('id', resort.id);
+                                if (!error) fetchResorts();
+                              }}
+                              className="absolute top-2 right-2 p-1 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.multiple = true;
+                            input.onchange = async (e: any) => {
+                              const files = e.target.files;
+                              if (files) {
+                                const newPhotos = [];
+                                for (let i = 0; i < files.length; i++) {
+                                  const url = await uploadFile(files[i], 'resorts');
+                                  if (url) newPhotos.push(url);
+                                }
+                                const { error } = await supabase
+                                  .from('resorts')
+                                  .update({ photos: [...safeArray(resort.photos), ...newPhotos] })
+                                  .eq('id', resort.id);
+                                if (!error) fetchResorts();
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="aspect-square border-2 border-dashed border-brand-navy/10 rounded-xl flex flex-col items-center justify-center text-brand-navy/20 hover:border-brand-teal hover:text-brand-teal transition-all"
+                        >
+                          <Plus size={24} />
+                          <span className="text-[8px] font-bold uppercase tracking-widest mt-2">Add Photos</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
             </div>

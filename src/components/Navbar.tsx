@@ -66,7 +66,7 @@ export default function Navbar({ user, role }: NavbarProps) {
                 <img 
                   src={logo} 
                   alt="Exciting Maldives" 
-                  className={`h-10 w-auto object-contain transition-all duration-700 ${logoLoaded ? 'opacity-100' : 'opacity-0'} ${isTransparent ? 'brightness-0 invert' : ''}`} 
+                  className={`h-20 w-auto object-contain transition-all duration-700 ${logoLoaded ? 'opacity-100' : 'opacity-0'} ${isTransparent ? 'brightness-0 invert' : ''}`} 
                   onLoad={() => setLogoLoaded(true)}
                   referrerPolicy="no-referrer" 
                 />
