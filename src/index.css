@@ -5,11 +5,11 @@
   --font-serif: "Playfair Display", serif;
   --font-sans: "Inter", sans-serif;
   
-  --color-brand-navy: #0C2340;
-  --color-brand-teal: #1FA4B8;
-  --color-brand-paper: #F7F7F7;
-  --color-brand-gold: #D4AB4A;
-  --color-brand-ink: #0C2340;
+  --color-brand-navy: #0F172A;
+  --color-brand-teal: #4FD1C5;
+  --color-brand-paper: #F8F5F0;
+  --color-brand-gold: #E8B44B;
+  --color-brand-ink: #0F172A;
 }
 
 @layer base {

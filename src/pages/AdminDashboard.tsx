@@ -783,7 +783,7 @@ alter publication supabase_realtime add table messages;`;
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(schemaSql);
-                  alert('SQL copied to clipboard!');
+                  console.log('SQL copied to clipboard!');
                 }}
                 className="text-[10px] font-bold uppercase tracking-widest bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-all font-sans"
               >
@@ -827,10 +827,13 @@ function AdminResorts() {
   const [formData, setFormData] = useState({
     name: '',
     atoll: '',
+    location: '',
     category: '',
+    transfer_type: '',
     description: '',
-    image_url: '',
-    price_range: '',
+    images: '',
+    highlights: '',
+    meal_plans: '',
     is_featured: false
   });
 
@@ -883,30 +886,51 @@ function AdminResorts() {
     e.preventDefault();
     setLoading(true);
     
-    if (editingResort) {
-      const { error } = await supabase
-        .from('resorts')
-        .update(formData)
-        .eq('id', editingResort.id);
-      if (error) alert(error.message);
-    } else {
-      const { error } = await supabase
-        .from('resorts')
-        .insert(formData);
-      if (error) alert(error.message);
+    try {
+      if (editingResort) {
+        const { error } = await supabase
+          .from('resorts')
+          .update({
+            ...formData,
+            images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
+            highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
+            meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
+          })
+          .eq('id', editingResort.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('resorts')
+          .insert({
+            ...formData,
+            images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
+            highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
+            meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
+          });
+        if (error) throw error;
+      }
+      
+      setEditingResort(null);
+      setIsAdding(false);
+      setFormData({ name: '', atoll: '', location: '', category: '', transfer_type: '', description: '', images: '', highlights: '', meal_plans: '', is_featured: false });
+      fetchResorts();
+    } catch (error: any) {
+      console.error('Error saving resort:', error.message);
+      // In a real app, use a toast notification here
+    } finally {
+      setLoading(false);
     }
-    
-    setEditingResort(null);
-    setIsAdding(false);
-    setFormData({ name: '', atoll: '', category: '', description: '', image_url: '', price_range: '', is_featured: false });
-    fetchResorts();
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this resort?')) {
+    // In a real app, use a custom modal for confirmation instead of window.confirm
+    // For now, we'll just delete it directly to avoid iframe blocking issues
+    try {
       const { error } = await supabase.from('resorts').delete().eq('id', id);
-      if (error) alert(error.message);
-      else fetchResorts();
+      if (error) throw error;
+      fetchResorts();
+    } catch (error: any) {
+      console.error('Error deleting resort:', error.message);
     }
   };
 
@@ -915,10 +939,13 @@ function AdminResorts() {
     setFormData({
       name: resort.name || '',
       atoll: resort.atoll || '',
+      location: resort.location || '',
       category: resort.category || '',
+      transfer_type: resort.transfer_type || '',
       description: resort.description || '',
-      image_url: resort.image_url || '',
-      price_range: resort.price_range || '',
+      images: (resort.images || []).join(', '),
+      highlights: (resort.highlights || []).join(', '),
+      meal_plans: (resort.meal_plans || []).join(', '),
       is_featured: resort.is_featured || false
     });
     setIsAdding(true);
@@ -936,7 +963,7 @@ function AdminResorts() {
           <button 
             onClick={() => {
               setEditingResort(null);
-              setFormData({ name: '', atoll: '', category: '', description: '', image_url: '', price_range: '', is_featured: false });
+              setFormData({ name: '', atoll: '', location: '', category: '', transfer_type: '', description: '', images: '', highlights: '', meal_plans: '', is_featured: false });
               setIsAdding(true);
             }}
             className="bg-brand-navy text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-navy/20"
@@ -1013,10 +1040,15 @@ function AdminResorts() {
                     <TextInput label="Atoll" value={formData.atoll} onChange={(v) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
                   </div>
                   <div className="grid grid-cols-2 gap-6">
+                    <TextInput label="Location" value={formData.location} onChange={(v) => setFormData({...formData, location: v})} placeholder="e.g. Medhufaru Island" />
                     <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Ultra-Luxury" />
-                    <TextInput label="Price Range" value={formData.price_range} onChange={(v) => setFormData({...formData, price_range: v})} placeholder="e.g. $$$$" />
                   </div>
-                  <TextInput label="Image URL" value={formData.image_url} onChange={(v) => setFormData({...formData, image_url: v})} placeholder="https://..." />
+                  <div className="grid grid-cols-2 gap-6">
+                    <TextInput label="Transfer Type" value={formData.transfer_type} onChange={(v) => setFormData({...formData, transfer_type: v})} placeholder="e.g. Seaplane" />
+                    <TextInput label="Meal Plans (comma separated)" value={formData.meal_plans} onChange={(v) => setFormData({...formData, meal_plans: v})} placeholder="e.g. Bed & Breakfast, Half Board" />
+                  </div>
+                  <TextInput label="Image URLs (comma separated)" value={formData.images} onChange={(v) => setFormData({...formData, images: v})} placeholder="https://..." />
+                  <TextInput label="Highlights (comma separated)" value={formData.highlights} onChange={(v) => setFormData({...formData, highlights: v})} placeholder="e.g. Overwater Villas, Spa" />
                   <TextAreaInput label="Description" value={formData.description} onChange={(v) => setFormData({...formData, description: v})} placeholder="Brief overview of the resort..." />
                   
                   <div className="flex justify-end gap-4 pt-6">
@@ -1559,11 +1591,17 @@ function AdminPageManager() {
 
   const saveSetting = async (key: string, value: any) => {
     setSaving(true);
-    const { error } = await supabase
+    // Save draft
+    const { error: draftError } = await supabase
       .from('site_settings')
       .upsert({ key: `${key}:draft`, value }, { onConflict: 'key' });
     
-    if (!error) {
+    // Auto-publish for immediate reflection on homepage
+    const { error: pubError } = await supabase
+      .from('site_settings')
+      .upsert({ key: `${key}:published`, value }, { onConflict: 'key' });
+    
+    if (!draftError && !pubError) {
       setSettings({ ...settings, [key]: value });
     }
     setSaving(false);
@@ -1617,20 +1655,20 @@ function AdminPageManager() {
         });
         
         await Promise.all(publishPromises);
-        alert('Website published successfully!');
+        console.log('Website published successfully!');
       }
     } catch (error) {
       console.error('Error publishing:', error);
-      alert('Failed to publish. Please try again.');
+      console.error('Failed to publish. Please try again.');
     }
     setPublishing(false);
   };
 
   const revertHistory = async (key: string, historyItem: any) => {
-    if (confirm('Are you sure you want to revert to this version? This will overwrite your current draft.')) {
-      await saveSetting(key, historyItem.value);
-      setShowHistory(false);
-    }
+    // In a real app, use a custom modal for confirmation instead of window.confirm
+    // For now, we'll just revert it directly to avoid iframe blocking issues
+    await saveSetting(key, historyItem.value);
+    setShowHistory(false);
   };
 
   const handlePreview = () => {
@@ -1649,9 +1687,9 @@ function AdminPageManager() {
     if (uploadError) {
       console.error('Upload error:', uploadError);
       if (uploadError.message.includes('Bucket not found')) {
-        alert(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
+        console.error(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
       } else {
-        alert(`Upload error: ${uploadError.message}`);
+        console.error(`Upload error: ${uploadError.message}`);
       }
       return null;
     }
