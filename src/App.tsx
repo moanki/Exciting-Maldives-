@@ -1,22 +1,22 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { supabase } from './supabase';
 import { User } from '@supabase/supabase-js';
 import { getSiteSettings } from './lib/settings';
 
-// Pages
-import Home from './pages/Home';
-import ResortSearch from './pages/ResortSearch';
-import ResortDetail from './pages/ResortDetail';
-import AdminDashboard from './pages/AdminDashboard';
-import Login from './pages/Login';
-import TouristInfo from './pages/TouristInfo';
-import MaldivesMap from './pages/MaldivesMap';
-import Legal from './pages/Legal';
-import CustomPage from './pages/CustomPage';
-import BecomePartner from './pages/BecomePartner';
-import ProtectedResources from './pages/ProtectedResources';
-import Test3D from './pages/Test3D';
+// Lazy load pages
+const Home = lazy(() => import('./pages/Home'));
+const ResortSearch = lazy(() => import('./pages/ResortSearch'));
+const ResortDetail = lazy(() => import('./pages/ResortDetail'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Login = lazy(() => import('./pages/Login'));
+const TouristInfo = lazy(() => import('./pages/TouristInfo'));
+const MaldivesMap = lazy(() => import('./pages/MaldivesMap'));
+const Legal = lazy(() => import('./pages/Legal'));
+const CustomPage = lazy(() => import('./pages/CustomPage'));
+const BecomePartner = lazy(() => import('./pages/BecomePartner'));
+const ProtectedResources = lazy(() => import('./pages/ProtectedResources'));
+const Test3D = lazy(() => import('./pages/Test3D'));
 
 // Components
 import Navbar from './components/Navbar';
@@ -44,31 +44,37 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans">
+    <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans relative">
       <Navbar user={user} role={role} />
-      <main>
-        <Routes>
-          {isPageActive('') && <Route path="/" element={<Home />} />}
-          {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
-          {isPageActive('resorts') && <Route path="/resorts/:id" element={<ResortDetail />} />}
-          {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo />} />}
-          {isPageActive('map') && <Route path="/map" element={<MaldivesMap />} />}
-          {isPageActive('legal') && <Route path="/legal" element={<Legal />} />}
-          <Route path="/p/:slug" element={<CustomPage />} />
-          {isPageActive('become-partner') && <Route path="/become-partner" element={<BecomePartner />} />}
-          {isPageActive('login') && <Route path="/login" element={<Login />} />}
-          <Route path="/test-3d" element={<Test3D />} />
-          <Route path="/resources/:id" element={<ProtectedResources />} />
-          
-          {/* Protected Routes */}
-          <Route 
-            path="/admin/*" 
-            element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
-          />
-          
-          {/* Fallback route for inactive pages */}
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+      <main className="relative">
+        <Suspense fallback={
+          <div className="min-h-[60vh] flex items-center justify-center bg-brand-navy/5">
+            <div className="w-12 h-12 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }>
+          <Routes>
+            {isPageActive('') && <Route path="/" element={<Home />} />}
+            {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
+            {isPageActive('resorts') && <Route path="/resorts/:id" element={<ResortDetail />} />}
+            {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo />} />}
+            {isPageActive('map') && <Route path="/map" element={<MaldivesMap />} />}
+            {isPageActive('legal') && <Route path="/legal" element={<Legal />} />}
+            <Route path="/p/:slug" element={<CustomPage />} />
+            {isPageActive('become-partner') && <Route path="/become-partner" element={<BecomePartner />} />}
+            {isPageActive('login') && <Route path="/login" element={<Login />} />}
+            <Route path="/test-3d" element={<Test3D />} />
+            <Route path="/resources/:id" element={<ProtectedResources />} />
+            
+            {/* Protected Routes */}
+            <Route 
+              path="/admin/*" 
+              element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
+            />
+            
+            {/* Fallback route for inactive pages */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </Suspense>
       </main>
       {!isDashboard && <Footer />}
       {!isDashboard && <ChatWidget />}

@@ -14,10 +14,20 @@ export default function CustomPage() {
       const isPreview = searchParams.get('preview') === 'true';
       const settings = await getSiteSettings(isPreview);
       
-      if (settings.custom_pages) {
-        const found = settings.custom_pages.find((p: any) => p.slug === slug);
-        setPage(found);
-      }
+      const safeArray = (val: any) => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) return parsed;
+          } catch (e) {}
+        }
+        return [];
+      };
+
+      const customPages = safeArray(settings.custom_pages);
+      const found = customPages.find((p: any) => p.slug === slug);
+      setPage(found);
       setLoading(false);
     };
     fetchPage();

@@ -40,6 +40,7 @@ export default function ResortDetail() {
           alt={resort.name}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          fetchPriority="high"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-transparent to-transparent"></div>
         <button 
@@ -121,6 +122,8 @@ export default function ResortDetail() {
                       alt={room.name} 
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                   <div className="p-8 flex-1">

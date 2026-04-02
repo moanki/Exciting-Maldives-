@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
 import { Menu, X, User as UserIcon, LogOut } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { getSiteSettings } from '../lib/settings';
 
 interface NavbarProps {
@@ -10,7 +10,7 @@ interface NavbarProps {
   role: string | null;
 }
 
-export default function Navbar({ user, role }: NavbarProps) {
+const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<any>({});
   const [logoLoaded, setLogoLoaded] = useState(false);
@@ -43,7 +43,18 @@ export default function Navbar({ user, role }: NavbarProps) {
     window.location.reload(); // Force reload to clear state
   };
 
-  const navItems = settings.navbar || [
+  const safeArray = (val: any) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  };
+
+  const navItems = safeArray(settings.navbar).length > 0 ? safeArray(settings.navbar) : [
     { label: 'Home', path: '/' },
     { label: 'Resorts', path: '/resorts' },
     { label: 'Experiences', path: '/experiences' },
@@ -161,4 +172,6 @@ export default function Navbar({ user, role }: NavbarProps) {
       )}
     </nav>
   );
-}
+});
+
+export default Navbar;

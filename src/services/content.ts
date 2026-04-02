@@ -53,6 +53,7 @@ export const extractResortDataFromPDF = async (base64Data: string) => {
       ],
       config: {
         responseMimeType: "application/json",
+        maxOutputTokens: 2048, // Increase limit to prevent truncation
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -85,7 +86,22 @@ export const extractResortDataFromPDF = async (base64Data: string) => {
       throw new Error('Failed to extract data from the document.');
     }
 
-    return JSON.parse(response.text);
+    let jsonString = response.text.trim();
+    
+    // Robust JSON extraction in case of markdown wrapping or truncation
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      console.warn('Initial JSON parse failed, attempting to clean string...', e);
+      // Try to find the first '{' and last '}'
+      const start = jsonString.indexOf('{');
+      const end = jsonString.lastIndexOf('}');
+      if (start !== -1 && end !== -1) {
+        jsonString = jsonString.substring(start, end + 1);
+        return JSON.parse(jsonString);
+      }
+      throw e;
+    }
   } catch (error) {
     console.error('Content processing error:', error);
     throw error;
