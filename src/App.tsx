@@ -47,11 +47,7 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
     <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans relative">
       <Navbar user={user} role={role} />
       <main className="relative">
-        <Suspense fallback={
-          <div className="min-h-[60vh] flex items-center justify-center bg-brand-navy/5">
-            <div className="w-12 h-12 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        }>
+        <Suspense fallback={null}>
           <Routes>
             {isPageActive('') && <Route path="/" element={<Home />} />}
             {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
@@ -190,14 +186,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white font-serif italic text-2xl animate-pulse">Exciting Maldives...</div>
-      </div>
-    );
-  }
 
   return (
     <Router>

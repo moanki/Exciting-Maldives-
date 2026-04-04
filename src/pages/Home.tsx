@@ -118,30 +118,30 @@ export default function Home() {
   const ctaBgY = useTransform(ctaScroll, [0, 1], ['-20%', '20%']);
   
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
       const isPreview = new URLSearchParams(window.location.search).get('preview') === 'true';
-      const settingsData = await getSiteSettings(isPreview);
+      
+      const [settingsData, resortsResult] = await Promise.all([
+        getSiteSettings(isPreview),
+        supabase
+          .from('resorts')
+          .select('*')
+          .eq('is_featured', true)
+          .limit(6)
+      ]);
+
       setSettings(settingsData);
       
-      const { data, error } = await supabase
-        .from('resorts')
-        .select('*')
-        .eq('is_featured', true)
-        .limit(6);
-      
-      if (error || !data || data.length === 0) {
+      if (resortsResult.error || !resortsResult.data || resortsResult.data.length === 0) {
         const fallback = await supabase.from('resorts').select('*').limit(6);
         if (fallback.data) setFeaturedResorts(fallback.data);
       } else {
-        setFeaturedResorts(data);
+        setFeaturedResorts(resortsResult.data);
       }
-      setIsLoading(false);
     };
     fetchData();
   }, []);
@@ -198,11 +198,12 @@ export default function Home() {
       <section ref={heroRef} style={{ position: 'relative' }} className="relative h-screen flex items-center overflow-hidden bg-brand-navy">
         <motion.div style={{ y: heroBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
-            src={settings.hero?.banner_url} 
+            src={`${settings.hero?.banner_url}${settings.hero?.banner_url?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : ''}`} 
             alt="Luxury Maldives" 
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
             fetchPriority="high"
+            loading="eager"
           />
         </motion.div>
         
@@ -247,7 +248,13 @@ export default function Home() {
                 {safeArray(settings.hero_partners).length > 0 ? (
                   [...safeArray(settings.hero_partners), ...safeArray(settings.hero_partners)].map((logo: any, i: number) => (
                     <div key={i} className="flex-shrink-0">
-                      <img src={logo.url} alt="Partner" className="h-16 md:h-20 max-w-[200px] w-auto object-contain brightness-0 invert" referrerPolicy="no-referrer" />
+                      <img 
+                        src={`${logo.url}${logo.url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=300' : ''}`} 
+                        alt="Partner" 
+                        className="h-16 md:h-20 max-w-[200px] w-auto object-contain brightness-0 invert" 
+                        referrerPolicy="no-referrer" 
+                        loading="lazy"
+                      />
                     </div>
                   ))
                 ) : (
@@ -313,7 +320,7 @@ export default function Home() {
               <StackedPhotoCarousel 
                 onIndexChange={setActiveIndex}
                 images={[
-                  settings.platform_excellence?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800",
+                  (settings.platform_excellence?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8") + (settings.platform_excellence?.image_url?.includes('?') ? '&' : '?') + "auto=format&fit=crop&q=80&w=800",
                   "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800",
                   "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=800"
                 ]}
@@ -361,7 +368,7 @@ export default function Home() {
             <Link to={`/resorts/${resort.id}`} key={i} className="group block">
               <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6 relative shadow-sm group-hover:shadow-2xl transition-shadow duration-500">
                 <img 
-                  src={resort.images?.[0] || `https://picsum.photos/seed/${resort.id || i}/600/800`} 
+                  src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
                   alt={resort.name} 
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-1"
                   referrerPolicy="no-referrer"
@@ -479,7 +486,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5]">
               <img 
-                src={settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=800"} 
+                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
                 alt="CEO" 
                 className="absolute inset-0 w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -524,7 +531,7 @@ export default function Home() {
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5] order-1 lg:order-2">
               <motion.img 
                 style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
-                src={settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800"} 
+                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
                 alt="Our Story" 
                 className="absolute inset-0 w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -549,7 +556,13 @@ export default function Home() {
             {safeArray(settings.awards?.items).length > 0 ? (
               safeArray(settings.awards.items).map((item: any, i: number) => (
                 <div key={i} className="flex items-center justify-center transition-transform hover:scale-105 duration-300">
-                  <img src={item.url} alt="Award" className="h-48 md:h-56 lg:h-64 w-auto object-contain" referrerPolicy="no-referrer" loading="lazy" />
+                  <img 
+                    src={`${item.url}${item.url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=400' : ''}`} 
+                    alt="Award" 
+                    className="h-48 md:h-56 lg:h-64 w-auto object-contain" 
+                    referrerPolicy="no-referrer" 
+                    loading="lazy" 
+                  />
                 </div>
               ))
             ) : (

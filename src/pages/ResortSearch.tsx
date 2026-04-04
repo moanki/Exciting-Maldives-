@@ -101,73 +101,63 @@ export default function ResortSearch() {
       </div>
 
       {/* Results */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="animate-pulse bg-brand-paper/50 rounded-3xl h-96"></div>
-          ))}
-        </div>
-      ) : (
-        <>
-          <div className="mb-6 text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">
-            Showing {filteredResorts.length} results
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredResorts.map((resort, idx) => (
-              <motion.div 
-                key={resort.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className="group bg-white rounded-3xl overflow-hidden border border-brand-navy/5 hover:shadow-2xl hover:shadow-brand-navy/10 transition-all"
-              >
-                <Link to={`/resorts/${resort.id}`}>
-                  <div className="relative aspect-video overflow-hidden">
-                    <img 
-                      src={resort.images?.[0] || `https://picsum.photos/seed/${resort.name}/800/600`} 
-                      alt={resort.name}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans text-brand-navy">
-                      {resort.category}
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <h3 className="text-xl font-serif text-brand-navy">{resort.name}</h3>
-                      <div className="flex items-center text-brand-teal">
-                        <MapPin size={14} className="mr-1" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest font-sans">{resort.atoll}</span>
-                      </div>
-                    </div>
-                    <p className="text-brand-navy/60 text-sm line-clamp-2 mb-6 font-sans font-light leading-relaxed">
-                      {resort.description}
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-brand-paper">
-                      <span className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">Transfer: {resort.transfer_type}</span>
-                      <span className="text-brand-navy group-hover:text-brand-teal transition-colors flex items-center text-[10px] font-bold uppercase tracking-widest font-sans">
-                        Details <ChevronRight size={16} className="ml-1" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-          
-          {filteredResorts.length === 0 && (
-            <div className="text-center py-24">
-              <div className="text-brand-beige mb-4 flex justify-center">
-                <Search size={64} />
+      <div className="mb-6 text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">
+        Showing {filteredResorts.length} results
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {filteredResorts.map((resort, idx) => (
+          <motion.div 
+            key={resort.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+            className="group bg-white rounded-3xl overflow-hidden border border-brand-navy/5 hover:shadow-2xl hover:shadow-brand-navy/10 transition-all"
+          >
+            <Link to={`/resorts/${resort.id}`}>
+              <div className="relative aspect-video overflow-hidden">
+                <img 
+                  src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                  alt={resort.name}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans text-brand-navy">
+                  {resort.category}
+                </div>
               </div>
-              <h3 className="text-2xl font-serif mb-2 text-brand-navy">No resorts found</h3>
-              <p className="text-brand-navy/50 font-sans">Try adjusting your search or filters</p>
-            </div>
-          )}
-        </>
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-xl font-serif text-brand-navy">{resort.name}</h3>
+                  <div className="flex items-center text-brand-teal">
+                    <MapPin size={14} className="mr-1" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest font-sans">{resort.atoll}</span>
+                  </div>
+                </div>
+                <p className="text-brand-navy/60 text-sm line-clamp-2 mb-6 font-sans font-light leading-relaxed">
+                  {resort.description}
+                </p>
+                <div className="flex items-center justify-between pt-4 border-t border-brand-paper">
+                  <span className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold font-sans">Transfer: {resort.transfer_type}</span>
+                  <span className="text-brand-navy group-hover:text-brand-teal transition-colors flex items-center text-[10px] font-bold uppercase tracking-widest font-sans">
+                    Details <ChevronRight size={16} className="ml-1" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
+      
+      {filteredResorts.length === 0 && !loading && (
+        <div className="text-center py-24">
+          <div className="text-brand-beige mb-4 flex justify-center">
+            <Search size={64} />
+          </div>
+          <h3 className="text-2xl font-serif mb-2 text-brand-navy">No resorts found</h3>
+          <p className="text-brand-navy/50 font-sans">Try adjusting your search or filters</p>
+        </div>
       )}
     </div>
   );

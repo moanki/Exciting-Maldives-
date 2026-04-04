@@ -28,19 +28,20 @@ export default function ResortDetail() {
     fetchResort();
   }, [id]);
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-serif italic text-xl text-brand-navy">Loading resort...</div>;
-  if (!resort) return <div className="h-screen flex items-center justify-center font-serif text-xl text-brand-navy">Resort not found</div>;
+  if (!resort && !loading) return <div className="h-screen flex items-center justify-center font-serif text-xl text-brand-navy">Resort not found</div>;
+  if (!resort) return null;
 
   return (
     <div className="pb-24 bg-brand-paper/20">
       {/* Hero Gallery */}
       <div className="relative h-[70vh] group">
         <img 
-          src={resort.images?.[0] || `https://picsum.photos/seed/${resort.name}/1920/1080`} 
+          src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : '?auto=format&fit=crop&q=85&w=1920'}`} 
           alt={resort.name}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
           fetchPriority="high"
+          loading="eager"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-transparent to-transparent"></div>
         <button 
@@ -118,7 +119,7 @@ export default function ResortDetail() {
                 <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">
                   <div className="md:w-1/3 aspect-video md:aspect-auto">
                     <img 
-                      src={room.image || `https://picsum.photos/seed/${room.name}/600/400`} 
+                      src={`${room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${room.image?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=600' : '?auto=format&fit=crop&q=80&w=600'}`} 
                       alt={room.name} 
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"

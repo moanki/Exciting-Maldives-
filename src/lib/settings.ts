@@ -15,7 +15,7 @@ export async function getSiteSettings(isPreview: boolean = false) {
     hero: {
       title: 'Curating the Maldives for the World’s Leading Travel Professionals',
       subtitle: 'Exclusive resort partnerships, seamless destination management, and real-time booking intelligence.',
-      banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
+      banner_url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=85&w=1920',
       banner_type: 'image',
       partners_title: 'Top Properties'
     },
@@ -56,9 +56,9 @@ export async function getSiteSettings(isPreview: boolean = false) {
       title: 'Prestigious Awards',
       summary: '',
       items: [
-        { url: 'https://picsum.photos/seed/award1/200/200' },
-        { url: 'https://picsum.photos/seed/award2/200/200' },
-        { url: 'https://picsum.photos/seed/award3/200/200' }
+        { url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&q=80&w=400' },
+        { url: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&q=80&w=400' },
+        { url: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=400' }
       ]
     },
     services: [
@@ -70,10 +70,10 @@ export async function getSiteSettings(isPreview: boolean = false) {
       { title: 'Event & Group Travel', icon: 'Calendar', desc: 'Specialized handling for weddings, corporate retreats, and MICE.' }
     ],
     hero_partners: [
-      { url: 'https://picsum.photos/seed/partner1/200/100' },
-      { url: 'https://picsum.photos/seed/partner2/200/100' },
-      { url: 'https://picsum.photos/seed/partner3/200/100' },
-      { url: 'https://picsum.photos/seed/partner4/200/100' }
+      { url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=300' },
+      { url: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=300' },
+      { url: 'https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=300' },
+      { url: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=300' }
     ],
     travel_guide: [
       { title: 'Best Atolls for Diving', category: 'Destinations', img: 'https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?auto=format&fit=crop&q=80' },
