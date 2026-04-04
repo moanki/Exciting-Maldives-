@@ -121,7 +121,6 @@ export default function AdminDashboard() {
                         <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/retreats" label="Retreats" active={location.pathname === '/admin/page-manager/retreats'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/ctas" label="CTAs" active={location.pathname === '/admin/page-manager/ctas'} onClick={() => setIsMobileMenuOpen(false)} />
                       </div>
                     </div>
@@ -142,6 +141,15 @@ export default function AdminDashboard() {
 
           <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
+          <div className="pt-8 mt-auto border-t border-white/10">
+            <p className="px-4 mb-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/30">System Status</p>
+            <div className="px-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-widest text-white/40">Gemini (Pro)</span>
+                <div className={`w-2 h-2 rounded-full ${process.env.GEMINI_API_KEY ? 'bg-brand-teal shadow-[0_0_8px_rgba(0,128,128,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
+              </div>
+            </div>
+          </div>
         </nav>
       </aside>
 
@@ -2857,6 +2865,13 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   Reset to Defaults
                 </button>
               </div>
+              <div className="bg-brand-paper/30 p-6 rounded-3xl space-y-4">
+                <TextInput 
+                  label="Section Title" 
+                  value={settings.why_us_title || 'Why Travel Designers Choose Us'} 
+                  onChange={(val) => saveSetting('why_us_title', val)} 
+                />
+              </div>
               {safeArray(settings.why_us).map((pillar: any, idx: number) => (
                 <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
                   <button 
@@ -2868,6 +2883,23 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   >
                     <Trash2 size={16} />
                   </button>
+                  <LogoInput 
+                    label="Pillar Image" 
+                    value={pillar.image_url || ''} 
+                    onUpload={async (file: File) => {
+                      const url = await uploadFile(file, 'why-us');
+                      if (url) {
+                        const newPillars = [...safeArray(settings.why_us)];
+                        newPillars[idx].image_url = url;
+                        saveSetting('why_us', newPillars);
+                      }
+                    }}
+                    onChange={(val: string) => {
+                      const newPillars = [...safeArray(settings.why_us)];
+                      newPillars[idx].image_url = val;
+                      saveSetting('why_us', newPillars);
+                    }} 
+                  />
                   <TextInput 
                     label="Pillar Title" 
                     value={pillar.title || ''} 
@@ -2985,29 +3017,6 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
               </div>
             </div>
           )}
-
-          {activeTab === 'retreats' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-serif text-brand-navy mb-6">Featured Resorts</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {resorts.map(resort => {
-                  return (
-                    <button
-                      key={resort.id}
-                      onClick={() => toggleFeatured(resort)}
-                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                        resort.is_featured ? 'bg-brand-teal/5 border-brand-teal text-brand-teal' : 'bg-white border-brand-navy/5 text-brand-navy/60 hover:border-brand-navy/20'
-                      }`}
-                    >
-                      <span className="text-[10px] font-bold uppercase tracking-widest font-sans">{resort.name}</span>
-                      {resort.is_featured ? <Check size={16} /> : <Plus size={16} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
 
           {activeTab === 'excellence' && (
             <div className="space-y-8">

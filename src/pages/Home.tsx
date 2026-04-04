@@ -1,4 +1,4 @@
-import { motion, useScroll, useTransform } from 'motion/react';
+import { motion, useScroll, useTransform, AnimatePresence, useMotionValue } from 'motion/react';
 import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -14,6 +14,70 @@ const safeArray = (val: any) => {
     } catch (e) {}
   }
   return [];
+};
+
+const StackedPhotoCarousel = ({ images, onIndexChange }: { images: string[], onIndexChange: (index: number) => void }) => {
+  const [index, setIndex] = useState(0);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [images.length]);
+
+  useEffect(() => {
+    onIndexChange(index);
+  }, [index, onIndexChange]);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    mouseX.set((e.clientX - left) / width - 0.5);
+    mouseY.set((e.clientY - top) / height - 0.5);
+  };
+
+  const rotateX = useTransform(mouseY, [-0.5, 0.5], [5, -5]);
+  const rotateY = useTransform(mouseX, [-0.5, 0.5], [-5, 5]);
+
+  return (
+    <div 
+      className="relative w-full h-full perspective-1000"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => { mouseX.set(0); mouseY.set(0); }}
+    >
+      <AnimatePresence mode="popLayout">
+        {/* Behind Image */}
+        <motion.div
+          key={(index + 1) % images.length}
+          initial={{ opacity: 0, scale: 0.8, x: 20, y: 10 }}
+          animate={{ opacity: 0.5, scale: 0.9, x: 10, y: 5 }}
+          exit={{ opacity: 0, scale: 0.8, x: 20, y: 10 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="absolute inset-0 rounded-3xl overflow-hidden shadow-lg"
+          style={{ rotateX, rotateY, transformStyle: 'preserve-3d', zIndex: 0 }}
+        >
+          <img src={images[(index + 1) % images.length]} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="absolute inset-0 bg-brand-navy/20" />
+        </motion.div>
+
+        {/* Front Image */}
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, scale: 0.9, x: -20, y: -10 }}
+          animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+          exit={{ opacity: 0, scale: 0.8, x: 20, y: 10 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute inset-0 rounded-3xl overflow-hidden shadow-2xl"
+          style={{ rotateX, rotateY, transformStyle: 'preserve-3d', zIndex: 10 }}
+        >
+          <img src={images[index]} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="absolute inset-0 bg-brand-navy/5" />
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
 };
 
 function Newsletter() {
@@ -56,6 +120,7 @@ export default function Home() {
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,7 +195,7 @@ export default function Home() {
       </button>
 
       {/* 1. HERO EXPERIENCE (Parallax) */}
-      <section ref={heroRef} className="relative h-screen flex items-center overflow-hidden bg-brand-navy">
+      <section ref={heroRef} style={{ position: 'relative' }} className="relative h-screen flex items-center overflow-hidden bg-brand-navy">
         <motion.div style={{ y: heroBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
             src={settings.hero?.banner_url} 
@@ -198,57 +263,66 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 2. WHY TRAVEL DESIGNERS CHOOSE US / PLATFORM EXCELLENCE */}
-      <section className="py-[120px] bg-brand-paper relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      {/* 2. WHY TRAVEL DESIGNERS CHOOSE US & PLATFORM EXCELLENCE */}
+      <section className="py-[120px] bg-brand-paper relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-20">
-            <h2 className="font-serif text-3xl md:text-4xl text-brand-navy">{settings.platform_excellence?.title || 'Why Travel Designers Choose Us'}</h2>
-            {settings.platform_excellence?.description && (
-              <p className="mt-6 text-gray-600 max-w-2xl mx-auto text-lg">{settings.platform_excellence.description}</p>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {safeArray(settings.why_us).length > 0 ? (
-              safeArray(settings.why_us).map((card: any, i: number) => (
-                <div key={i} className="group bg-white p-10 rounded-3xl space-y-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
-                  <div className="w-12 h-12 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal group-hover:bg-brand-teal group-hover:text-white transition-all overflow-hidden">
-                    <CheckCircle2 size={24} strokeWidth={1.5} />
-                  </div>
-                  <h3 className="font-serif text-2xl text-brand-navy">{card.title}</h3>
-                  <p className="text-gray-600 font-light leading-relaxed text-sm">{card.description}</p>
-                </div>
-              ))
-            ) : safeArray(settings.platform_excellence?.features).length > 0 ? (
-              safeArray(settings.platform_excellence.features).map((card: any, i: number) => (
-                <div key={i} className="group bg-white p-10 rounded-3xl space-y-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
-                  <div className="w-12 h-12 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal group-hover:bg-brand-teal group-hover:text-white transition-all overflow-hidden">
-                    {card.icon_url ? (
-                      <img src={card.icon_url} alt={card.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
-                    ) : (
-                      <CheckCircle2 size={24} strokeWidth={1.5} />
-                    )}
-                  </div>
-                  <h3 className="font-serif text-2xl text-brand-navy">{card.title}</h3>
-                  <p className="text-gray-600 font-light leading-relaxed text-sm">{card.description}</p>
-                </div>
-              ))
-            ) : (
-              whyUsPillars.map((card: any, i: number) => {
-                const Icon = card.icon;
-                return (
-                  <div key={i} className="group bg-white p-10 rounded-3xl space-y-6 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
-                    <div className="w-12 h-12 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal group-hover:bg-brand-teal group-hover:text-white transition-all">
-                      <Icon size={24} strokeWidth={1.5} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+            
+            {/* Left: Text Points */}
+            <div className="space-y-12 h-[400px] flex flex-col justify-center">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+              >
+                <span className="text-[10px] font-bold text-brand-teal uppercase tracking-[0.3em] mb-4 block">Our Value Proposition</span>
+                <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+                  {settings.why_us_title || 'Why Travel Designers Choose Us'}
+                </h2>
+              </motion.div>
+
+              <div className="space-y-8">
+                {(safeArray(settings.why_us).length > 0 ? safeArray(settings.why_us) : whyUsPillars).map((pillar: any, i: number) => (
+                  <motion.div 
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ 
+                      opacity: 1, 
+                      x: 0,
+                      scale: i === activeIndex ? 1.05 : 1
+                    }}
+                    transition={{ duration: 0.5 }}
+                    className="flex gap-6"
+                  >
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center shadow-sm transition-colors duration-500 ${i === activeIndex ? 'bg-brand-teal text-white' : 'bg-white text-brand-teal'}`}>
+                      <CheckCircle2 size={20} />
                     </div>
-                    <h3 className="font-serif text-2xl text-brand-navy">{card.title}</h3>
-                    <p className="text-gray-600 font-light leading-relaxed text-sm">{card.desc}</p>
-                  </div>
-                );
-              })
-            )}
+                    <div className="space-y-2">
+                      <h3 className="font-serif text-xl text-brand-navy">{pillar.title}</h3>
+                      <p className="font-light leading-relaxed text-sm text-gray-600">
+                        {pillar.description || pillar.desc}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right: Interactive Parallax Stack */}
+            <div className="relative h-[400px] w-full max-w-md mx-auto flex items-center justify-center perspective-1000">
+              <StackedPhotoCarousel 
+                onIndexChange={setActiveIndex}
+                images={[
+                  settings.platform_excellence?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800",
+                  "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=800"
+                ]}
+              />
+            </div>
           </div>
         </div>
       </section>
+
 
       {/* STRATEGIC SUGGESTION: MALDIVES EXPERTISE */}
       <section className="py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
@@ -433,7 +507,7 @@ export default function Home() {
       </section>
 
       {/* 6.5 OUR STORY */}
-      <section ref={storyRef} className="py-[120px] bg-white overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      <section ref={storyRef} className="py-[120px] bg-white overflow-hidden relative" id="story" style={{ position: 'relative', contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
             <div className="space-y-10 order-2 lg:order-1">
@@ -495,7 +569,7 @@ export default function Home() {
       </section>
 
       {/* 8. JOIN OUR GLOBAL NETWORK (CTA Parallax) */}
-      <section ref={ctaRef} className="relative py-[160px] overflow-hidden bg-brand-navy">
+      <section ref={ctaRef} style={{ position: 'relative' }} className="relative py-[160px] overflow-hidden bg-brand-navy">
         <motion.div style={{ y: ctaBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
             src="https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=1920" 
