@@ -5,6 +5,63 @@ import { supabase } from '../supabase';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
 
+export async function uploadFile(file: File, path: string, bucket: string = 'site-assets', setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void) {
+  if (setUploadProgress) setUploadProgress(0);
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random()}.${fileExt}`;
+  const filePath = `${path}/${fileName}`;
+
+  const { error: uploadError, data } = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file);
+
+  if (setUploadProgress) setUploadProgress(null);
+
+  if (uploadError) {
+    console.error('Upload error:', uploadError);
+    if (uploadError.message.includes('Bucket not found')) {
+      console.error(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
+    } else {
+      console.error(`Upload error: ${uploadError.message}`);
+    }
+    return null;
+  }
+
+  if (showNotification) showNotification('Uploaded Successfully');
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
+export async function uploadResortFile(file: File, resortName: string, category: string, setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void) {
+  if (setUploadProgress) setUploadProgress(0);
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random()}.${fileExt}`;
+  const filePath = `resorts/${resortName.toLowerCase().replace(/\s+/g, '-')}/${category.toLowerCase().replace(/\s+/g, '-')}/${fileName}`;
+
+  const { error: uploadError, data } = await supabase.storage
+    .from('site-assets')
+    .upload(filePath, file);
+
+  if (setUploadProgress) setUploadProgress(null);
+
+  if (uploadError) {
+    console.error('Upload error:', uploadError);
+    return null;
+  }
+
+  if (showNotification) showNotification('Uploaded Successfully');
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('site-assets')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
 /**
  * AdminDashboard Component
  * 
@@ -581,28 +638,7 @@ function ProtectedResourceModal({ onClose, onAdd }: any) {
   );
 }
 
-const uploadFile = async (file: File, folder: string) => {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${folder}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('site-assets')
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage
-      .from('site-assets')
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
-  } catch (error: any) {
-    console.error('Error uploading file:', error.message);
-    return null;
-  }
-};
 
 function AdminOverview() {
   const [seeding, setSeeding] = useState(false);
@@ -1061,6 +1097,9 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     failed: number;
     status: string;
   } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [scrapedImages, setScrapedImages] = useState<string[]>([]);
+  const [isFetchingImages, setIsFetchingImages] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     atoll: '',
@@ -1070,6 +1109,8 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     description: '',
     images: '',
     banner_url: '',
+    resort_url: '',
+    crawl: false,
     highlights: '',
     meal_plans: '',
     is_featured: false,
@@ -1151,11 +1192,12 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     
     try {
       if (editingResort) {
-        const { banner_url, ...dataToSave } = formData;
+        const { banner_url, resort_url, crawl, ...dataToSave } = formData;
         const { error } = await supabase
           .from('resorts')
           .update({
             ...dataToSave,
+            banner_url,
             images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
             highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
             meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
@@ -1163,17 +1205,20 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
           .eq('id', editingResort.id);
         if (error) throw error;
       } else {
-        const { banner_url, ...dataToSave } = formData;
+        const { banner_url, resort_url, crawl, ...dataToSave } = formData;
         const { error } = await supabase
           .from('resorts')
           .insert({
             ...dataToSave,
+            banner_url,
             images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
             highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
             meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
           });
         if (error) throw error;
       }
+      
+      showNotification(`${formData.name} has been updated`);
       
       setEditingResort(null);
       setIsAdding(false);
@@ -1186,15 +1231,17 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
         description: '', 
         images: '', 
         banner_url: '', 
+        resort_url: '',
         highlights: '', 
         meal_plans: '', 
         is_featured: false, 
+        crawl: false,
         room_types: [] 
       });
       fetchResorts();
     } catch (error: any) {
       console.error('Error saving resort:', error.message);
-      // In a real app, use a toast notification here
+      showNotification(`Error updating resort: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -1212,6 +1259,101 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     }
   };
 
+  const [driveUrl, setDriveUrl] = useState(() => localStorage.getItem('admin_drive_url') || '');
+  const [isFetchingDrive, setIsFetchingDrive] = useState(false);
+
+  const handleDriveUpload = async () => {
+    if (!driveUrl) return;
+
+    localStorage.setItem('admin_drive_url', driveUrl);
+
+    setIsFetchingDrive(true);
+    setAiProcessing(true);
+    setSmartUploadProgress({
+      total: 1,
+      current: 0,
+      completed: 0,
+      failed: 0,
+      status: 'Fetching from Google Drive...'
+    });
+
+    try {
+      const response = await fetch('/api/fetch-drive-pdfs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: driveUrl }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch from Google Drive');
+      }
+
+      const data = await response.json();
+      const pdfs = data.pdfs; // Array of base64 strings
+
+      if (!pdfs || pdfs.length === 0) {
+        throw new Error('No PDFs found in the provided Google Drive folder.');
+      }
+
+      setSmartUploadProgress({
+        total: pdfs.length,
+        current: 0,
+        completed: 0,
+        failed: 0,
+        status: 'Processing PDFs...'
+      });
+
+      for (let i = 0; i < pdfs.length; i++) {
+        setSmartUploadProgress(prev => prev ? { 
+          ...prev, 
+          current: i + 1, 
+          status: `Processing PDF ${i + 1} of ${pdfs.length}...` 
+        } : null);
+
+        try {
+          const extracted = await extractResortDataFromPDF(pdfs[i]);
+          
+          // Check if resort already exists
+          const { data: existingResort } = await supabase
+            .from('resorts')
+            .select('id')
+            .ilike('name', extracted.name)
+            .maybeSingle();
+
+          if (existingResort) {
+            console.log(`Resort "${extracted.name}" already exists. Skipping.`);
+            setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+            continue;
+          }
+
+          const { error } = await supabase
+            .from('resorts')
+            .insert({
+              ...extracted,
+              is_featured: false
+            });
+          
+          if (error) throw error;
+          setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+          fetchResorts();
+        } catch (err) {
+          console.error('AI Extraction failed for Drive PDF:', err);
+          setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
+        }
+      }
+      
+      showNotification('Google Drive processing complete');
+    } catch (error: any) {
+      console.error('Drive fetch error:', error);
+      showNotification(`Error: ${error.message}`);
+      setSmartUploadProgress(null);
+    } finally {
+      setIsFetchingDrive(false);
+      setAiProcessing(false);
+    }
+  };
+
   const startEdit = (resort: any) => {
     setEditingResort(resort);
     setFormData({
@@ -1223,9 +1365,11 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
       description: resort.description || '',
       images: (resort.images || []).join(', '),
       banner_url: resort.banner_url || '',
+      resort_url: resort.resort_url || '',
       highlights: (resort.highlights || []).join(', '),
       meal_plans: (resort.meal_plans || []).join(', '),
       is_featured: resort.is_featured || false,
+      crawl: false,
       room_types: resort.room_types || []
     });
     setIsAdding(true);
@@ -1235,10 +1379,28 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <h1 className="text-3xl font-serif text-brand-navy">Resort Management</h1>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
+            <input 
+              type="text" 
+              placeholder="Google Drive Folder URL" 
+              className="text-sm outline-none border-none bg-transparent w-48"
+              value={driveUrl}
+              onChange={(e) => setDriveUrl(e.target.value)}
+              disabled={isFetchingDrive || aiProcessing}
+            />
+            <button 
+              onClick={handleDriveUpload}
+              disabled={!driveUrl || isFetchingDrive || aiProcessing}
+              className="text-brand-teal hover:text-brand-navy disabled:opacity-50 transition-colors"
+              title="Fetch PDFs from Drive"
+            >
+              <Database size={16} />
+            </button>
+          </div>
           <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
-            <Upload size={16} /> {aiProcessing ? 'Processing AI...' : 'Smart Upload PDF'}
-            <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing} />
+            <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
+            <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
           </label>
           <button 
             onClick={() => {
@@ -1252,6 +1414,8 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
                 description: '', 
                 images: '', 
                 banner_url: '', 
+                resort_url: '',
+                crawl: false,
                 highlights: '', 
                 meal_plans: '', 
                 is_featured: false, 
@@ -1364,6 +1528,73 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
                     <TextInput label="Resort Name" value={formData.name} onChange={(v) => setFormData({...formData, name: v})} placeholder="e.g. Soneva Jani" />
                     <TextInput label="Atoll" value={formData.atoll} onChange={(v) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
                   </div>
+                  
+                  <div className="space-y-4">
+                    <TextInput label="Resort URL" value={formData.resort_url} onChange={(v) => setFormData({...formData, resort_url: v})} placeholder="https://..." />
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 text-xs font-bold text-brand-navy uppercase tracking-widest">
+                        <input type="checkbox" checked={formData.crawl || false} onChange={(e) => setFormData({...formData, crawl: e.target.checked})} />
+                        Crawl Linked Pages
+                      </label>
+                      <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Beach Villa" />
+                    </div>
+                    <button 
+                      type="button" 
+                      disabled={isFetchingImages}
+                      onClick={async () => {
+                        setIsFetchingImages(true);
+                        showNotification('Fetching images...');
+                        try {
+                          const response = await fetch('/api/scrape-resort', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: formData.resort_url, crawl: formData.crawl }),
+                          });
+                          const data = await response.json();
+                          if (data.images) {
+                            setScrapedImages(data.images);
+                            showNotification('Images fetched successfully');
+                          } else {
+                            showNotification('No images found');
+                          }
+                        } catch (error) {
+                          showNotification('Failed to fetch images');
+                        } finally {
+                          setIsFetchingImages(false);
+                        }
+                      }}
+                      className="text-[10px] font-bold text-brand-teal uppercase tracking-widest disabled:opacity-50"
+                    >
+                      {isFetchingImages ? 'Fetching...' : 'Fetch Images'}
+                    </button>
+                  </div>
+
+                  {scrapedImages.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Select Images</h4>
+                      <div className="grid grid-cols-4 gap-4">
+                        {scrapedImages.map((img, i) => (
+                          <div key={i} className="relative cursor-pointer group" onClick={async () => {
+                            showNotification('Uploading image...');
+                            const response = await fetch(img);
+                            const blob = await response.blob();
+                            const file = new File([blob], `image-${i}.jpg`, { type: blob.type });
+                            const url = await uploadResortFile(file, formData.name, formData.category);
+                            if (url) {
+                              setFormData({...formData, images: formData.images ? `${formData.images}, ${url}` : url});
+                              showNotification('Image uploaded successfully');
+                            } else {
+                              showNotification('Failed to upload image');
+                            }
+                          }}>
+                            <img src={img} alt="Scraped" className="w-full h-24 object-cover rounded-lg" />
+                            <div className="absolute inset-0 bg-brand-teal/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold">Add</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <TextInput label="Location" value={formData.location} onChange={(v) => setFormData({...formData, location: v})} placeholder="e.g. Medhufaru Island" />
                     <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Ultra-Luxury" />
@@ -1390,8 +1621,14 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
                           input.onchange = async (e: any) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              showNotification('Uploading banner...');
                               const url = await uploadFile(file, 'resorts');
-                              if (url) setFormData({...formData, banner_url: url});
+                              if (url) {
+                                setFormData({...formData, banner_url: url});
+                                showNotification('Banner uploaded successfully');
+                              } else {
+                                showNotification('Failed to upload banner');
+                              }
                             }
                           };
                           input.click();
@@ -2190,37 +2427,6 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
     window.open(`${window.location.origin}/?preview=true`, '_blank');
   };
 
-  const uploadFile = async (file: File, path: string, bucket: string = 'site-assets') => {
-    setUploadProgress(0);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${path}/${fileName}`;
-
-    const { error: uploadError, data } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file);
-
-    setUploadProgress(null);
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      if (uploadError.message.includes('Bucket not found')) {
-        console.error(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
-      } else {
-        console.error(`Upload error: ${uploadError.message}`);
-      }
-      return null;
-    }
-
-    showNotification('Uploaded Successfully');
-
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-
-    return publicUrl;
-  };
-
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div></div>;
 
   return (
@@ -2837,6 +3043,17 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
           {activeTab === 'why' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-serif text-brand-navy">Featured Retreats</h3>
+              </div>
+              <div className="bg-brand-paper/30 p-6 rounded-3xl space-y-4">
+                <TextInput 
+                  label="Section Title" 
+                  value={settings.featured_retreats_title || 'Featured Retreats'} 
+                  onChange={(val) => saveSetting('featured_retreats_title', val)} 
+                />
+              </div>
+
+              <div className="flex justify-between items-center mb-6 mt-12">
                 <h3 className="text-xl font-serif text-brand-navy">Why Us Pillars</h3>
                 <button 
                   onClick={() => {

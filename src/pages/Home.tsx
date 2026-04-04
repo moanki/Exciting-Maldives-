@@ -1,4 +1,4 @@
-import { motion, useScroll, useTransform, AnimatePresence, useMotionValue } from 'motion/react';
+import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useAnimationFrame, wrap } from 'motion/react';
 import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -270,7 +270,235 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 2. WHY TRAVEL DESIGNERS CHOOSE US & PLATFORM EXCELLENCE */}
+      {/* 2. FEATURED RETREATS */}
+      <section className="py-[120px] bg-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="text-center mb-16">
+            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">{settings.featured_retreats_title || 'Featured Retreats'}</h2>
+            <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest mt-4">Hand-picked luxury island experiences</p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+            {featuredResorts.slice(0, 5).map((resort: any, i: number) => (
+              <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">
+                {/* Background Image */}
+                <img 
+                  src={resort.banner_url || resort.images?.[0] || resort.image_url || "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=800"} 
+                  alt={resort.name} 
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                  referrerPolicy="no-referrer" 
+                  loading="lazy" 
+                  decoding="async" 
+                />
+                
+                {/* Filter/Blur Overlay */}
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-500"></div>
+                <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/40 to-transparent backdrop-blur-[2px]"></div>
+                
+                {/* Content */}
+                <div className="absolute inset-0 p-5 flex flex-col justify-end z-10">
+                  <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                    <h3 className="font-serif text-xl text-white mb-2 drop-shadow-md line-clamp-2 leading-tight">
+                      {resort.name}
+                    </h3>
+                    
+                    <div className="flex flex-col gap-1.5 text-xs text-white/90 mb-4 font-sans drop-shadow-md">
+                      {resort.atoll && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin size={12} className="text-white shrink-0" />
+                          <span className="truncate">{resort.atoll}</span>
+                        </span>
+                      )}
+                      {resort.category && (
+                        <span className="flex items-center gap-1.5">
+                          <Star size={12} className="text-white shrink-0" />
+                          <span className="truncate">{resort.category}</span>
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white opacity-80 group-hover:opacity-100 transition-opacity">
+                      <span>View More</span>
+                      <ArrowRight size={12} className="transform group-hover:translate-x-1 transition-transform duration-300" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. CEO MESSAGE */}
+      <section className="py-[120px] bg-brand-paper overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5]">
+              <img 
+                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                alt="CEO" 
+                className="absolute inset-0 w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div className="space-y-10">
+              <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">CEO's Message</span>
+              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+                {settings.ceo_message?.quote || "“Our mission is to connect the world’s leading travel designers with the extraordinary experiences of the Maldives.”"}
+              </h2>
+              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
+                <p>
+                  {settings.ceo_message?.message || "Founded on the principles of discretion and excellence, we have spent two decades building intimate relationships with the Maldives' most secluded resorts."}
+                </p>
+              </div>
+              <div>
+                <p className="font-bold text-brand-navy text-xl">{settings.ceo_message?.name || 'Elias Jancel'}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-teal mt-1">{settings.ceo_message?.title || 'Founder & CEO'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. OUR STORY */}
+      <section ref={storyRef} className="py-[120px] bg-white overflow-hidden relative" id="story" style={{ position: 'relative', contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            <div className="space-y-10 order-2 lg:order-1">
+              <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">Our Story</span>
+              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+                {settings.our_story?.title || "A Legacy of Luxury in the Maldives"}
+              </h2>
+              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
+                <p>
+                  {settings.our_story?.content || "Our role as a specialized B2B DMC is to be the extension of your team on the ground, ensuring every detail is executed with precision. We understand that your reputation relies on our flawless execution."}
+                </p>
+              </div>
+            </div>
+            <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5] order-1 lg:order-2">
+              <motion.img 
+                style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
+                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                alt="Our Story" 
+                className="absolute inset-0 w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. GLOBAL MARKETS */}
+      <section className="py-[120px] bg-brand-navy text-white relative overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        {/* Subtle Map Background */}
+        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+        <div className="max-w-5xl mx-auto px-6 md:px-12 relative z-10">
+          <div className="text-center mb-20">
+            <h2 className="font-serif text-4xl md:text-5xl text-white">Global Markets</h2>
+            <p className="text-white/60 font-sans text-sm uppercase tracking-widest mt-4">Supporting travel designers and agencies across global markets.</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-8">
+            {safeArray(settings.global_markets).length > 0 ? (
+              safeArray(settings.global_markets).map((market: any, i: number) => (
+                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
+                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
+                    <Globe size={80} strokeWidth={1} />
+                  </div>
+                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
+                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
+                    {market.name}
+                  </h3>
+                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.description}</p>
+                </div>
+              ))
+            ) : (
+              globalMarkets.map((market: any, i: number) => (
+                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
+                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
+                    <Globe size={80} strokeWidth={1} />
+                  </div>
+                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
+                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
+                    {market.name}
+                  </h3>
+                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.desc}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. DMC SERVICES */}
+      <section className="py-[120px] bg-white relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="text-center mb-20">
+            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">DMC Services</h2>
+            <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest mt-4">Comprehensive on-ground support for our partners</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-8">
+            {safeArray(settings.services).length > 0 ? (
+              safeArray(settings.services).map((service: any, i: number) => {
+                const Icon = service.icon === 'Hotel' ? Hotel :
+                             service.icon === 'Plane' ? Plane :
+                             service.icon === 'Ship' ? Ship :
+                             service.icon === 'UserCheck' ? UserCheck :
+                             service.icon === 'Calendar' ? Calendar :
+                             service.icon === 'Smile' ? Smile :
+                             service.icon === 'Star' ? Star :
+                             service.icon === 'Users' ? Users :
+                             service.icon === 'Compass' ? Globe :
+                             service.icon === 'Map' ? MapPin : Zap;
+                return (
+                  <Link to={service.link || '#'} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
+                      <Icon size={32} strokeWidth={1.5} />
+                    </div>
+                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
+                  </Link>
+                );
+              })
+            ) : (
+              dmcServices.map((service: any, i: number) => {
+                const Icon = service.icon;
+                return (
+                  <Link to={service.link} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
+                      <Icon size={32} strokeWidth={1.5} />
+                    </div>
+                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* STRATEGIC SUGGESTION: MALDIVES EXPERTISE */}
+      <section className="py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 text-center divide-x divide-white/10">
+            {(safeArray(settings.expertise_stats).length > 0 ? safeArray(settings.expertise_stats) : [
+              { value: '198+', label: 'Resorts' },
+              { value: '20+', label: 'Years Experience' },
+              { value: '24/7', label: 'Local Support' },
+              { value: 'Global', label: 'Travel Partners' }
+            ]).map((stat: any, i: number) => (
+              <div key={i} className="px-4">
+                <h4 className="text-4xl md:text-5xl font-serif text-brand-teal mb-2">{stat.value}</h4>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-bold">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 7. WHY TRAVEL DESIGNERS CHOOSE US & PLATFORM EXCELLENCE */}
       <section className="py-[120px] bg-brand-paper relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
@@ -330,220 +558,7 @@ export default function Home() {
         </div>
       </section>
 
-
-      {/* STRATEGIC SUGGESTION: MALDIVES EXPERTISE */}
-      <section className="py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 text-center divide-x divide-white/10">
-            {(safeArray(settings.expertise_stats).length > 0 ? safeArray(settings.expertise_stats) : [
-              { value: '198+', label: 'Resorts' },
-              { value: '20+', label: 'Years Experience' },
-              { value: '24/7', label: 'Local Support' },
-              { value: 'Global', label: 'Travel Partners' }
-            ]).map((stat: any, i: number) => (
-              <div key={i} className="px-4">
-                <h4 className="text-4xl md:text-5xl font-serif text-brand-teal mb-2">{stat.value}</h4>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-bold">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 3. FEATURED RETREATS (Micro-parallax) */}
-      <section className="py-[120px] px-6 md:px-12 max-w-7xl mx-auto relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 800px' }}>
-        <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
-          <div>
-            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">
-              {settings.ctas?.retreats_title || 'Featured Retreats'}
-            </h2>
-          </div>
-          <Link to="/resorts" className="text-brand-navy font-sans text-[10px] uppercase tracking-widest border-b border-brand-navy pb-1 hover:text-brand-teal hover:border-brand-teal transition-colors">
-            {settings.ctas?.retreats_btn || 'View All Resorts'}
-          </Link>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {featuredResorts.slice(0, 4).map((resort, i) => (
-            <Link to={`/resorts/${resort.id}`} key={i} className="group block">
-              <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6 relative shadow-sm group-hover:shadow-2xl transition-shadow duration-500">
-                <img 
-                  src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
-                  alt={resort.name} 
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-1"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                  <h3 className="text-white font-serif text-2xl mb-2">{resort.name}</h3>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-white/80 text-[10px] uppercase tracking-wider font-bold">
-                    <span className="flex items-center gap-1"><MapPin size={12} strokeWidth={1.5} /> {resort.atoll || 'Baa Atoll'}</span>
-                    <span className="flex items-center gap-1"><Plane size={12} strokeWidth={1.5} /> {resort.transfer_type || 'Seaplane'}</span>
-                    <span className="flex items-center gap-1"><Hotel size={12} strokeWidth={1.5} /> {resort.villas_count || '70'} Villas</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-2">
-                <span className="text-brand-navy font-sans text-[10px] uppercase tracking-widest font-bold group-hover:text-brand-teal transition-colors">View Resort</span>
-                <ArrowRight size={14} strokeWidth={1.5} className="text-brand-navy group-hover:text-brand-teal transition-colors group-hover:translate-x-1" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* 4. DMC SERVICES */}
-      <section className="py-[120px] bg-white relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-20">
-            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">DMC Services</h2>
-            <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest mt-4">Comprehensive on-ground support for our partners</p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-8">
-            {safeArray(settings.services).length > 0 ? (
-              safeArray(settings.services).map((service: any, i: number) => {
-                const Icon = service.icon === 'Hotel' ? Hotel :
-                             service.icon === 'Plane' ? Plane :
-                             service.icon === 'Ship' ? Ship :
-                             service.icon === 'UserCheck' ? UserCheck :
-                             service.icon === 'Calendar' ? Calendar :
-                             service.icon === 'Smile' ? Smile :
-                             service.icon === 'Star' ? Star :
-                             service.icon === 'Users' ? Users :
-                             service.icon === 'Compass' ? Globe :
-                             service.icon === 'Map' ? MapPin : Zap;
-                return (
-                  <Link to={service.link || '#'} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
-                      <Icon size={32} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
-                  </Link>
-                );
-              })
-            ) : (
-              dmcServices.map((service: any, i: number) => {
-                const Icon = service.icon;
-                return (
-                  <Link to={service.link} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
-                      <Icon size={32} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
-                  </Link>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* 5. GLOBAL MARKETS */}
-      <section className="py-[120px] bg-brand-navy text-white relative overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
-        {/* Subtle Map Background */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-        <div className="max-w-5xl mx-auto px-6 md:px-12 relative z-10">
-          <div className="text-center mb-20">
-            <h2 className="font-serif text-4xl md:text-5xl text-white">Global Markets</h2>
-            <p className="text-white/60 font-sans text-sm uppercase tracking-widest mt-4">Supporting travel designers and agencies across global markets.</p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-8">
-            {safeArray(settings.global_markets).length > 0 ? (
-              safeArray(settings.global_markets).map((market: any, i: number) => (
-                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
-                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
-                    <Globe size={80} strokeWidth={1} />
-                  </div>
-                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
-                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
-                    {market.name}
-                  </h3>
-                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.description}</p>
-                </div>
-              ))
-            ) : (
-              globalMarkets.map((market: any, i: number) => (
-                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
-                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
-                    <Globe size={80} strokeWidth={1} />
-                  </div>
-                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
-                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
-                    {market.name}
-                  </h3>
-                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.desc}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* 6. CEO MESSAGE */}
-      <section className="py-[120px] bg-brand-paper overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-            <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5]">
-              <img 
-                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
-                alt="CEO" 
-                className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div className="space-y-10">
-              <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">CEO's Message</span>
-              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
-                {settings.ceo_message?.quote || "“Our mission is to connect the world’s leading travel designers with the extraordinary experiences of the Maldives.”"}
-              </h2>
-              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
-                <p>
-                  {settings.ceo_message?.message || "Founded on the principles of discretion and excellence, we have spent two decades building intimate relationships with the Maldives' most secluded resorts."}
-                </p>
-              </div>
-              <div>
-                <p className="font-bold text-brand-navy text-xl">{settings.ceo_message?.name || 'Elias Jancel'}</p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-teal mt-1">{settings.ceo_message?.title || 'Founder & CEO'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6.5 OUR STORY */}
-      <section ref={storyRef} className="py-[120px] bg-white overflow-hidden relative" id="story" style={{ position: 'relative', contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-            <div className="space-y-10 order-2 lg:order-1">
-              <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">Our Story</span>
-              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
-                {settings.our_story?.title || "A Legacy of Luxury in the Maldives"}
-              </h2>
-              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
-                <p>
-                  {settings.our_story?.content || "Our role as a specialized B2B DMC is to be the extension of your team on the ground, ensuring every detail is executed with precision. We understand that your reputation relies on our flawless execution."}
-                </p>
-              </div>
-            </div>
-            <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5] order-1 lg:order-2">
-              <motion.img 
-                style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
-                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
-                alt="Our Story" 
-                className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 7. PRESTIGIOUS AWARDS */}
+      {/* 8. PRESTIGIOUS AWARDS */}
       <section className="py-24 bg-white overflow-hidden border-y border-brand-navy/5 relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 400px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12 mb-16 text-center">
           <h2 className="font-serif text-3xl md:text-4xl text-brand-navy">{settings.awards?.title || 'Prestigious Awards'}</h2>
@@ -581,7 +596,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 8. JOIN OUR GLOBAL NETWORK (CTA Parallax) */}
+      {/* 9. JOIN OUR GLOBAL NETWORK (CTA Parallax) */}
       <section ref={ctaRef} style={{ position: 'relative' }} className="relative py-[160px] overflow-hidden bg-brand-navy">
         <motion.div style={{ y: ctaBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
@@ -616,7 +631,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 9. MALDIVES TRAVEL GUIDE */}
+      {/* 10. MALDIVES TRAVEL GUIDE */}
       <section className="py-[120px] px-6 md:px-12 max-w-7xl mx-auto relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
           <div>
@@ -654,7 +669,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 10. NEWSLETTER */}
+      {/* 11. NEWSLETTER */}
       <Newsletter />
 
     </div>

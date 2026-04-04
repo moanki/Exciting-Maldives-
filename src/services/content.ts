@@ -71,7 +71,7 @@ export const extractResortDataFromPDF = async (base64Data: string) => {
                 properties: {
                   name: { type: Type.STRING },
                   description: { type: Type.STRING },
-                  max_guests: { type: Type.INTEGER },
+                  max_guests: { type: Type.STRING, description: "Maximum number of guests, e.g., '2 Adults + 1 Child' or '3'" },
                   size: { type: Type.STRING }
                 }
               } 
@@ -108,8 +108,14 @@ export const extractResortDataFromPDF = async (base64Data: string) => {
       }
       throw e;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Content processing error:', error);
+    
+    // Check for quota exhaustion (429 Too Many Requests)
+    if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
+      throw new Error('API tokens exhausted. Please switch to a paid Gemini API key in your environment variables to continue processing.');
+    }
+    
     throw error;
   }
 };
