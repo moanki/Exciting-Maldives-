@@ -30,10 +30,32 @@ create table if not exists public.resorts (
   category text not null,
   transfer_type text not null,
   description text,
-  images text[], -- Array of URLs
+  images text[], -- Deprecated: Use resort_media table
   highlights text[],
   meal_plans text[],
   room_types jsonb[], -- Array of room type objects
+  status text check (status in ('draft', 'reviewed', 'published')) default 'draft',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3.1 Resort Media
+create table if not exists public.resort_media (
+  id uuid default gen_random_uuid() primary key,
+  resort_id uuid references public.resorts on delete cascade,
+  category text not null, -- hero, aerial, villa, dining, spa, activity, map
+  sort_order integer default 0,
+  alt_text text,
+  is_featured boolean default false,
+  storage_path text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3.2 Resort Documents
+create table if not exists public.resort_documents (
+  id uuid default gen_random_uuid() primary key,
+  resort_id uuid references public.resorts on delete cascade,
+  title text not null,
+  storage_path text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -84,6 +106,8 @@ create table if not exists public.messages (
 alter table public.profiles enable row level security;
 alter table public.agents enable row level security;
 alter table public.resorts enable row level security;
+alter table public.resort_media enable row level security;
+alter table public.resort_documents enable row level security;
 alter table public.booking_requests enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.resources enable row level security;
@@ -101,8 +125,16 @@ create policy "Users can read own agent profile" on public.agents for select usi
 create policy "Public can insert agent profile" on public.agents for insert with check (true);
 
 -- Resorts: Public can read, Admins can manage
-create policy "Public can read resorts" on public.resorts for select using (true);
+create policy "Public can read resorts" on public.resorts for select using (status = 'published');
 create policy "Admins can manage resorts" on public.resorts for all using (auth.uid() in (select id from public.profiles));
+
+-- Resort Media: Public can read, Admins can manage
+create policy "Public can read resort media" on public.resort_media for select using (true);
+create policy "Admins can manage resort media" on public.resort_media for all using (auth.uid() in (select id from public.profiles));
+
+-- Resort Documents: Public can read, Admins can manage
+create policy "Public can read resort documents" on public.resort_documents for select using (true);
+create policy "Admins can manage resort documents" on public.resort_documents for all using (auth.uid() in (select id from public.profiles));
 
 -- Booking Requests: Admins can read all, Agents can read/insert own
 create policy "Admins can read all bookings" on public.booking_requests for select using (auth.uid() in (select id from public.profiles));

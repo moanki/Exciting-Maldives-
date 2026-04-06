@@ -131,7 +131,7 @@ export default function Home() {
         getSiteSettings(isPreview),
         supabase
           .from('resorts')
-          .select('*')
+          .select('*, resort_media(*)')
           .eq('is_featured', true)
           .limit(6)
       ]);
@@ -290,7 +290,7 @@ export default function Home() {
               <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">
                 {/* Background Image */}
                 <img 
-                  src={resort.banner_url || (resort.images && resort.images[0]) || resort.image_url || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800&sig=${resort.id}`} 
+                  src={resort.banner_url || (resort.resort_media && resort.resort_media.find((m: any) => m.is_featured)?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || resort.image_url || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800&sig=${resort.id}`} 
                   alt={resort.name} 
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                   referrerPolicy="no-referrer" 

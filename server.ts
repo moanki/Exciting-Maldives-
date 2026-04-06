@@ -140,7 +140,7 @@ async function startServer() {
       res.json({ files });
     } catch (error: any) {
       console.error("Drive API list error:", error);
-      res.status(500).json({ error: "Failed to list files from Google Drive. Ensure the service account has access to the folder." });
+      res.status(500).json({ error: `Failed to list files from Google Drive: ${error.message}` });
     }
   });
 

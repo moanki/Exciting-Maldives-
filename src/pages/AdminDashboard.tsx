@@ -2180,7 +2180,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
   };
 
   const fetchResorts = async () => {
-    const { data } = await supabase.from('resorts').select('id, name, is_featured, images');
+    const { data } = await supabase.from('resorts').select('id, name, is_featured, resort_media(id, category, storage_path, sort_order)');
     if (data) setResorts(data);
   };
 
@@ -3608,16 +3608,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     <div key={resort.id} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
                       <h4 className="text-sm font-bold text-brand-navy">{resort.name}</h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {safeArray(resort.images).map((photoUrl: string, idx: number) => (
-                          <div key={idx} className="relative group">
-                            <img src={photoUrl} alt="Resort" className="w-full aspect-square object-cover rounded-xl" />
+                        {safeArray(resort.resort_media).map((media: any) => (
+                          <div key={media.id} className="relative group">
+                            <img src={media.storage_path} alt={media.alt_text || "Resort"} className="w-full aspect-square object-cover rounded-xl" />
                             <button 
                               onClick={async () => {
-                                const newPhotos = safeArray(resort.images).filter((_: any, i: number) => i !== idx);
                                 const { error } = await supabase
-                                  .from('resorts')
-                                  .update({ images: newPhotos })
-                                  .eq('id', resort.id);
+                                  .from('resort_media')
+                                  .delete()
+                                  .eq('id', media.id);
                                 if (!error) fetchResorts();
                               }}
                               className="absolute top-2 right-2 p-1 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
@@ -3635,15 +3634,14 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                             input.onchange = async (e: any) => {
                               const files = e.target.files;
                               if (files) {
-                                const newPhotos = [];
+                                const newMedia = [];
                                 for (let i = 0; i < files.length; i++) {
                                   const url = await uploadFile(files[i], 'resorts');
-                                  if (url) newPhotos.push(url);
+                                  if (url) newMedia.push({ resort_id: resort.id, storage_path: url, category: 'gallery' });
                                 }
                                 const { error } = await supabase
-                                  .from('resorts')
-                                  .update({ images: [...safeArray(resort.images), ...newPhotos] })
-                                  .eq('id', resort.id);
+                                  .from('resort_media')
+                                  .insert(newMedia);
                                 if (!error) fetchResorts();
                               }
                             };

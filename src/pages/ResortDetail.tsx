@@ -16,7 +16,7 @@ export default function ResortDetail() {
       if (!id) return;
       const { data, error } = await supabase
         .from('resorts')
-        .select('*')
+        .select('*, resort_media(*)')
         .eq('id', id)
         .single();
       
@@ -36,7 +36,7 @@ export default function ResortDetail() {
       {/* Hero Gallery */}
       <div className="relative h-[70vh] group">
         <img 
-          src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : '?auto=format&fit=crop&q=85&w=1920'}`} 
+          src={(resort.resort_media && resort.resort_media.find((m: any) => m.category === 'hero')?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`} 
           alt={resort.name}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
