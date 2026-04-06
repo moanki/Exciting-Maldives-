@@ -82,25 +82,87 @@ const StackedPhotoCarousel = ({ images, onIndexChange }: { images: string[], onI
   );
 };
 
-function Newsletter() {
+function Newsletter({ settings }: { settings: any }) {
+  const [formData, setFormData] = useState({
+    full_name: '',
+    agency_name: '',
+    country: '',
+    phone: '',
+    email: '',
+    primary_market: '',
+    notes: ''
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('newsletter_submissions').insert([formData]);
+    if (!error) {
+      setSubmitted(true);
+    }
+  };
+
+  const markets = settings.primary_markets || ['Europe', 'Middle East', 'Asia', 'Russia (CIS)', 'Other'];
+
   return (
-    <section className="py-16 md:py-[120px] bg-brand-paper text-brand-navy relative overflow-hidden">
-      <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
-      <div className="max-w-3xl mx-auto px-6 text-center space-y-8 relative z-10">
-        <h2 className="text-3xl md:text-5xl font-serif">Stay Updated With Maldives Travel Insights</h2>
-        <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest">
-          Get the latest on new resorts, seasonal offers, and destination updates.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <input type="email" placeholder="Enter your email" className="flex-1 bg-white border border-brand-navy/10 rounded-full px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/50 outline-none" />
-          <button className="bg-brand-navy text-white px-8 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all">Subscribe</button>
+    <section className="py-32 bg-brand-paper text-brand-navy relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
+          {/* Image Block - Proportional to form height */}
+          <div className="h-full min-h-[600px] bg-brand-navy/5 rounded-2xl overflow-hidden shadow-inner">
+            <img src="https://picsum.photos/seed/maldives/800/1000" alt="Maldives" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          </div>
+          
+          {/* Form Block */}
+          <div>
+            <div className="mb-16">
+              <span className="text-[11px] font-bold text-brand-teal uppercase tracking-[0.4em] mb-6 block">Stay Connected</span>
+              <h2 className="text-5xl md:text-6xl font-serif mb-10 tracking-tight">Be in Touch</h2>
+              <p className="text-lg text-brand-navy/60 font-light leading-relaxed max-w-md">
+                We would be delighted to stay connected and learn more about your business. Please share your details below, and our team will keep you informed with carefully selected updates, opportunities, and insights relevant to your market.
+              </p>
+            </div>
+
+            {submitted ? (
+              <div className="p-12 bg-white/50 rounded-[2rem] border border-brand-navy/5">
+                <h3 className="text-3xl font-serif mb-4">Thank you for reaching out</h3>
+                <p className="text-brand-navy/60 text-lg">We will be in touch shortly.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-10">
+                <div className="grid grid-cols-1 gap-x-12 gap-y-8">
+                  <input required type="text" placeholder="Full Name *" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, full_name: e.target.value})} />
+                  <input required type="text" placeholder="Travel Agency / Tour Operator Name *" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, agency_name: e.target.value})} />
+                  <input required type="text" placeholder="Country of Origin *" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, country: e.target.value})} />
+                  <input required type="tel" placeholder="Contact Number *" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, phone: e.target.value})} />
+                  <input required type="email" placeholder="Email Address *" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, email: e.target.value})} />
+                  <select required className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors text-brand-navy/40" onChange={e => setFormData({...formData, primary_market: e.target.value})}>
+                    <option value="">Primary Market *</option>
+                    {markets.map((m: string) => <option key={m} value={m} className="text-brand-navy">{m}</option>)}
+                  </select>
+                </div>
+                <textarea placeholder="Additional Notes" className="w-full bg-transparent border-b border-brand-navy/20 pb-4 text-sm outline-none focus:border-brand-teal transition-colors h-24 placeholder:text-brand-navy/40" onChange={e => setFormData({...formData, notes: e.target.value})} />
+                
+                <div className="flex flex-col items-start gap-8 pt-4">
+                  <button type="submit" className="bg-brand-navy text-white px-12 py-4 rounded-full text-xs font-bold uppercase tracking-[0.2em] hover:bg-brand-teal transition-all duration-500 hover:shadow-xl">Stay in Touch</button>
+                  <p className="text-[11px] text-brand-navy/40 uppercase tracking-[0.2em]">Only thoughtful updates we believe are worth sharing.</p>
+                  <p className="text-[10px] text-brand-navy/30 font-sans max-w-sm">By submitting this form, you agree to receive relevant updates and offers from Exciting Maldives. You may opt out at any time.</p>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
+      </div>
+      
+      {/* Divider */}
+      <div className="max-w-7xl mx-auto px-6 mt-32">
+        <div className="h-px bg-brand-navy/10 w-full"></div>
       </div>
     </section>
   );
 }
 
-export default function Home() {
+export default function Home({ settings }: { settings: any }) {
   const containerRef = useRef(null);
   const heroRef = useRef(null);
   const storyRef = useRef(null);
@@ -120,37 +182,28 @@ export default function Home() {
   const ctaBgY = useTransform(ctaScroll, [0, 1], ['-20%', '20%']);
   
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>({});
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-      const isPreview = new URLSearchParams(window.location.search).get('preview') === 'true';
-      
-      const [settingsData, resortsResult] = await Promise.all([
-        getSiteSettings(isPreview),
-        supabase
-          .from('resorts')
-          .select('*, resort_media(*)')
-          .eq('is_featured', true)
-          .limit(6)
-      ]);
+    const fetchResorts = async () => {
+      const resortsResult = await supabase
+        .from('resorts')
+        .select('*, resort_media(*)')
+        .eq('is_featured', true)
+        .limit(6);
 
       if (resortsResult.error) {
         console.error('Error fetching featured resorts:', resortsResult.error);
       }
-
-      setSettings(settingsData);
-      console.log('Site settings loaded:', settingsData);
       
-      if (resortsResult.error || !resortsResult.data || resortsResult.data.length === 0) {
-        const fallback = await supabase.from('resorts').select('*').limit(6);
-        if (fallback.data) setFeaturedResorts(fallback.data);
-      } else {
+      if (resortsResult.data && resortsResult.data.length > 0) {
         setFeaturedResorts(resortsResult.data);
+      } else {
+        const fallback = await supabase.from('resorts').select('*, resort_media(*)').limit(6);
+        if (fallback.data) setFeaturedResorts(fallback.data);
       }
     };
-    fetchData();
+    fetchResorts();
   }, []);
 
   // Static Data for B2B
@@ -286,52 +339,60 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
-            {featuredResorts.slice(0, 5).map((resort: any, i: number) => (
-              <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">
-                {/* Background Image */}
-                <img 
-                  src={resort.banner_url || (resort.resort_media && resort.resort_media.find((m: any) => m.is_featured)?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || resort.image_url || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800&sig=${resort.id}`} 
-                  alt={resort.name} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-                  referrerPolicy="no-referrer" 
-                  loading="lazy" 
-                  decoding="async" 
-                />
-                
-                {/* Filter/Blur Overlay */}
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-500"></div>
-                <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/40 to-transparent backdrop-blur-[2px]"></div>
-                
-                {/* Content */}
-                <div className="absolute inset-0 p-5 flex flex-col justify-end z-10">
-                  <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                    <h3 className="font-serif text-xl text-white mb-2 drop-shadow-md line-clamp-2 leading-tight">
-                      {resort.name}
-                    </h3>
-                    
-                    <div className="flex flex-col gap-1.5 text-xs text-white/90 mb-4 font-sans drop-shadow-md">
-                      {resort.atoll && (
-                        <span className="flex items-center gap-1.5">
-                          <MapPin size={12} className="text-white shrink-0" />
-                          <span className="truncate">{resort.atoll}</span>
-                        </span>
-                      )}
-                      {resort.category && (
-                        <span className="flex items-center gap-1.5">
-                          <Star size={12} className="text-white shrink-0" />
-                          <span className="truncate">{resort.category}</span>
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white opacity-80 group-hover:opacity-100 transition-opacity">
-                      <span>View More</span>
-                      <ArrowRight size={12} className="transform group-hover:translate-x-1 transition-transform duration-300" />
+            {featuredResorts.slice(0, 5).map((resort: any, i: number) => {
+              const featuredMedia = resort.resort_media?.find((m: any) => m.is_featured);
+              const resortImage = featuredMedia?.storage_path || resort.resort_media?.[0]?.storage_path || resort.image_url || null;
+              
+              return (
+                <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">
+                  {resortImage ? (
+                    <img 
+                      src={resortImage} 
+                      alt={resort.name} 
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                      referrerPolicy="no-referrer" 
+                      loading="lazy" 
+                      decoding="async" 
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-stone-200" />
+                  )}
+                  
+                  {/* Filter/Blur Overlay */}
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-500"></div>
+                  <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/40 to-transparent backdrop-blur-[2px]"></div>
+                  
+                  {/* Content */}
+                  <div className="absolute inset-0 p-5 flex flex-col justify-end z-10">
+                    <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                      <h3 className="font-serif text-xl text-white mb-2 drop-shadow-md line-clamp-2 leading-tight">
+                        {resort.name}
+                      </h3>
+                      
+                      <div className="flex flex-col gap-1.5 text-xs text-white/90 mb-4 font-sans drop-shadow-md">
+                        {resort.atoll && (
+                          <span className="flex items-center gap-1.5">
+                            <MapPin size={12} className="text-white shrink-0" />
+                            <span className="truncate">{resort.atoll}</span>
+                          </span>
+                        )}
+                        {resort.category && (
+                          <span className="flex items-center gap-1.5">
+                            <Star size={12} className="text-white shrink-0" />
+                            <span className="truncate">{resort.category}</span>
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white opacity-80 group-hover:opacity-100 transition-opacity">
+                        <span>View More</span>
+                        <ArrowRight size={12} className="transform group-hover:translate-x-1 transition-transform duration-300" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -655,7 +716,7 @@ export default function Home() {
       </section>
 
       {/* 11. NEWSLETTER */}
-      <Newsletter />
+      <Newsletter settings={settings} />
 
     </div>
   );

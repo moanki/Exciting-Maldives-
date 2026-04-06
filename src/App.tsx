@@ -26,21 +26,9 @@ import ChatWidget from './components/ChatWidget';
 import { Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-function AppContent({ user, role }: { user: User | null, role: string | null }) {
+function AppContent({ user, role, settings, loadingSettings }: { user: User | null, role: string | null, settings: any, loadingSettings: boolean }) {
   const location = useLocation();
   const isDashboard = location.pathname.startsWith('/admin');
-  const [settings, setSettings] = useState<any>({});
-  const [loadingSettings, setLoadingSettings] = useState(true);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      const isPreview = new URLSearchParams(location.search).get('preview') === 'true';
-      const settingsData = await getSiteSettings(isPreview);
-      setSettings(settingsData);
-      setLoadingSettings(false);
-    };
-    fetchSettings();
-  }, [location.pathname, location.search]);
 
   const isPageActive = (slug: string) => {
     return settings.builtin_pages_status?.[slug] !== false;
@@ -60,7 +48,7 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
       <main className="relative">
         <Suspense fallback={null}>
           <Routes>
-            {isPageActive('') && <Route path="/" element={<Home />} />}
+            {isPageActive('') && <Route path="/" element={<Home settings={settings} />} />}
             {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
             {isPageActive('resorts') && <Route path="/resorts/:id" element={<ResortDetail />} />}
             {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo />} />}
@@ -109,8 +97,18 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<any>({});
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
+    const fetchSettings = async () => {
+      const isPreview = new URLSearchParams(window.location.search).get('preview') === 'true';
+      const settingsData = await getSiteSettings(isPreview);
+      setSettings(settingsData);
+      setLoadingSettings(false);
+    };
+    fetchSettings();
+
     // Check for Demo Mode
     const demoMode = localStorage.getItem('demo_mode');
     if (demoMode) {
@@ -200,7 +198,8 @@ export default function App() {
 
   return (
     <Router>
-      <AppContent user={user} role={role} />
+      <AppContent user={user} role={role} settings={settings} loadingSettings={loadingSettings} />
     </Router>
   );
 }
+

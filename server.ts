@@ -188,6 +188,25 @@ async function startServer() {
     }
   });
 
+  app.post("/api/import-media", async (req, res) => {
+    const { url, resort_id } = req.body;
+    if (!url || !resort_id) return res.status(400).json({ error: "URL and Resort ID are required" });
+
+    try {
+      // Placeholder: In a real implementation, this would trigger a background job
+      // to process the URL based on its type (Google Drive, Dropbox, etc.)
+      console.log(`Importing media for resort ${resort_id} from ${url}`);
+      
+      // Simulate processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      res.json({ success: true, message: "Import started" });
+    } catch (error: any) {
+      console.error("Import error:", error);
+      res.status(500).json({ error: "Failed to start import" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

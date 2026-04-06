@@ -24,7 +24,7 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
     hero: {
       title: 'Curating the Maldives for the World’s Leading Travel Professionals',
       subtitle: 'Exclusive resort partnerships, seamless destination management, and real-time booking intelligence.',
-      banner_url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=85&w=1920',
+      banner_url: '',
       banner_type: 'image',
       partners_title: 'Top Properties'
     },
@@ -48,7 +48,7 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
     platform_excellence: {
       title: 'Why Travel Designers Choose Us',
       description: '',
-      image_url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8',
+      image_url: '',
       badge_text: 'Platform Excellence',
       images: [],
       features: [
@@ -61,14 +61,14 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
     our_story: {
       title: 'A Legacy of Luxury in the Maldives',
       content: 'Our role as a specialized B2B DMC is to be the extension of your team on the ground, ensuring every detail is executed with precision. We understand that your reputation relies on our flawless execution.',
-      image_url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8'
+      image_url: ''
     },
     ceo_message: {
       name: 'Elias Jancel',
       title: 'Founder & CEO',
       quote: '“Our mission is to connect the world’s leading travel designers with the extraordinary experiences of the Maldives.”',
       message: 'Founded on the principles of discretion and excellence, we have spent two decades building intimate relationships with the Maldives\' most secluded resorts.',
-      photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2'
+      photo_url: ''
     },
     global_markets: [
       { name: 'Europe', description: 'Supporting luxury agencies across the UK, DACH, and Southern Europe.', lat: '48.8566', lng: '2.3522', countries: 'UK, Germany, France, Italy' },
@@ -81,11 +81,7 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
     awards: {
       title: 'Prestigious Awards',
       summary: '',
-      items: [
-        { url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&q=80&w=400' },
-        { url: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&q=80&w=400' },
-        { url: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=400' }
-      ]
+      items: []
     },
     ctas: {
       partner_title: 'Join Our Global Network of Travel Professionals',
@@ -94,7 +90,7 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
       guide_btn: 'View All Insights',
       retreats_title: 'Featured Retreats',
       retreats_btn: 'View All Resorts',
-      bg_image_url: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21'
+      bg_image_url: ''
     },
     services: [
       { title: 'Luxury Resort Reservations', icon: 'Hotel', desc: 'Direct contracts and preferred rates with top-tier properties.' },
@@ -104,18 +100,8 @@ export async function getSiteSettings(isPreview: boolean = false, force: boolean
       { title: 'Experiences & Excursions', icon: 'Compass', desc: 'Curated diving, dining, and cultural immersions.' },
       { title: 'Event & Group Travel', icon: 'Calendar', desc: 'Specialized handling for weddings, corporate retreats, and MICE.' }
     ],
-    hero_partners: [
-      { url: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=300' },
-      { url: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=300' },
-      { url: 'https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=300' },
-      { url: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=300' }
-    ],
-    travel_guide: [
-      { title: 'Best Atolls for Diving', category: 'Destinations', img: 'https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?auto=format&fit=crop&q=80' },
-      { title: 'When to Visit the Maldives', category: 'Planning', img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80' },
-      { title: 'Seaplane vs. Speedboat', category: 'Transfers', img: 'https://images.unsplash.com/photo-1546026423-cc46426e97b7?auto=format&fit=crop&q=80' },
-      { title: 'Luxury Resorts Guide', category: 'Accommodation', img: 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80' }
-    ],
+    hero_partners: [],
+    travel_guide: [],
     navbar: [
       { label: 'Home', path: '/' },
       { label: 'Resorts', path: '/resorts' },

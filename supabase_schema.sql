@@ -43,12 +43,36 @@ create table if not exists public.resort_media (
   id uuid default gen_random_uuid() primary key,
   resort_id uuid references public.resorts on delete cascade,
   category text not null, -- hero, aerial, villa, dining, spa, activity, map
+  subcategory text,
+  source_type text,
+  source_url text,
+  import_batch_id uuid, -- references public.import_batches added below
+  original_filename text,
   sort_order integer default 0,
   alt_text text,
   is_featured boolean default false,
+  is_hero boolean default false,
   storage_path text not null,
+  width integer,
+  height integer,
+  status text check (status in ('pending', 'active', 'archived')) default 'active',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- 3.1.1 Import Batches
+create table if not exists public.import_batches (
+  id uuid default gen_random_uuid() primary key,
+  resort_id uuid references public.resorts on delete cascade,
+  source_type text not null, -- 'google_drive', 'dropbox', 'zip', 'local'
+  processed_count integer default 0,
+  duplicate_count integer default 0,
+  skipped_count integer default 0,
+  imported_count integer default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add foreign key to resort_media
+alter table public.resort_media add constraint fk_import_batch foreign key (import_batch_id) references public.import_batches(id);
 
 -- 3.2 Resort Documents
 create table if not exists public.resort_documents (
@@ -92,16 +116,20 @@ create table if not exists public.resources (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 7. Messages (Chat)
-create table if not exists public.messages (
+-- 8. Newsletter Submissions
+create table if not exists public.newsletter_submissions (
   id uuid default gen_random_uuid() primary key,
-  chat_id text not null,
-  text text not null,
-  sender_id uuid references auth.users on delete set null,
-  sender_name text not null,
+  full_name text not null,
+  agency_name text not null,
+  country text not null,
+  phone text not null,
+  email text not null,
+  primary_market text not null,
+  notes text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Enable RLS
 -- Enable RLS
 alter table public.profiles enable row level security;
 alter table public.agents enable row level security;
@@ -112,6 +140,15 @@ alter table public.booking_requests enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.resources enable row level security;
 alter table public.messages enable row level security;
+alter table public.newsletter_submissions enable row level security;
+alter table public.import_batches enable row level security;
+
+-- RLS Policies
+create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (auth.uid() in (select id from public.profiles));
+create policy "Public can insert newsletter submissions" on public.newsletter_submissions for insert with check (true);
+
+-- Import Batches: Admins can manage
+create policy "Admins can manage import batches" on public.import_batches for all using (auth.uid() in (select id from public.profiles));
 
 -- RLS Policies
 

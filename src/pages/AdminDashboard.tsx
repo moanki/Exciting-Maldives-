@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { ResortEditForm } from '../components/ResortEditForm';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const schemaSql = `-- Supabase Schema for Exciting Maldives
 
@@ -352,6 +354,7 @@ export default function AdminDashboard() {
                         <SubSidebarLink to="/admin/page-manager/story" label="Our Story" active={location.pathname === '/admin/page-manager/story'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/excellence" label="Excellence" active={location.pathname === '/admin/page-manager/excellence'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/markets" label="Global Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
+                        <SubSidebarLink to="/admin/page-manager/newsletter_markets" label="Newsletter Markets" active={location.pathname === '/admin/page-manager/newsletter_markets'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/services" label="Services" active={location.pathname === '/admin/page-manager/services'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
@@ -375,6 +378,7 @@ export default function AdminDashboard() {
             </AnimatePresence>
           </div>
 
+          <SidebarLink to="/admin/newsletter" icon={<Mail size={18} />} label="Newsletter" active={location.pathname.startsWith('/admin/newsletter')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
           <div className="pt-8 mt-auto border-t border-white/10">
@@ -437,6 +441,7 @@ export default function AdminDashboard() {
             <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
             <Route path="/page-manager" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            <Route path="/newsletter" element={<AdminNewsletter />} />
             <Route path="/password-manager" element={<AdminPasswordManager />} />
             <Route path="/resources" element={<AdminResources />} />
           </Routes>
@@ -527,6 +532,63 @@ function AdminPasswordManager() {
           </tbody>
         </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminNewsletter() {
+  const [submissions, setSubmissions] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      const { data } = await supabase.from('newsletter_submissions').select('*').order('created_at', { ascending: false });
+      if (data) setSubmissions(data);
+    };
+    fetchSubmissions();
+  }, []);
+
+  const downloadCSV = () => {
+    const headers = ['Full Name', 'Agency Name', 'Country', 'Phone', 'Email', 'Primary Market', 'Notes', 'Created At'];
+    const csvContent = [
+      headers.join(','),
+      ...submissions.map(s => [s.full_name, s.agency_name, s.country, s.phone, s.email, s.primary_market, s.notes, s.created_at].join(','))
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'newsletter_submissions.csv';
+    a.click();
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-10">
+        <h1 className="text-3xl font-serif text-brand-navy">Newsletter Submissions</h1>
+        <button onClick={downloadCSV} className="bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Download CSV</button>
+      </div>
+      <div className="bg-white rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-brand-paper border-b border-brand-navy/5">
+            <tr>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40">Name</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40">Agency</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40">Email</th>
+              <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-brand-navy/40">Market</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-brand-paper">
+            {submissions.map(s => (
+              <tr key={s.id}>
+                <td className="px-6 py-4 font-sans text-sm">{s.full_name}</td>
+                <td className="px-6 py-4 font-sans text-sm">{s.agency_name}</td>
+                <td className="px-6 py-4 font-sans text-sm">{s.email}</td>
+                <td className="px-6 py-4 font-sans text-sm">{s.primary_market}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1574,222 +1636,16 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
             >
               <div className="p-12 overflow-y-auto">
                 <h2 className="text-3xl font-serif text-brand-navy mb-8">{editingResort ? 'Edit Resort' : 'Add New Resort'}</h2>
-                <form onSubmit={handleSave} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TextInput label="Resort Name" value={formData.name} onChange={(v) => setFormData({...formData, name: v})} placeholder="e.g. Soneva Jani" />
-                    <TextInput label="Atoll" value={formData.atoll} onChange={(v) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <TextInput label="Resort URL" value={formData.resort_url} onChange={(v) => setFormData({...formData, resort_url: v})} placeholder="https://..." />
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-xs font-bold text-brand-navy uppercase tracking-widest">
-                        <input type="checkbox" checked={formData.crawl || false} onChange={(e) => setFormData({...formData, crawl: e.target.checked})} />
-                        Crawl Linked Pages
-                      </label>
-                      <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Beach Villa" />
-                    </div>
-                    <button 
-                      type="button" 
-                      disabled={isFetchingImages}
-                      onClick={async () => {
-                        setIsFetchingImages(true);
-                        showNotification('Fetching images...');
-                        try {
-                          const response = await fetch('/api/scrape-resort', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url: formData.resort_url, crawl: formData.crawl }),
-                          });
-                          const data = await response.json();
-                          if (data.images) {
-                            setScrapedImages(data.images);
-                            showNotification('Images fetched successfully');
-                          } else {
-                            showNotification('No images found');
-                          }
-                        } catch (error) {
-                          showNotification('Failed to fetch images');
-                        } finally {
-                          setIsFetchingImages(false);
-                        }
-                      }}
-                      className="text-[10px] font-bold text-brand-teal uppercase tracking-widest disabled:opacity-50"
-                    >
-                      {isFetchingImages ? 'Fetching...' : 'Fetch Images'}
-                    </button>
-                  </div>
-
-                  {scrapedImages.length > 0 && (
-                    <div className="space-y-4">
-                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Select Images</h4>
-                      <div className="grid grid-cols-4 gap-4">
-                        {scrapedImages.map((img, i) => (
-                          <div key={i} className="relative cursor-pointer group" onClick={async () => {
-                            showNotification('Uploading image...');
-                            const response = await fetch(img);
-                            const blob = await response.blob();
-                            const file = new File([blob], `image-${i}.jpg`, { type: blob.type });
-                            const url = await uploadResortFile(file, formData.name, formData.category);
-                            if (url) {
-                              setFormData({...formData, images: formData.images ? `${formData.images}, ${url}` : url});
-                              showNotification('Image uploaded successfully');
-                            } else {
-                              showNotification('Failed to upload image');
-                            }
-                          }}>
-                            <img src={img} alt="Scraped" className="w-full h-24 object-cover rounded-lg" />
-                            <div className="absolute inset-0 bg-brand-teal/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold">Add</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TextInput label="Location" value={formData.location} onChange={(v) => setFormData({...formData, location: v})} placeholder="e.g. Medhufaru Island" />
-                    <TextInput label="Category" value={formData.category} onChange={(v) => setFormData({...formData, category: v})} placeholder="e.g. Ultra-Luxury" />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TextInput label="Transfer Type" value={formData.transfer_type} onChange={(v) => setFormData({...formData, transfer_type: v})} placeholder="e.g. Seaplane" />
-                    <TextInput label="Meal Plans (comma separated)" value={formData.meal_plans} onChange={(v) => setFormData({...formData, meal_plans: v})} placeholder="e.g. Bed & Breakfast, Half Board" />
-                  </div>
-                  <div className="space-y-4">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Main Banner</label>
-                    <div className="flex gap-4 items-center">
-                      {formData.banner_url && (
-                        <img src={formData.banner_url} alt="Banner" className="w-24 h-16 object-cover rounded-lg border border-brand-navy/10" />
-                      )}
-                      <div className="flex-1">
-                        <TextInput value={formData.banner_url} onChange={(v) => setFormData({...formData, banner_url: v})} placeholder="https://..." />
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*';
-                          input.onchange = async (e: any) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              showNotification('Uploading banner...');
-                              const url = await uploadFile(file, 'resorts');
-                              if (url) {
-                                setFormData({...formData, banner_url: url});
-                                showNotification('Banner uploaded successfully');
-                              } else {
-                                showNotification('Failed to upload banner');
-                              }
-                            }
-                          };
-                          input.click();
-                        }}
-                        className="p-3 bg-brand-paper rounded-xl text-brand-teal hover:bg-brand-teal hover:text-white transition-all"
-                      >
-                        <Plus size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <TextInput label="Gallery Image URLs (comma separated)" value={formData.images} onChange={(v) => setFormData({...formData, images: v})} placeholder="https://..." />
-                  <TextInput label="Highlights (comma separated)" value={formData.highlights} onChange={(v) => setFormData({...formData, highlights: v})} placeholder="e.g. Overwater Villas, Spa" />
-                  <TextAreaInput label="Description" value={formData.description} onChange={(v) => setFormData({...formData, description: v})} placeholder="Brief overview of the resort..." />
-                  
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-xl font-serif text-brand-navy">Room Types</h3>
-                      <button 
-                        type="button"
-                        onClick={() => setFormData({...formData, room_types: [...formData.room_types, { name: '', max_guests: 2, size: '', photo_url: '' }]})}
-                        className="text-[10px] font-bold text-brand-teal uppercase tracking-widest flex items-center gap-2"
-                      >
-                        <Plus size={14} /> Add Room Type
-                      </button>
-                    </div>
-                    {formData.room_types.map((room, idx) => (
-                      <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4 relative group">
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            const newRooms = formData.room_types.filter((_, i) => i !== idx);
-                            setFormData({...formData, room_types: newRooms});
-                          }}
-                          className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <div className="grid grid-cols-2 gap-4">
-                          <TextInput label="Room Name" value={room.name} onChange={(v) => {
-                            const newRooms = [...formData.room_types];
-                            newRooms[idx].name = v;
-                            setFormData({...formData, room_types: newRooms});
-                          }} />
-                          <TextInput label="Size" value={room.size} onChange={(v) => {
-                            const newRooms = [...formData.room_types];
-                            newRooms[idx].size = v;
-                            setFormData({...formData, room_types: newRooms});
-                          }} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <TextInput label="Max Guests" type="number" value={room.max_guests} onChange={(v) => {
-                            const newRooms = [...formData.room_types];
-                            newRooms[idx].max_guests = parseInt(v);
-                            setFormData({...formData, room_types: newRooms});
-                          }} />
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Room Photo</label>
-                            <div className="flex gap-2">
-                              <TextInput value={room.photo_url} onChange={(v) => {
-                                const newRooms = [...formData.room_types];
-                                newRooms[idx].photo_url = v;
-                                setFormData({...formData, room_types: newRooms});
-                              }} />
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  const input = document.createElement('input');
-                                  input.type = 'file';
-                                  input.accept = 'image/*';
-                                  input.onchange = async (e: any) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const url = await uploadFile(file, 'rooms');
-                                      if (url) {
-                                        const newRooms = [...formData.room_types];
-                                        newRooms[idx].photo_url = url;
-                                        setFormData({...formData, room_types: newRooms});
-                                      }
-                                    }
-                                  };
-                                  input.click();
-                                }}
-                                className="p-2 bg-brand-paper rounded-lg text-brand-teal"
-                              >
-                                <Plus size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end gap-4 pt-6">
-                    <button 
-                      type="button"
-                      onClick={() => setIsAdding(false)}
-                      className="px-8 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 hover:text-brand-navy transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit"
-                      className="bg-brand-navy text-white px-10 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all shadow-xl shadow-brand-navy/20"
-                    >
-                      {editingResort ? 'Update Resort' : 'Add Resort'}
-                    </button>
-                  </div>
-                </form>
+                <ErrorBoundary>
+                  <ResortEditForm 
+                    formData={formData}
+                    setFormData={setFormData}
+                    editingResort={editingResort}
+                    handleSave={handleSave}
+                    setIsAdding={setIsAdding}
+                    showNotification={showNotification}
+                  />
+                </ErrorBoundary>
               </div>
             </motion.div>
           </div>
@@ -3655,6 +3511,46 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       </div>
                     </div>
                   ))}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'newsletter_markets' && (
+            <div className="space-y-8">
+              <section>
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Primary Markets</h3>
+                <div className="bg-brand-paper/30 p-6 rounded-3xl space-y-4">
+                  <p className="text-xs text-brand-navy/60 mb-4">Manage the primary markets available in the newsletter signup form.</p>
+                  {safeArray(settings.primary_markets).map((market: string, idx: number) => (
+                    <div key={idx} className="flex items-center gap-4">
+                      <input 
+                        type="text" 
+                        value={market} 
+                        className="flex-1 bg-white border border-brand-navy/10 rounded-xl px-4 py-3 text-sm outline-none"
+                        onChange={(e) => {
+                          const newMarkets = [...safeArray(settings.primary_markets)];
+                          newMarkets[idx] = e.target.value;
+                          saveSetting('primary_markets', newMarkets);
+                        }}
+                      />
+                      <button 
+                        onClick={() => {
+                          const newMarkets = safeArray(settings.primary_markets).filter((_: any, i: number) => i !== idx);
+                          saveSetting('primary_markets', newMarkets);
+                        }}
+                        className="p-2 text-brand-coral hover:bg-brand-coral/10 rounded-full"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => saveSetting('primary_markets', [...safeArray(settings.primary_markets), 'New Market'])}
+                    className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Add Market
+                  </button>
                 </div>
               </section>
             </div>
