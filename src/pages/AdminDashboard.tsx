@@ -6,6 +6,7 @@ import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const schemaSql = `-- Supabase Schema for Exciting Maldives
@@ -2958,6 +2959,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                 <div className="sticky top-8">
                   <div className="bg-brand-navy rounded-[32px] overflow-hidden h-[600px] relative shadow-2xl border border-brand-navy/10">
                     <Map
+                      mapLib={maplibregl}
                       initialViewState={{
                         longitude: 20,
                         latitude: 20,

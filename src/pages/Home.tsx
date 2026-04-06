@@ -1,11 +1,11 @@
 import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useAnimationFrame, wrap } from 'motion/react';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { getSiteSettings } from '../lib/settings';
 import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, ChevronLeft, Zap, Check, MessageSquare, Hotel, Calendar, Smile, Globe, Award, HeartHandshake, PhoneCall, UserCheck } from 'lucide-react';
-import Map, { Marker, Popup } from 'react-map-gl/maplibre';
-import 'maplibre-gl/dist/maplibre-gl.css';
+
+const GlobalMarketsMap = lazy(() => import('../components/GlobalMarketsMap'));
 
 const safeArray = (val: any) => {
   if (Array.isArray(val)) return val;
@@ -122,7 +122,6 @@ export default function Home() {
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [activeIndex, setActiveIndex] = useState(0);
-  const [activeMarket, setActiveMarket] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -409,77 +408,9 @@ export default function Home() {
           </div>
           
           <div className="w-full h-[400px] md:h-[600px] rounded-3xl overflow-hidden border border-white/10 relative luxury-shadow">
-            <Map
-              initialViewState={{
-                longitude: 20,
-                latitude: 20,
-                zoom: 1.5,
-                pitch: 0,
-                bearing: 0
-              }}
-              mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-              interactive={true}
-              dragPan={true}
-              scrollZoom={false}
-              attributionControl={false}
-            >
-              {(safeArray(settings.global_markets).length > 0 ? safeArray(settings.global_markets) : globalMarkets).map((market: any, i: number) => {
-                const lat = parseFloat(market.lat);
-                const lng = parseFloat(market.lng);
-                
-                if (isNaN(lat) || isNaN(lng)) return null;
-
-                return (
-                  <Marker
-                    key={`marker-${i}`}
-                    longitude={lng}
-                    latitude={lat}
-                    anchor="bottom"
-                    onClick={e => {
-                      e.originalEvent.stopPropagation();
-                      setActiveMarket(market);
-                    }}
-                  >
-                    <div className="relative group cursor-pointer">
-                      <div className="absolute -inset-4 bg-brand-teal/20 rounded-full blur-md animate-pulse"></div>
-                      <div className="relative bg-brand-teal text-white p-2 rounded-full shadow-lg border-2 border-white/20 group-hover:scale-110 transition-transform">
-                        <MapPin size={20} />
-                      </div>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-brand-navy/80 backdrop-blur-sm text-white px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                        {market.countries || market.name}
-                      </div>
-                    </div>
-                  </Marker>
-                );
-              })}
-
-              {activeMarket && !isNaN(parseFloat(activeMarket.lat)) && !isNaN(parseFloat(activeMarket.lng)) && (
-                <Popup
-                  longitude={parseFloat(activeMarket.lng)}
-                  latitude={parseFloat(activeMarket.lat)}
-                  anchor="top"
-                  onClose={() => setActiveMarket(null)}
-                  closeOnClick={false}
-                  className="global-market-popup"
-                  maxWidth="300px"
-                >
-                  <div className="p-4 bg-white rounded-xl text-brand-navy shadow-xl">
-                    <h3 className="font-serif text-xl mb-1 flex items-center gap-2">
-                      <Globe size={16} className="text-brand-teal" />
-                      {activeMarket.name}
-                    </h3>
-                    {activeMarket.countries && (
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-brand-teal mb-2">
-                        {activeMarket.countries}
-                      </p>
-                    )}
-                    <p className="text-sm text-brand-navy/70 leading-relaxed">
-                      {activeMarket.description || activeMarket.desc}
-                    </p>
-                  </div>
-                </Popup>
-              )}
-            </Map>
+            <Suspense fallback={<div className="w-full h-full bg-brand-navy/50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div></div>}>
+              <GlobalMarketsMap settings={settings} globalMarkets={globalMarkets} />
+            </Suspense>
             
             {/* Overlay gradient to blend map edges */}
             <div className="absolute inset-0 pointer-events-none rounded-3xl shadow-[inset_0_0_40px_rgba(10,25,47,0.8)]"></div>

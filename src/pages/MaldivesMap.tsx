@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { MapPin, Hotel } from 'lucide-react';
 import Map, { Marker, NavigationControl, MapRef, Popup } from 'react-map-gl/maplibre';
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { supabase } from '../supabase';
 import { Link } from 'react-router-dom';
@@ -70,6 +71,7 @@ export default function MaldivesMap() {
           {/* Map Visualization */}
           <div className="relative aspect-[3/4] bg-blue-50 rounded-[40px] overflow-hidden border border-blue-100 shadow-inner">
             <Map
+              mapLib={maplibregl}
               ref={mapRef}
               {...viewState}
               onMove={evt => setViewState(evt.viewState)}

@@ -30,12 +30,14 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
   const location = useLocation();
   const isDashboard = location.pathname.startsWith('/admin');
   const [settings, setSettings] = useState<any>({});
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
     const fetchSettings = async () => {
       const isPreview = new URLSearchParams(location.search).get('preview') === 'true';
       const settingsData = await getSiteSettings(isPreview);
       setSettings(settingsData);
+      setLoadingSettings(false);
     };
     fetchSettings();
   }, [location.pathname, location.search]);
@@ -43,6 +45,14 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
   const isPageActive = (slug: string) => {
     return settings.builtin_pages_status?.[slug] !== false;
   };
+
+  if (loadingSettings) {
+    return (
+      <div className="min-h-screen bg-[#f5f2ed] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans relative">
