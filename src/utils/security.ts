@@ -5,6 +5,9 @@
  */
 
 export const initializeSecurity = () => {
+  // Temporarily disabled for debugging
+  return;
+
   if (process.env.NODE_ENV === 'development') return;
 
   // Disable right-click context menu

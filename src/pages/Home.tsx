@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { getSiteSettings } from '../lib/settings';
 import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, ChevronLeft, Zap, Check, MessageSquare, Hotel, Calendar, Smile, Globe, Award, HeartHandshake, PhoneCall, UserCheck } from 'lucide-react';
+import Map, { Marker, Popup } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const safeArray = (val: any) => {
   if (Array.isArray(val)) return val;
@@ -82,14 +84,14 @@ const StackedPhotoCarousel = ({ images, onIndexChange }: { images: string[], onI
 
 function Newsletter() {
   return (
-    <section className="py-[120px] bg-brand-paper text-brand-navy relative overflow-hidden">
+    <section className="py-16 md:py-[120px] bg-brand-paper text-brand-navy relative overflow-hidden">
       <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
       <div className="max-w-3xl mx-auto px-6 text-center space-y-8 relative z-10">
         <h2 className="text-3xl md:text-5xl font-serif">Stay Updated With Maldives Travel Insights</h2>
         <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest">
           Get the latest on new resorts, seasonal offers, and destination updates.
         </p>
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <input type="email" placeholder="Enter your email" className="flex-1 bg-white border border-brand-navy/10 rounded-full px-6 py-4 text-sm focus:ring-2 focus:ring-brand-teal/50 outline-none" />
           <button className="bg-brand-navy text-white px-8 py-4 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all">Subscribe</button>
         </div>
@@ -120,6 +122,7 @@ export default function Home() {
   const [featuredResorts, setFeaturedResorts] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [activeIndex, setActiveIndex] = useState(0);
+  const [activeMarket, setActiveMarket] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -134,7 +137,12 @@ export default function Home() {
           .limit(6)
       ]);
 
+      if (resortsResult.error) {
+        console.error('Error fetching featured resorts:', resortsResult.error);
+      }
+
       setSettings(settingsData);
+      console.log('Site settings loaded:', settingsData);
       
       if (resortsResult.error || !resortsResult.data || resortsResult.data.length === 0) {
         const fallback = await supabase.from('resorts').select('*').limit(6);
@@ -164,11 +172,11 @@ export default function Home() {
   ];
 
   const globalMarkets = [
-    { name: 'Europe', desc: 'Supporting luxury agencies across the UK, DACH, and Southern Europe.' },
-    { name: 'Middle East', desc: 'Curated VIP and ultra-luxury services for GCC travelers.' },
-    { name: 'Asia', desc: 'Tailored solutions for high-net-worth clients from emerging Asian markets.' },
-    { name: 'North America', desc: 'Seamless long-haul travel planning and exclusive access.' },
-    { name: 'Australia', desc: 'Bespoke itineraries for discerning travelers from Oceania.' }
+    { name: 'Europe', desc: 'Supporting luxury agencies across the UK, DACH, and Southern Europe.', lat: '48.8566', lng: '2.3522', countries: 'UK, Germany, France, Italy' },
+    { name: 'Middle East', desc: 'Curated VIP and ultra-luxury services for GCC travelers.', lat: '25.2048', lng: '55.2708', countries: 'UAE, Saudi Arabia, Qatar' },
+    { name: 'Asia', desc: 'Tailored solutions for high-net-worth clients from emerging Asian markets.', lat: '1.3521', lng: '103.8198', countries: 'Singapore, China, Japan' },
+    { name: 'North America', desc: 'Seamless long-haul travel planning and exclusive access.', lat: '40.7128', lng: '-74.0060', countries: 'USA, Canada' },
+    { name: 'Australia', desc: 'Bespoke itineraries for discerning travelers from Oceania.', lat: '-33.8688', lng: '151.2093', countries: 'Australia, New Zealand' }
   ];
 
   const travelGuideArticles = [
@@ -195,10 +203,10 @@ export default function Home() {
       </button>
 
       {/* 1. HERO EXPERIENCE (Parallax) */}
-      <section ref={heroRef} style={{ position: 'relative' }} className="relative h-screen flex items-center overflow-hidden bg-brand-navy">
+      <section ref={heroRef} style={{ position: 'relative' }} className="relative h-[100dvh] min-h-[600px] flex items-center overflow-hidden bg-brand-navy">
         <motion.div style={{ y: heroBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
-            src={`${settings.hero?.banner_url}${settings.hero?.banner_url?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : ''}`} 
+            src={`${settings.hero?.banner_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=85&w=1920"}${settings.hero?.banner_url?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : (settings.hero?.banner_url ? '' : '')}`} 
             alt="Luxury Maldives" 
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
@@ -210,21 +218,21 @@ export default function Home() {
         {/* Dark gradient overlay stays stable */}
         <div className="absolute inset-0 z-10 bg-gradient-to-b from-brand-navy/40 via-brand-navy/60 to-brand-navy/90"></div>
         
-        <motion.div style={{ y: heroTextY }} className="relative z-20 px-6 md:px-12 max-w-7xl mx-auto w-full mt-20">
+        <motion.div style={{ y: heroTextY }} className="relative z-20 px-6 md:px-12 max-w-7xl mx-auto w-full mt-10 md:mt-20">
           <div className="max-w-4xl">
             <h1 
-              className={`${settings.hero?.title_size || 'text-4xl md:text-5xl lg:text-6xl'} ${settings.hero?.title_font || 'font-serif'} mb-6 leading-tight tracking-tight`}
+              className={`${settings.hero?.title_size || 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl'} ${settings.hero?.title_font || 'font-serif'} mb-6 leading-tight tracking-tight`}
               style={{ color: settings.hero?.title_color || '#ffffff' }}
             >
               {settings.hero?.title || 'Your Trusted Maldives Destination Management Partner'}
             </h1>
-            <p className="text-white/90 font-light text-lg md:text-xl max-w-2xl mb-10 leading-relaxed">
+            <p className="text-white/90 font-light text-base md:text-xl max-w-2xl mb-10 leading-relaxed">
               {settings.hero?.subtitle || 'Luxury resort access, curated experiences, and seamless travel solutions for global travel professionals.'}
             </p>
-            <div className="flex flex-wrap gap-6">
+            <div className="flex flex-wrap gap-4 md:gap-6">
               <Link to="/resorts">
                 <button 
-                  className="text-white px-10 py-5 text-xs uppercase tracking-[0.2em] font-sans rounded-full hover:bg-white hover:text-brand-navy transition-all"
+                  className="text-white px-8 md:px-10 py-4 md:py-5 text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold rounded-full hover:bg-white hover:text-brand-navy transition-all"
                   style={{ backgroundColor: settings.hero?.button_color || '#008080' }}
                 >
                   Explore Resorts
@@ -271,11 +279,11 @@ export default function Home() {
       </section>
 
       {/* 2. FEATURED RETREATS */}
-      <section className="py-[120px] bg-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      <section className="py-16 md:py-[120px] bg-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-16">
-            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">{settings.featured_retreats_title || 'Featured Retreats'}</h2>
-            <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest mt-4">Hand-picked luxury island experiences</p>
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="font-serif text-3xl md:text-5xl text-brand-navy">{settings.featured_retreats_title || 'Featured Retreats'}</h2>
+            <p className="text-brand-navy/60 font-sans text-xs md:text-sm uppercase tracking-widest mt-4">Hand-picked luxury island experiences</p>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
@@ -283,7 +291,7 @@ export default function Home() {
               <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">
                 {/* Background Image */}
                 <img 
-                  src={resort.banner_url || resort.images?.[0] || resort.image_url || "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=800"} 
+                  src={resort.banner_url || (resort.images && resort.images[0]) || resort.image_url || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800&sig=${resort.id}`} 
                   alt={resort.name} 
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                   referrerPolicy="no-referrer" 
@@ -330,12 +338,12 @@ export default function Home() {
       </section>
 
       {/* 3. CEO MESSAGE */}
-      <section className="py-[120px] bg-brand-paper overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      <section className="py-16 md:py-[120px] bg-brand-paper overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20 items-center">
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5]">
               <img 
-                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : (settings.ceo_message?.photo_url ? '' : '?auto=format&fit=crop&q=80&w=800')}`} 
                 alt="CEO" 
                 className="absolute inset-0 w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -343,18 +351,18 @@ export default function Home() {
                 decoding="async"
               />
             </div>
-            <div className="space-y-10">
+            <div className="space-y-6 md:space-y-10">
               <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">CEO's Message</span>
-              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+              <h2 className="font-serif text-3xl md:text-5xl text-brand-navy leading-tight">
                 {settings.ceo_message?.quote || "“Our mission is to connect the world’s leading travel designers with the extraordinary experiences of the Maldives.”"}
               </h2>
-              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
+              <div className="text-base md:text-lg text-gray-600 leading-relaxed font-light space-y-6">
                 <p>
                   {settings.ceo_message?.message || "Founded on the principles of discretion and excellence, we have spent two decades building intimate relationships with the Maldives' most secluded resorts."}
                 </p>
               </div>
               <div>
-                <p className="font-bold text-brand-navy text-xl">{settings.ceo_message?.name || 'Elias Jancel'}</p>
+                <p className="font-bold text-brand-navy text-lg md:text-xl">{settings.ceo_message?.name || 'Elias Jancel'}</p>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-teal mt-1">{settings.ceo_message?.title || 'Founder & CEO'}</p>
               </div>
             </div>
@@ -363,15 +371,15 @@ export default function Home() {
       </section>
 
       {/* 4. OUR STORY */}
-      <section ref={storyRef} className="py-[120px] bg-white overflow-hidden relative" id="story" style={{ position: 'relative', contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      <section ref={storyRef} className="py-16 md:py-[120px] bg-white overflow-hidden relative" id="story" style={{ position: 'relative', contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-            <div className="space-y-10 order-2 lg:order-1">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20 items-center">
+            <div className="space-y-6 md:space-y-10 order-2 lg:order-1">
               <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">Our Story</span>
-              <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+              <h2 className="font-serif text-3xl md:text-5xl text-brand-navy leading-tight">
                 {settings.our_story?.title || "A Legacy of Luxury in the Maldives"}
               </h2>
-              <div className="text-lg text-gray-600 leading-relaxed font-light space-y-6">
+              <div className="text-base md:text-lg text-gray-600 leading-relaxed font-light space-y-6">
                 <p>
                   {settings.our_story?.content || "Our role as a specialized B2B DMC is to be the extension of your team on the ground, ensuring every detail is executed with precision. We understand that your reputation relies on our flawless execution."}
                 </p>
@@ -380,7 +388,7 @@ export default function Home() {
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5] order-1 lg:order-2">
               <motion.img 
                 style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
-                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : (settings.our_story?.image_url ? '' : '?auto=format&fit=crop&q=80&w=800')}`} 
                 alt="Our Story" 
                 className="absolute inset-0 w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -393,54 +401,99 @@ export default function Home() {
       </section>
 
       {/* 5. GLOBAL MARKETS */}
-      <section className="py-[120px] bg-brand-navy text-white relative overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
-        {/* Subtle Map Background */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-        <div className="max-w-5xl mx-auto px-6 md:px-12 relative z-10">
-          <div className="text-center mb-20">
-            <h2 className="font-serif text-4xl md:text-5xl text-white">Global Markets</h2>
-            <p className="text-white/60 font-sans text-sm uppercase tracking-widest mt-4">Supporting travel designers and agencies across global markets.</p>
+      <section className="py-16 md:py-[120px] bg-brand-navy text-white relative overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="font-serif text-3xl md:text-5xl text-white">Global Markets</h2>
+            <p className="text-white/60 font-sans text-xs md:text-sm uppercase tracking-widest mt-4">Supporting travel designers and agencies across global markets.</p>
           </div>
-          <div className="flex flex-wrap justify-center gap-8">
-            {safeArray(settings.global_markets).length > 0 ? (
-              safeArray(settings.global_markets).map((market: any, i: number) => (
-                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
-                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
-                    <Globe size={80} strokeWidth={1} />
+          
+          <div className="w-full h-[400px] md:h-[600px] rounded-3xl overflow-hidden border border-white/10 relative luxury-shadow">
+            <Map
+              initialViewState={{
+                longitude: 20,
+                latitude: 20,
+                zoom: 1.5,
+                pitch: 0,
+                bearing: 0
+              }}
+              mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+              interactive={true}
+              dragPan={true}
+              scrollZoom={false}
+            >
+              {(safeArray(settings.global_markets).length > 0 ? safeArray(settings.global_markets) : globalMarkets).map((market: any, i: number) => {
+                const lat = parseFloat(market.lat);
+                const lng = parseFloat(market.lng);
+                
+                if (isNaN(lat) || isNaN(lng)) return null;
+
+                return (
+                  <Marker
+                    key={`marker-${i}`}
+                    longitude={lng}
+                    latitude={lat}
+                    anchor="bottom"
+                    onClick={e => {
+                      e.originalEvent.stopPropagation();
+                      setActiveMarket(market);
+                    }}
+                  >
+                    <div className="relative group cursor-pointer">
+                      <div className="absolute -inset-4 bg-brand-teal/20 rounded-full blur-md animate-pulse"></div>
+                      <div className="relative bg-brand-teal text-white p-2 rounded-full shadow-lg border-2 border-white/20 group-hover:scale-110 transition-transform">
+                        <MapPin size={20} />
+                      </div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-brand-navy/80 backdrop-blur-sm text-white px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                        {market.countries || market.name}
+                      </div>
+                    </div>
+                  </Marker>
+                );
+              })}
+
+              {activeMarket && !isNaN(parseFloat(activeMarket.lat)) && !isNaN(parseFloat(activeMarket.lng)) && (
+                <Popup
+                  longitude={parseFloat(activeMarket.lng)}
+                  latitude={parseFloat(activeMarket.lat)}
+                  anchor="top"
+                  onClose={() => setActiveMarket(null)}
+                  closeOnClick={false}
+                  className="global-market-popup"
+                  maxWidth="300px"
+                >
+                  <div className="p-4 bg-white rounded-xl text-brand-navy shadow-xl">
+                    <h3 className="font-serif text-xl mb-1 flex items-center gap-2">
+                      <Globe size={16} className="text-brand-teal" />
+                      {activeMarket.name}
+                    </h3>
+                    {activeMarket.countries && (
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-brand-teal mb-2">
+                        {activeMarket.countries}
+                      </p>
+                    )}
+                    <p className="text-sm text-brand-navy/70 leading-relaxed">
+                      {activeMarket.description || activeMarket.desc}
+                    </p>
                   </div>
-                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
-                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
-                    {market.name}
-                  </h3>
-                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.description}</p>
-                </div>
-              ))
-            ) : (
-              globalMarkets.map((market: any, i: number) => (
-                <div key={i} className="w-full md:w-[calc(50%-1rem)] group relative p-10 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300 hover:-translate-y-2 overflow-hidden backdrop-blur-sm">
-                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-300">
-                    <Globe size={80} strokeWidth={1} />
-                  </div>
-                  <h3 className="font-serif text-2xl text-white mb-4 relative z-10 flex items-center gap-3">
-                    <MapPin size={20} strokeWidth={1.5} className="text-brand-teal" />
-                    {market.name}
-                  </h3>
-                  <p className="text-white/70 font-light leading-relaxed text-sm relative z-10">{market.desc}</p>
-                </div>
-              ))
-            )}
+                </Popup>
+              )}
+            </Map>
+            
+            {/* Overlay gradient to blend map edges */}
+            <div className="absolute inset-0 pointer-events-none rounded-3xl shadow-[inset_0_0_40px_rgba(10,25,47,0.8)]"></div>
           </div>
         </div>
       </section>
 
       {/* 6. DMC SERVICES */}
-      <section className="py-[120px] bg-white relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+      <section className="py-16 md:py-[120px] bg-white relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-20">
-            <h2 className="font-serif text-4xl md:text-5xl text-brand-navy">DMC Services</h2>
-            <p className="text-brand-navy/60 font-sans text-sm uppercase tracking-widest mt-4">Comprehensive on-ground support for our partners</p>
+          <div className="text-center mb-12 md:mb-20">
+            <h2 className="font-serif text-3xl md:text-5xl text-brand-navy">DMC Services</h2>
+            <p className="text-brand-navy/60 font-sans text-xs md:text-sm uppercase tracking-widest mt-4">Comprehensive on-ground support for our partners</p>
           </div>
-          <div className="flex flex-wrap justify-center gap-8">
+          <div className="flex flex-wrap justify-center gap-4 md:gap-8">
             {safeArray(settings.services).length > 0 ? (
               safeArray(settings.services).map((service: any, i: number) => {
                 const Icon = service.icon === 'Hotel' ? Hotel :
@@ -454,11 +507,11 @@ export default function Home() {
                              service.icon === 'Compass' ? Globe :
                              service.icon === 'Map' ? MapPin : Zap;
                 return (
-                  <Link to={service.link || '#'} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
-                      <Icon size={32} strokeWidth={1.5} />
+                  <Link to={service.link || '#'} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-4 md:space-y-6 p-6 md:p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
+                      <Icon size={24} className="md:size-32" strokeWidth={1.5} />
                     </div>
-                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
+                    <h3 className="font-serif text-lg md:text-xl text-brand-navy">{service.title}</h3>
                   </Link>
                 );
               })
@@ -466,11 +519,11 @@ export default function Home() {
               dmcServices.map((service: any, i: number) => {
                 const Icon = service.icon;
                 return (
-                  <Link to={service.link} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-6 p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-16 h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
-                      <Icon size={32} strokeWidth={1.5} />
+                  <Link to={service.link} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-4 md:space-y-6 p-6 md:p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
+                      <Icon size={24} className="md:size-32" strokeWidth={1.5} />
                     </div>
-                    <h3 className="font-serif text-xl text-brand-navy">{service.title}</h3>
+                    <h3 className="font-serif text-lg md:text-xl text-brand-navy">{service.title}</h3>
                   </Link>
                 );
               })
@@ -480,18 +533,18 @@ export default function Home() {
       </section>
 
       {/* STRATEGIC SUGGESTION: MALDIVES EXPERTISE */}
-      <section className="py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
+      <section className="py-16 md:py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 text-center divide-x divide-white/10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center md:divide-x divide-white/10">
             {(safeArray(settings.expertise_stats).length > 0 ? safeArray(settings.expertise_stats) : [
               { value: '198+', label: 'Resorts' },
               { value: '20+', label: 'Years Experience' },
               { value: '24/7', label: 'Local Support' },
               { value: 'Global', label: 'Travel Partners' }
             ]).map((stat: any, i: number) => (
-              <div key={i} className="px-4">
-                <h4 className="text-4xl md:text-5xl font-serif text-brand-teal mb-2">{stat.value}</h4>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-bold">{stat.label}</p>
+              <div key={i} className="px-2 md:px-4">
+                <h4 className="text-3xl md:text-5xl font-serif text-brand-teal mb-2">{stat.value}</h4>
+                <p className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] text-white/70 font-bold">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -499,24 +552,24 @@ export default function Home() {
       </section>
 
       {/* 7. WHY TRAVEL DESIGNERS CHOOSE US & PLATFORM EXCELLENCE */}
-      <section className="py-[120px] bg-brand-paper relative overflow-hidden">
+      <section className="py-16 md:py-[120px] bg-brand-paper relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-16 items-start">
             
             {/* Left: Text Points */}
-            <div className="space-y-12 h-[400px] flex flex-col justify-center">
+            <div className="space-y-8 md:space-y-12 md:h-[400px] flex flex-col justify-center">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
               >
                 <span className="text-[10px] font-bold text-brand-teal uppercase tracking-[0.3em] mb-4 block">Our Value Proposition</span>
-                <h2 className="font-serif text-4xl md:text-5xl text-brand-navy leading-tight">
+                <h2 className="font-serif text-3xl md:text-5xl text-brand-navy leading-tight">
                   {settings.why_us_title || 'Why Travel Designers Choose Us'}
                 </h2>
               </motion.div>
 
-              <div className="space-y-8">
+              <div className="space-y-6 md:space-y-8">
                 {(safeArray(settings.why_us).length > 0 ? safeArray(settings.why_us) : whyUsPillars).map((pillar: any, i: number) => (
                   <motion.div 
                     key={i}
@@ -527,14 +580,14 @@ export default function Home() {
                       scale: i === activeIndex ? 1.05 : 1
                     }}
                     transition={{ duration: 0.5 }}
-                    className="flex gap-6"
+                    className="flex gap-4 md:gap-6"
                   >
-                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center shadow-sm transition-colors duration-500 ${i === activeIndex ? 'bg-brand-teal text-white' : 'bg-white text-brand-teal'}`}>
-                      <CheckCircle2 size={20} />
+                    <div className={`flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shadow-sm transition-colors duration-500 ${i === activeIndex ? 'bg-brand-teal text-white' : 'bg-white text-brand-teal'}`}>
+                      <CheckCircle2 size={18} className="md:size-20" />
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="font-serif text-xl text-brand-navy">{pillar.title}</h3>
-                      <p className="font-light leading-relaxed text-sm text-gray-600">
+                    <div className="space-y-1 md:space-y-2">
+                      <h3 className="font-serif text-lg md:text-xl text-brand-navy">{pillar.title}</h3>
+                      <p className="font-light leading-relaxed text-xs md:text-sm text-gray-600">
                         {pillar.description || pillar.desc}
                       </p>
                     </div>
@@ -544,10 +597,10 @@ export default function Home() {
             </div>
 
             {/* Right: Interactive Parallax Stack */}
-            <div className="relative h-[400px] w-full max-w-md mx-auto flex items-center justify-center perspective-1000">
+            <div className="relative h-[300px] md:h-[400px] w-full max-w-md mx-auto flex items-center justify-center perspective-1000">
               <StackedPhotoCarousel 
                 onIndexChange={setActiveIndex}
-                images={[
+                images={safeArray(settings.platform_excellence?.images).length > 0 ? safeArray(settings.platform_excellence.images) : [
                   (settings.platform_excellence?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8") + (settings.platform_excellence?.image_url?.includes('?') ? '&' : '?') + "auto=format&fit=crop&q=80&w=800",
                   "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800",
                   "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=800"
@@ -600,7 +653,7 @@ export default function Home() {
       <section ref={ctaRef} style={{ position: 'relative' }} className="relative py-[160px] overflow-hidden bg-brand-navy">
         <motion.div style={{ y: ctaBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
           <img 
-            src="https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=1920" 
+            src={settings.ctas?.bg_image_url || "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=1920"} 
             alt="Maldives Aerial" 
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"

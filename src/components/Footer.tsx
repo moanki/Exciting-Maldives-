@@ -4,19 +4,11 @@ import { useState, useEffect, memo } from 'react';
 import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin, X } from 'lucide-react';
 import { getSiteSettings } from '../lib/settings';
 
-const Footer = memo(function Footer() {
-  const [settings, setSettings] = useState<any>({});
-  const [searchParams] = useSearchParams();
+interface FooterProps {
+  settings: any;
+}
 
-  useEffect(() => {
-    const fetchSettings = async () => {
-      const isPreview = searchParams.get('preview') === 'true';
-      const settingsData = await getSiteSettings(isPreview);
-      setSettings(settingsData);
-    };
-    fetchSettings();
-  }, [searchParams]);
-
+const Footer = memo(function Footer({ settings }: FooterProps) {
   const safeArray = (val: any) => {
     if (Array.isArray(val)) return val;
     if (typeof val === 'string') {
@@ -60,17 +52,18 @@ const Footer = memo(function Footer() {
   const logos = settings.logos || {};
 
   return (
-    <footer className="bg-brand-navy text-white pt-32 pb-12 px-6 md:px-10">
+    <footer className="bg-brand-navy text-white pt-16 md:pt-32 pb-12 px-6 md:px-10">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 mb-24">
           {/* Brand & Contact */}
           <div className="space-y-10">
             <Link to="/" className="inline-block">
-              {logos.white ? (
-                <img src={logos.white} alt="Exciting Maldives" className="h-28 w-auto object-contain" referrerPolicy="no-referrer" />
-              ) : (
-                <span className="text-2xl font-serif tracking-tighter">Exciting Maldives</span>
-              )}
+              <img 
+                src={logos.white || logos.primary || 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=200'} 
+                alt="Exciting Maldives" 
+                className="h-28 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100 transition-all" 
+                referrerPolicy="no-referrer" 
+              />
             </Link>
             <div className="space-y-6 text-white/50 text-sm font-sans leading-relaxed">
               <p className="max-w-xs">

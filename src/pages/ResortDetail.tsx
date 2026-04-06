@@ -46,21 +46,21 @@ export default function ResortDetail() {
         <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-transparent to-transparent"></div>
         <button 
           onClick={() => navigate(-1)}
-          className="absolute top-8 left-8 bg-white/20 backdrop-blur-md text-white p-3 rounded-full hover:bg-white hover:text-brand-navy transition-all"
+          className="absolute top-6 left-6 md:top-8 md:left-8 bg-white/20 backdrop-blur-md text-white p-2 md:p-3 rounded-full hover:bg-white hover:text-brand-navy transition-all z-20"
         >
-          <ArrowLeft size={24} />
+          <ArrowLeft size={20} className="md:size-24" />
         </button>
         
-        <div className="absolute bottom-12 left-8 right-8 max-w-7xl mx-auto">
-          <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[10px] font-bold mb-4 font-sans">
-            <MapPin size={14} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
+        <div className="absolute bottom-8 md:bottom-12 left-6 right-6 md:left-8 md:right-8 max-w-7xl mx-auto">
+          <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[8px] md:text-[10px] font-bold mb-2 md:mb-4 font-sans">
+            <MapPin size={12} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
           </div>
-          <h1 className="text-5xl md:text-7xl font-serif text-white mb-4">{resort.name}</h1>
-          <div className="flex gap-4">
-            <span className="bg-brand-teal text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans">
+          <h1 className="text-3xl md:text-7xl font-serif text-white mb-4 leading-tight">{resort.name}</h1>
+          <div className="flex gap-3 md:gap-4">
+            <span className="bg-brand-teal text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
               {resort.category}
             </span>
-            <span className="bg-white/20 backdrop-blur text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest font-sans">
+            <span className="bg-white/20 backdrop-blur text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
               {resort.transfer_type}
             </span>
           </div>

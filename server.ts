@@ -127,8 +127,10 @@ async function startServer() {
           credentials,
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
+      } else if (process.env.GOOGLE_DRIVE_API_KEY) {
+        auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        return res.status(500).json({ error: "Service account credentials not found. Please provide service-account.json or GOOGLE_SERVICE_ACCOUNT_JSON env var." });
+        return res.status(500).json({ error: "Google Drive credentials not found. Please provide GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_DRIVE_API_KEY env var." });
       }
 
       const drive = google.drive({ version: 'v3', auth });

@@ -1,23 +1,24 @@
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
-import { Menu, X, User as UserIcon, LogOut } from 'lucide-react';
+import { Menu, X, User as UserIcon, LogOut, ChevronRight } from 'lucide-react';
 import { useState, useEffect, memo } from 'react';
 import { getSiteSettings } from '../lib/settings';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface NavbarProps {
   user: User | null;
   role: string | null;
+  settings: any;
 }
 
-const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
+const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [settings, setSettings] = useState<any>({});
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const isHome = window.location.pathname === '/';
+  const location = useLocation();
+  const isHome = location.pathname === '/';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -26,15 +27,6 @@ const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      const isPreview = searchParams.get('preview') === 'true';
-      const settingsData = await getSiteSettings(isPreview);
-      setSettings(settingsData);
-    };
-    fetchSettings();
-  }, [searchParams]);
 
   const handleLogout = async () => {
     localStorage.removeItem('demo_mode');
@@ -62,10 +54,12 @@ const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
     { label: 'About', path: '/#about' }
   ];
 
-  const logo = settings.logos?.primary;
+  const logo = settings.logos?.primary || 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=200';
+  const whiteLogo = settings.logos?.white || logo;
   const isTransparent = isHome && !scrolled;
-  const textColorClass = isTransparent ? 'text-white' : 'text-brand-navy';
-  const textHoverClass = isTransparent ? 'hover:text-white/80' : 'hover:text-brand-teal';
+  const activeLogo = isTransparent ? whiteLogo : logo;
+  const textColorClass = scrolled ? 'text-brand-navy' : (isTransparent ? 'text-white' : 'text-brand-navy');
+  const textHoverClass = scrolled ? 'hover:text-brand-teal' : (isTransparent ? 'hover:text-white/80' : 'hover:text-brand-teal');
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${!isTransparent ? 'bg-white/80 backdrop-blur-xl border-b border-brand-navy/5 py-0' : 'bg-transparent py-4'}`}>
@@ -73,17 +67,14 @@ const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
         <div className="flex justify-between h-24">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-3 group">
-              {logo ? (
-                <img 
-                  src={logo} 
-                  alt="Exciting Maldives" 
-                  className={`h-20 w-auto object-contain transition-all duration-700 ${logoLoaded ? 'opacity-100' : 'opacity-0'} ${isTransparent ? 'brightness-0 invert' : ''}`} 
-                  onLoad={() => setLogoLoaded(true)}
-                  referrerPolicy="no-referrer" 
-                />
-              ) : (
-                <span className={`text-xl font-serif tracking-tighter ${textColorClass}`}>Exciting Maldives</span>
-              )}
+              <img 
+                src={activeLogo} 
+                alt="Exciting Maldives" 
+                className={`h-20 w-auto object-contain transition-all duration-700 ${logoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'} ${isTransparent && !settings.logos?.white ? 'brightness-0 invert' : ''}`} 
+                onLoad={() => setLogoLoaded(true)}
+                onError={() => setLogoLoaded(true)}
+                referrerPolicy="no-referrer" 
+              />
             </Link>
           </div>
 
@@ -144,32 +135,87 @@ const Navbar = memo(function Navbar({ user, role }: NavbarProps) {
       </div>
 
       {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden bg-white border-b border-gray-200">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            {navItems.map((item: any, idx: number) => (
-              <Link 
-                key={idx} 
-                to={item.path} 
-                className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-brand-teal"
-              >
-                {item.label}
-              </Link>
-            ))}
-            {user ? (
-              <>
-                {['super_admin', 'sales', 'content_manager'].includes(role || '') && <Link to="/admin" className="block px-3 py-2 text-base font-medium text-brand-teal">Admin</Link>}
-                <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700">Logout</button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-brand-teal">Admin Login</Link>
-                <a href="https://b2b.excitingmv.com/" target="_blank" rel="noopener noreferrer" className="block px-3 py-2 text-base font-medium text-brand-teal">Partner Login</a>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="md:hidden bg-white border-b border-brand-navy/5 overflow-hidden"
+          >
+            <div className="px-6 py-8 space-y-6">
+              <div className="space-y-4">
+                {navItems.map((item: any, idx: number) => (
+                  <Link 
+                    key={idx} 
+                    to={item.path} 
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-between group"
+                  >
+                    <span className="text-lg font-serif text-brand-navy group-hover:text-brand-teal transition-colors">
+                      {item.label}
+                    </span>
+                    <ChevronRight size={16} className="text-brand-navy/20 group-hover:text-brand-teal transition-colors" />
+                  </Link>
+                ))}
+              </div>
+
+              <div className="pt-6 border-t border-brand-navy/5 space-y-4">
+                {user ? (
+                  <div className="space-y-4">
+                    {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
+                      <Link 
+                        to="/admin" 
+                        onClick={() => setIsOpen(false)}
+                        className="block w-full py-4 text-center rounded-2xl bg-brand-teal/10 text-brand-teal font-bold uppercase tracking-widest text-[10px]"
+                      >
+                        Admin Dashboard
+                      </Link>
+                    )}
+                    <button 
+                      onClick={() => {
+                        handleLogout();
+                        setIsOpen(false);
+                      }} 
+                      className="block w-full py-4 text-center rounded-2xl bg-brand-navy/5 text-brand-navy/60 font-bold uppercase tracking-widest text-[10px]"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Link 
+                      to="/become-partner"
+                      onClick={() => setIsOpen(false)}
+                      className="block w-full py-4 text-center rounded-2xl bg-brand-navy text-white font-bold uppercase tracking-widest text-[10px] shadow-xl shadow-brand-navy/10"
+                    >
+                      Partner With Us
+                    </Link>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Link 
+                        to="/login" 
+                        onClick={() => setIsOpen(false)}
+                        className="py-3 text-center rounded-xl border border-brand-navy/10 text-brand-navy/60 font-bold uppercase tracking-widest text-[8px]"
+                      >
+                        Admin Login
+                      </Link>
+                      <a 
+                        href="https://b2b.excitingmv.com/" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="py-3 text-center rounded-xl border border-brand-navy/10 text-brand-teal font-bold uppercase tracking-widest text-[8px]"
+                      >
+                        Partner Login
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 });

@@ -33,11 +33,12 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const settingsData = await getSiteSettings();
+      const isPreview = new URLSearchParams(location.search).get('preview') === 'true';
+      const settingsData = await getSiteSettings(isPreview);
       setSettings(settingsData);
     };
     fetchSettings();
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const isPageActive = (slug: string) => {
     return settings.builtin_pages_status?.[slug] !== false;
@@ -45,7 +46,7 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans relative">
-      <Navbar user={user} role={role} />
+      <Navbar user={user} role={role} settings={settings} />
       <main className="relative">
         <Suspense fallback={null}>
           <Routes>
@@ -72,7 +73,7 @@ function AppContent({ user, role }: { user: User | null, role: string | null }) 
           </Routes>
         </Suspense>
       </main>
-      {!isDashboard && <Footer />}
+      {!isDashboard && <Footer settings={settings} />}
       {!isDashboard && <ChatWidget />}
 
       {/* WhatsApp Floating Button */}

@@ -1,9 +1,186 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { supabase } from '../supabase';
+import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
 import { motion, AnimatePresence } from 'motion/react';
+import Map, { Marker, Popup } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+const schemaSql = `-- Supabase Schema for Exciting Maldives
+
+-- 1. Profiles (Admins)
+create table if not exists public.profiles (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique not null,
+  role text check (role in ('admin', 'superadmin')) default 'admin',
+  full_name text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. Agents (Partners)
+create table if not exists public.agents (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique not null,
+  full_name text not null,
+  company_name text not null,
+  country text not null,
+  website text,
+  phone text,
+  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2.5 Partner Requests (Public Form Submissions)
+create table if not exists public.partner_requests (
+  id uuid default gen_random_uuid() primary key,
+  email text not null,
+  full_name text not null,
+  company_name text not null,
+  country text not null,
+  website text,
+  phone text,
+  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3. Resorts
+create table if not exists public.resorts (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  atoll text not null,
+  location text,
+  category text not null,
+  transfer_type text not null,
+  description text,
+  images text[],
+  banner_url text,
+  resort_url text,
+  highlights text[],
+  meal_plans text[],
+  is_featured boolean default false,
+  room_types jsonb[],
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add missing columns if table already exists
+do $$ 
+begin 
+  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='location') then
+    alter table public.resorts add column location text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='banner_url') then
+    alter table public.resorts add column banner_url text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='resort_url') then
+    alter table public.resorts add column resort_url text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='is_featured') then
+    alter table public.resorts add column is_featured boolean default false;
+  end if;
+end $$;
+
+-- 4. Booking Requests
+create table if not exists public.booking_requests (
+  id uuid default gen_random_uuid() primary key,
+  agent_id uuid references auth.users on delete set null,
+  resort_id uuid references public.resorts on delete set null,
+  resort_name text not null,
+  check_in date not null,
+  check_out date not null,
+  guests integer not null,
+  room_type text not null,
+  notes text,
+  status text check (status in ('new', 'processing', 'confirmed', 'cancelled')) default 'new',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 5. Site Settings
+create table if not exists public.site_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6. Resources
+create table if not exists public.resources (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  category text not null,
+  type text not null,
+  size text,
+  file_url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6.5 Protected Resources
+create table if not exists public.protected_resources (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  file_url text not null,
+  passwords text[] not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 7. Messages
+create table if not exists public.messages (
+  id uuid default gen_random_uuid() primary key,
+  chat_id text not null,
+  text text not null,
+  sender_id uuid references auth.users on delete set null,
+  sender_name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 8. Storage Buckets
+insert into storage.buckets (id, name, public) values 
+  ('site-assets', 'site-assets', true),
+  ('resort-images', 'resort-images', true),
+  ('documents', 'documents', true)
+on conflict do nothing;
+
+create policy "Public Access site-assets" on storage.objects for select using (bucket_id = 'site-assets');
+create policy "Admin Insert site-assets" on storage.objects for insert with check (bucket_id = 'site-assets');
+create policy "Admin Update site-assets" on storage.objects for update using (bucket_id = 'site-assets');
+create policy "Admin Delete site-assets" on storage.objects for delete using (bucket_id = 'site-assets');
+
+create policy "Public Access resort-images" on storage.objects for select using (bucket_id = 'resort-images');
+create policy "Admin Insert resort-images" on storage.objects for insert with check (bucket_id = 'resort-images');
+create policy "Admin Update resort-images" on storage.objects for update using (bucket_id = 'resort-images');
+create policy "Admin Delete resort-images" on storage.objects for delete using (bucket_id = 'resort-images');
+
+create policy "Public Access documents" on storage.objects for select using (bucket_id = 'documents');
+create policy "Admin Insert documents" on storage.objects for insert with check (bucket_id = 'documents');
+create policy "Admin Update documents" on storage.objects for update using (bucket_id = 'documents');
+create policy "Admin Delete documents" on storage.objects for delete using (bucket_id = 'documents');
+
+-- Enable RLS
+alter table public.profiles enable row level security;
+alter table public.agents enable row level security;
+alter table public.partner_requests enable row level security;
+alter table public.resorts enable row level security;
+alter table public.booking_requests enable row level security;
+alter table public.site_settings enable row level security;
+alter table public.resources enable row level security;
+alter table public.messages enable row level security;
+
+-- RLS Policies (Simplified for setup)
+create policy "Public read site_settings" on public.site_settings for select using (true);
+create policy "Admin manage site_settings" on public.site_settings for all using (true);
+create policy "Public read resorts" on public.resorts for select using (true);
+create policy "Admin manage resorts" on public.resorts for all using (true);
+create policy "Public insert partner_requests" on public.partner_requests for insert with check (true);
+create policy "Admin manage partner_requests" on public.partner_requests for all using (true);
+create policy "Public insert agents" on public.agents for insert with check (true);
+create policy "Admin manage agents" on public.agents for all using (true);
+create policy "Agents read own record" on public.agents for select using (auth.uid() = id);
+create policy "Public read profiles" on public.profiles for select using (true);
+
+create policy "Public manage messages" on public.messages for all using (true);
+
+-- Enable Realtime for messages
+alter publication supabase_realtime add table messages;`;
 
 export async function uploadFile(file: File, path: string, bucket: string = 'site-assets', setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void) {
   if (setUploadProgress) setUploadProgress(0);
@@ -173,12 +350,13 @@ export default function AdminDashboard() {
                         <SubSidebarLink to="/admin/page-manager/ceo" label="CEO Message" active={location.pathname === '/admin/page-manager/ceo'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/story" label="Our Story" active={location.pathname === '/admin/page-manager/story'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/excellence" label="Excellence" active={location.pathname === '/admin/page-manager/excellence'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/markets" label="Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
+                        <SubSidebarLink to="/admin/page-manager/markets" label="Global Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/services" label="Services" active={location.pathname === '/admin/page-manager/services'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/ctas" label="CTAs" active={location.pathname === '/admin/page-manager/ctas'} onClick={() => setIsMobileMenuOpen(false)} />
+                        <SubSidebarLink to="/admin/page-manager/system" label="System & DB" active={location.pathname === '/admin/page-manager/system'} onClick={() => setIsMobileMenuOpen(false)} />
                       </div>
                     </div>
 
@@ -652,159 +830,6 @@ function AdminOverview() {
     newRequests: 0,
     activeChats: 0
   });
-
-  const schemaSql = `-- Supabase Schema for Exciting Maldives
-
--- 1. Profiles (Admins)
-create table if not exists public.profiles (
-  id uuid references auth.users on delete cascade primary key,
-  email text unique not null,
-  role text check (role in ('admin', 'superadmin')) default 'admin',
-  full_name text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 2. Agents (Partners)
-create table if not exists public.agents (
-  id uuid references auth.users on delete cascade primary key,
-  email text unique not null,
-  full_name text not null,
-  company_name text not null,
-  country text not null,
-  website text,
-  phone text,
-  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 2.5 Partner Requests (Public Form Submissions)
-create table if not exists public.partner_requests (
-  id uuid default gen_random_uuid() primary key,
-  email text not null,
-  full_name text not null,
-  company_name text not null,
-  country text not null,
-  website text,
-  phone text,
-  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 3. Resorts
-create table if not exists public.resorts (
-  id uuid default gen_random_uuid() primary key,
-  name text not null,
-  atoll text not null,
-  category text not null,
-  transfer_type text not null,
-  description text,
-  images text[],
-  highlights text[],
-  meal_plans text[],
-  room_types jsonb[],
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 4. Booking Requests
-create table if not exists public.booking_requests (
-  id uuid default gen_random_uuid() primary key,
-  agent_id uuid references auth.users on delete set null,
-  resort_id uuid references public.resorts on delete set null,
-  resort_name text not null,
-  check_in date not null,
-  check_out date not null,
-  guests integer not null,
-  room_type text not null,
-  notes text,
-  status text check (status in ('new', 'processing', 'confirmed', 'cancelled')) default 'new',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 5. Site Settings
-create table if not exists public.site_settings (
-  key text primary key,
-  value jsonb not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 6. Resources
-create table if not exists public.resources (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  category text not null,
-  type text not null,
-  size text,
-  file_url text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 6.5 Protected Resources
-create table if not exists public.protected_resources (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  file_url text not null,
-  passwords text[] not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 7. Messages
-create table if not exists public.messages (
-  id uuid default gen_random_uuid() primary key,
-  chat_id text not null,
-  text text not null,
-  sender_id uuid references auth.users on delete set null,
-  sender_name text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 8. Storage Buckets
-insert into storage.buckets (id, name, public) values 
-  ('site-assets', 'site-assets', true),
-  ('resort-images', 'resort-images', true),
-  ('documents', 'documents', true)
-on conflict do nothing;
-
-create policy "Public Access site-assets" on storage.objects for select using (bucket_id = 'site-assets');
-create policy "Admin Insert site-assets" on storage.objects for insert with check (bucket_id = 'site-assets');
-create policy "Admin Update site-assets" on storage.objects for update using (bucket_id = 'site-assets');
-create policy "Admin Delete site-assets" on storage.objects for delete using (bucket_id = 'site-assets');
-
-create policy "Public Access resort-images" on storage.objects for select using (bucket_id = 'resort-images');
-create policy "Admin Insert resort-images" on storage.objects for insert with check (bucket_id = 'resort-images');
-create policy "Admin Update resort-images" on storage.objects for update using (bucket_id = 'resort-images');
-create policy "Admin Delete resort-images" on storage.objects for delete using (bucket_id = 'resort-images');
-
-create policy "Public Access documents" on storage.objects for select using (bucket_id = 'documents');
-create policy "Admin Insert documents" on storage.objects for insert with check (bucket_id = 'documents');
-create policy "Admin Update documents" on storage.objects for update using (bucket_id = 'documents');
-create policy "Admin Delete documents" on storage.objects for delete using (bucket_id = 'documents');
-
--- Enable RLS
-alter table public.profiles enable row level security;
-alter table public.agents enable row level security;
-alter table public.partner_requests enable row level security;
-alter table public.resorts enable row level security;
-alter table public.booking_requests enable row level security;
-alter table public.site_settings enable row level security;
-alter table public.resources enable row level security;
-alter table public.messages enable row level security;
-
--- RLS Policies (Simplified for setup)
-create policy "Public read site_settings" on public.site_settings for select using (true);
-create policy "Admin manage site_settings" on public.site_settings for all using (true);
-create policy "Public read resorts" on public.resorts for select using (true);
-create policy "Admin manage resorts" on public.resorts for all using (true);
-create policy "Public insert partner_requests" on public.partner_requests for insert with check (true);
-create policy "Admin manage partner_requests" on public.partner_requests for all using (true);
-create policy "Public insert agents" on public.agents for insert with check (true);
-create policy "Admin manage agents" on public.agents for all using (true);
-create policy "Agents read own record" on public.agents for select using (auth.uid() = id);
-create policy "Public read profiles" on public.profiles for select using (true);
-
-create policy "Public manage messages" on public.messages for all using (true);
-
--- Enable Realtime for messages
-alter publication supabase_realtime add table messages;`;
 
   useEffect(() => {
     const testConnection = async () => {
@@ -2088,12 +2113,17 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
     }
   }, [tab]);
   const [settings, setSettings] = useState<any>({});
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [resorts, setResorts] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [activeMarket, setActiveMarket] = useState<any | null>(null);
 
   const safeArray = (val: any) => {
     if (Array.isArray(val)) return val;
@@ -2113,204 +2143,18 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
 
   const fetchSettings = async () => {
     try {
-      console.log('Fetching site settings...');
-      if (!supabase) {
-        console.error('Supabase client is not initialized!');
-        return;
-      }
-      const { data, error } = await supabase.from('site_settings').select('*');
-      
-      if (error) {
-        console.error('Supabase error fetching settings:', error);
-        // If table doesn't exist (PGRST205), we just return defaults silently
-        if (error.code !== 'PGRST205') {
-          console.error('Error fetching settings:', error);
-        }
-        setSettings({
-          navbar: [{ label: 'Resorts', path: '/resorts' }, { label: 'Map', path: '/map' }, { label: 'Info', path: '/tourist-info' }],
-          hero: { title: 'The Art of Maldivian Luxury', subtitle: 'Bespoke Destination Management for Travel Professionals', banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080', banner_type: 'image' },
-          introduction: { title: 'Bespoke Destination Management', summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.' },
-          ceo_message: { name: 'CEO Name', message: '', photo_url: '' },
-          our_story: { title: 'Our Story', content: '' },
-          awards: { title: 'Prestigious Awards', summary: '', items: [] },
-          ctas: { partner_title: 'Join Our Global Network of Travel Professionals', partner_btn: 'Become a Travel Partner', guide_title: 'The Maldives Travel Guide', guide_btn: 'View All Insights', retreats_title: 'Featured Retreats', retreats_btn: 'View All Resorts' },
-          whatsapp: { enabled: false, number: '' },
-          why_us: [
-            { title: 'Authentic Connections', description: 'We focus on fostering genuine relationships with our B2B partners by understanding their needs and providing personalized solutions.' },
-            { title: 'Curated Luxury', description: 'Our strategy centers on curating unique luxury experiences that showcase the beauty and culture of the Maldives.' },
-            { title: 'Streamlined Collaboration', description: 'We aim to enhance collaboration that simplify the booking process and improve communication, ensuring seamless service delivery.' },
-            { title: 'Tailored Support', description: 'We offer dedicated support to our partners, providing them with the insights and resources needed to effectively promote our offerings.' }
-          ],
-          footer: { contact: { email: 'info@excitingmaldives.com' }, social: {}, important_links: [], legal_links: [] },
-          custom_pages: []
-        });
-        setLoading(false);
-        return;
-      }
-      console.log('Settings fetched successfully:', data);
-      if (data) {
-        // Load published settings first
-        const publishedSettings = data.filter((s: any) => s.key.endsWith(':published'));
-        const settingsMap = publishedSettings.reduce((acc: any, curr: any) => {
-          const key = curr.key.replace(':published', '');
-          let value = curr.value;
-          if (typeof value === 'string') {
-            try {
-              const parsed = JSON.parse(value);
-              if (parsed !== null && typeof parsed === 'object') {
-                value = parsed;
-              }
-            } catch (e) {}
-          }
-          acc[key] = value;
-          return acc;
-        }, {});
-
-        // Overlay draft settings
-        const draftSettings = data.filter((s: any) => s.key.endsWith(':draft'));
-        draftSettings.forEach((s: any) => {
-          const key = s.key.replace(':draft', '');
-          let value = s.value;
-          if (typeof value === 'string') {
-            try {
-              const parsed = JSON.parse(value);
-              if (parsed !== null && typeof parsed === 'object') {
-                value = parsed;
-              }
-            } catch (e) {}
-          }
-          settingsMap[key] = value;
-        });
-        
-        // Apply defaults for missing critical sections to ensure UI is populated
-        const finalSettings = {
-          navbar: [
-            { label: 'Home', path: '/' },
-            { label: 'Resorts', path: '/resorts' },
-            { label: 'Experiences', path: '/experiences' },
-            { label: 'Platform', path: '/platform' },
-            { label: 'About', path: '/about' }
-          ],
-          logos: {
-            primary: '',
-            white: '',
-            black: ''
-          },
-          hero: {
-            title: 'The Art of Maldivian Luxury',
-            subtitle: 'Bespoke Destination Management for Travel Professionals',
-            banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
-            banner_type: 'image',
-            partners_title: 'Top Properties'
-          },
-          expertise_stats: [
-            { value: '198+', label: 'Resorts' },
-            { value: '20+', label: 'Years Experience' },
-            { value: '24/7', label: 'Local Support' },
-            { value: 'Global', label: 'Travel Partners' }
-          ],
-          introduction: {
-            title: 'Bespoke Destination Management',
-            summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships. We offer tailored, high-end travel solutions that highlight the beauty and culture of the Maldives, ensuring our partners can deliver unforgettable and seamless experiences to their clients.'
-          },
-          ceo_message: {
-            name: 'CEO Name',
-            message: 'Welcome to Exciting Maldives. We are dedicated to providing the best Maldivian experiences.',
-            photo_url: ''
-          },
-          our_story: {
-            title: 'Our Story',
-            content: 'Exciting Maldives began with a vision to showcase the true beauty of our islands...'
-          },
-          awards: {
-            title: 'Prestigious Awards',
-            summary: 'Recognized for excellence in luxury travel and destination management.',
-            items: []
-          },
-          ctas: {
-            partner_title: 'Join Our Global Network of Travel Professionals',
-            partner_btn: 'Become a Travel Partner',
-            guide_title: 'The Maldives Travel Guide',
-            guide_btn: 'View All Insights',
-            retreats_title: 'Featured Retreats',
-            retreats_btn: 'View All Resorts'
-          },
-          global_markets: [
-            { name: "Europe", description: "Our primary market, with strong partnerships across the UK, Germany, France, and Italy." },
-            { name: "Middle East", description: "Catering to high-net-worth individuals seeking ultimate privacy and luxury." },
-            { name: "Asia Pacific", description: "Growing presence in key Asian markets, providing tailored cultural experiences." },
-            { name: "Americas", description: "Expanding our reach to travel designers in North and South America." },
-            { name: "Emerging Markets", description: "Continuously exploring new opportunities to connect with global travel professionals." }
-          ],
-          services: [
-            { title: "B2B Resort Bookings", icon: "Hotel", link: "/resorts" },
-            { title: "Seaplane & Transfers", icon: "Plane", link: "/transfers" },
-            { title: "VIP Meet & Greet", icon: "UserCheck", link: "/vip" },
-            { title: "Curated Experiences", icon: "Calendar", link: "/experiences" },
-            { title: "24/7 Concierge", icon: "Smile", link: "/concierge" },
-            { title: "Fast Track Services", icon: "Zap", link: "/fast-track" }
-          ],
-          whatsapp: {
-            enabled: false,
-            number: ''
-          },
-          why_us: [
-            { title: 'Local Expertise', description: 'Deeply rooted in the Maldives with unparalleled local knowledge.' },
-            { title: 'Bespoke Service', description: 'Tailored experiences designed for the most discerning travelers.' },
-            { title: 'B2B Focus', description: 'Dedicated support for our travel industry partners.' }
-          ],
-          footer: {
-            contact: { email: 'info@excitingmaldives.com', phone: '+960 123 4567', address: 'Male, Maldives' },
-            social: { instagram: '', linkedin: '', facebook: '', twitter: '' },
-            important_links: [{ label: 'Resorts', path: '/resorts' }],
-            legal_links: [{ label: 'Privacy Policy', path: '/legal' }]
-          },
-          custom_pages: [],
-          ...settingsMap
-        };
-
-        setSettings(finalSettings);
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-      // Fallback to defaults if table missing or error
-      setSettings({
-        navbar: [{ label: 'Resorts', path: '/resorts' }, { label: 'Map', path: '/map' }, { label: 'Info', path: '/tourist-info' }],
-        hero: { title: 'The Art of Maldivian Luxury', subtitle: 'Bespoke Destination Management for Travel Professionals', banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080', banner_type: 'image', partners_title: 'Top Properties' },
-        expertise_stats: [
-          { value: '198+', label: 'Resorts' },
-          { value: '20+', label: 'Years Experience' },
-          { value: '24/7', label: 'Local Support' },
-          { value: 'Global', label: 'Travel Partners' }
-        ],
-        introduction: { title: 'Bespoke Destination Management', summary: 'Exciting Maldives is a bespoke Destination Management Company specializing in B2B partnerships.' },
-        why_us: [{ title: 'Local Expertise', description: 'Deeply rooted in the Maldives.' }],
-        ctas: { partner_title: 'Join Our Global Network of Travel Professionals', partner_btn: 'Become a Travel Partner', guide_title: 'The Maldives Travel Guide', guide_btn: 'View All Insights', retreats_title: 'Featured Retreats', retreats_btn: 'View All Resorts' },
-        global_markets: [
-          { name: "Europe", description: "Our primary market, with strong partnerships across the UK, Germany, France, and Italy." },
-          { name: "Middle East", description: "Catering to high-net-worth individuals seeking ultimate privacy and luxury." },
-          { name: "Asia Pacific", description: "Growing presence in key Asian markets, providing tailored cultural experiences." },
-          { name: "Americas", description: "Expanding our reach to travel designers in North and South America." },
-          { name: "Emerging Markets", description: "Continuously exploring new opportunities to connect with global travel professionals." }
-        ],
-        services: [
-          { title: "B2B Resort Bookings", icon: "Hotel", link: "/resorts" },
-          { title: "Seaplane & Transfers", icon: "Plane", link: "/transfers" },
-          { title: "VIP Meet & Greet", icon: "UserCheck", link: "/vip" },
-          { title: "Curated Experiences", icon: "Calendar", link: "/experiences" },
-          { title: "24/7 Concierge", icon: "Smile", link: "/concierge" },
-          { title: "Fast Track Services", icon: "Zap", link: "/fast-track" }
-        ],
-        footer: { contact: { email: 'info@excitingmaldives.com' }, social: {}, important_links: [], legal_links: [] },
-        custom_pages: []
-      });
+      setLoading(true);
+      const settingsData = await getSiteSettings(true);
+      setSettings(settingsData);
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchResorts = async () => {
-    const { data } = await supabase.from('resorts').select('id, name, is_featured, photos');
+    const { data } = await supabase.from('resorts').select('id, name, is_featured, images');
     if (data) setResorts(data);
   };
 
@@ -2340,20 +2184,32 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
     setShowHistory(true);
   };
 
-  const saveSetting = async (key: string, value: any) => {
+  const saveSetting = async (key: string, valueOrUpdater: any) => {
     setSaving(true);
+    
+    // Get the latest value
+    const currentValue = settingsRef.current[key] || {};
+    const newValue = typeof valueOrUpdater === 'function' ? valueOrUpdater(currentValue) : valueOrUpdater;
+
     // Save draft
     const { error: draftError } = await supabase
       .from('site_settings')
-      .upsert({ key: `${key}:draft`, value }, { onConflict: 'key' });
+      .upsert({ key: `${key}:draft`, value: newValue }, { onConflict: 'key' });
     
     // Auto-publish for immediate reflection on homepage
     const { error: pubError } = await supabase
       .from('site_settings')
-      .upsert({ key: `${key}:published`, value }, { onConflict: 'key' });
+      .upsert({ key: `${key}:published`, value: newValue }, { onConflict: 'key' });
+    
+    if (draftError) console.error('Error saving draft setting:', draftError);
+    if (pubError) console.error('Error saving published setting:', pubError);
     
     if (!draftError && !pubError) {
-      setSettings({ ...settings, [key]: value });
+      clearSettingsCache();
+      setSettings(prev => ({ ...prev, [key]: newValue }));
+      showNotification('Changes saved and published');
+    } else {
+      showNotification('Error saving changes');
     }
     setSaving(false);
   };
@@ -2406,6 +2262,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
         });
         
         await Promise.all(publishPromises);
+        clearSettingsCache();
         showNotification('Published successfully');
         console.log('Website published successfully!');
       }
@@ -2587,27 +2444,27 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     value={settings.logos?.primary || ''} 
                     onUpload={async (file: File) => {
                       const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', { ...settings.logos, primary: url });
+                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, primary: url }));
                     }}
-                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, primary: val })} 
+                    onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, primary: val }))} 
                   />
                   <LogoInput 
                     label="White Logo" 
                     value={settings.logos?.white || ''} 
                     onUpload={async (file: File) => {
                       const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', { ...settings.logos, white: url });
+                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, white: url }));
                     }}
-                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, white: val })} 
+                    onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, white: val }))} 
                   />
                   <LogoInput 
                     label="Black Logo" 
                     value={settings.logos?.black || ''} 
                     onUpload={async (file: File) => {
                       const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', { ...settings.logos, black: url });
+                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, black: url }));
                     }}
-                    onChange={(val: string) => saveSetting('logos', { ...settings.logos, black: val })} 
+                    onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, black: val }))} 
                   />
                 </div>
               </section>
@@ -2722,22 +2579,22 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       const url = await uploadFile(file, 'banners');
                       if (url) {
                         const type = file.type.startsWith('video/') ? 'video' : 'image';
-                        saveSetting('hero', { ...settings.hero, banner_url: url, banner_type: type });
+                        saveSetting('hero', (prev: any) => ({ ...prev, banner_url: url, banner_type: type }));
                       }
                     }}
-                    onChange={(val: string) => saveSetting('hero', { ...settings.hero, banner_url: val })}
+                    onChange={(val: string) => saveSetting('hero', (prev: any) => ({ ...prev, banner_url: val }))}
                   />
                   <TextInput 
                     label="Main Title" 
                     value={settings.hero?.title || ''} 
-                    onChange={(val) => saveSetting('hero', { ...settings.hero, title: val })} 
+                    onChange={(val) => saveSetting('hero', (prev: any) => ({ ...prev, title: val }))} 
                   />
                   <div className="grid grid-cols-2 gap-6">
                     <div className="flex-1">
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">Title Font Size (e.g., text-4xl, text-5xl)</label>
                       <select
                         value={settings.hero?.title_size || 'text-5xl md:text-7xl'}
-                        onChange={(e) => saveSetting('hero', { ...settings.hero, title_size: e.target.value })}
+                        onChange={(e) => saveSetting('hero', (prev: any) => ({ ...prev, title_size: e.target.value }))}
                         className="w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm font-sans text-brand-navy focus:ring-2 focus:ring-brand-teal/20 transition-all"
                       >
                         <option value="text-3xl md:text-5xl">Small (3xl-5xl)</option>
@@ -2751,7 +2608,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       <input
                         type="color"
                         value={settings.hero?.title_color || '#ffffff'}
-                        onChange={(e) => saveSetting('hero', { ...settings.hero, title_color: e.target.value })}
+                        onChange={(e) => saveSetting('hero', (prev: any) => ({ ...prev, title_color: e.target.value }))}
                         className="w-full h-12 rounded-xl cursor-pointer"
                       />
                     </div>
@@ -2762,7 +2619,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       <input
                         type="color"
                         value={settings.hero?.button_color || '#008080'}
-                        onChange={(e) => saveSetting('hero', { ...settings.hero, button_color: e.target.value })}
+                        onChange={(e) => saveSetting('hero', (prev: any) => ({ ...prev, button_color: e.target.value }))}
                         className="w-full h-12 rounded-xl cursor-pointer"
                       />
                     </div>
@@ -2770,13 +2627,13 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   <TextAreaInput 
                     label="Subtitle" 
                     value={settings.hero?.subtitle || ''} 
-                    onChange={(val) => saveSetting('hero', { ...settings.hero, subtitle: val })} 
+                    onChange={(val) => saveSetting('hero', (prev: any) => ({ ...prev, subtitle: val }))} 
                   />
                   <div className="flex-1">
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">Title Font</label>
                     <select
                       value={settings.hero?.title_font || 'font-serif'}
-                      onChange={(e) => saveSetting('hero', { ...settings.hero, title_font: e.target.value })}
+                      onChange={(e) => saveSetting('hero', (prev: any) => ({ ...prev, title_font: e.target.value }))}
                       className="w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm font-sans text-brand-navy focus:ring-2 focus:ring-brand-teal/20 transition-all"
                     >
                       <option value="font-serif">Serif (Elegant)</option>
@@ -2793,7 +2650,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   <TextInput 
                     label="Partners Strip Title" 
                     value={settings.hero?.partners_title || 'Top Properties'} 
-                    onChange={(val) => saveSetting('hero', { ...settings.hero, partners_title: val })} 
+                    onChange={(val) => saveSetting('hero', (prev: any) => ({ ...prev, partners_title: val }))} 
                   />
                   <div className="space-y-4">
                     {safeArray(settings.hero_partners).map((partner: any, idx: number) => (
@@ -2997,46 +2854,154 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
           )}
 
           {activeTab === 'markets' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-serif text-brand-navy mb-6">Global Markets</h3>
-              <div className="space-y-6">
-                {safeArray(settings.global_markets).map((market: any, idx: number) => (
-                  <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group">
-                    <button 
-                      onClick={() => {
-                        const newMarkets = safeArray(settings.global_markets).filter((_: any, i: number) => i !== idx);
-                        saveSetting('global_markets', newMarkets);
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-serif text-brand-navy">Global Markets</h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30">Manage market presence and visualization</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  {safeArray(settings.global_markets).map((market: any, idx: number) => (
+                    <div key={idx} className="bg-brand-paper/30 p-6 rounded-3xl space-y-4 relative group border border-brand-navy/5 hover:border-brand-teal/30 transition-all">
+                      <button 
+                        onClick={() => {
+                          const newMarkets = safeArray(settings.global_markets).filter((_: any, i: number) => i !== idx);
+                          saveSetting('global_markets', newMarkets);
+                        }}
+                        className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all hover:bg-brand-coral/10 rounded-lg"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <TextInput 
+                        label="Market Name" 
+                        value={market.name || ''} 
+                        onChange={(val) => {
+                          const newMarkets = [...safeArray(settings.global_markets)];
+                          newMarkets[idx].name = val;
+                          saveSetting('global_markets', newMarkets);
+                        }} 
+                      />
+                      <TextAreaInput 
+                        label="Market Description" 
+                        value={market.description || ''} 
+                        onChange={(val) => {
+                          const newMarkets = [...safeArray(settings.global_markets)];
+                          newMarkets[idx].description = val;
+                          saveSetting('global_markets', newMarkets);
+                        }} 
+                      />
+                      <TextAreaInput 
+                        label="Countries (Comma separated)" 
+                        value={market.countries || ''} 
+                        onChange={(val) => {
+                          const newMarkets = [...safeArray(settings.global_markets)];
+                          newMarkets[idx].countries = val;
+                          saveSetting('global_markets', newMarkets);
+                        }} 
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <TextInput 
+                          label="Latitude" 
+                          value={market.lat || ''} 
+                          onChange={(val) => {
+                            const newMarkets = [...safeArray(settings.global_markets)];
+                            newMarkets[idx].lat = val;
+                            saveSetting('global_markets', newMarkets);
+                          }} 
+                        />
+                        <TextInput 
+                          label="Longitude" 
+                          value={market.lng || ''} 
+                          onChange={(val) => {
+                            const newMarkets = [...safeArray(settings.global_markets)];
+                            newMarkets[idx].lng = val;
+                            saveSetting('global_markets', newMarkets);
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => saveSetting('global_markets', [...safeArray(settings.global_markets), { name: 'New Market', description: '', countries: '', lat: '0', lng: '0' }])}
+                    className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Add New Market
+                  </button>
+                </div>
+
+                <div className="sticky top-8">
+                  <div className="bg-brand-navy rounded-[32px] overflow-hidden h-[600px] relative shadow-2xl border border-brand-navy/10">
+                    <Map
+                      initialViewState={{
+                        longitude: 20,
+                        latitude: 20,
+                        zoom: 1,
+                        pitch: 0,
+                        bearing: 0
                       }}
-                      className="absolute top-4 right-4 p-2 text-brand-coral opacity-0 group-hover:opacity-100 transition-all"
+                      mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                      interactive={true}
+                      dragPan={true}
+                      scrollZoom={true}
                     >
-                      <Trash2 size={16} />
-                    </button>
-                    <TextInput 
-                      label="Market Name" 
-                      value={market.name || ''} 
-                      onChange={(val) => {
-                        const newMarkets = [...safeArray(settings.global_markets)];
-                        newMarkets[idx].name = val;
-                        saveSetting('global_markets', newMarkets);
-                      }} 
-                    />
-                    <TextAreaInput 
-                      label="Market Description" 
-                      value={market.description || ''} 
-                      onChange={(val) => {
-                        const newMarkets = [...safeArray(settings.global_markets)];
-                        newMarkets[idx].description = val;
-                        saveSetting('global_markets', newMarkets);
-                      }} 
-                    />
+                      {safeArray(settings.global_markets).map((market: any, i: number) => {
+                        const lat = parseFloat(market.lat);
+                        const lng = parseFloat(market.lng);
+                        if (isNaN(lat) || isNaN(lng)) return null;
+
+                        return (
+                          <Marker
+                            key={`admin-marker-${i}`}
+                            longitude={lng}
+                            latitude={lat}
+                            anchor="bottom"
+                            onClick={e => {
+                              e.originalEvent.stopPropagation();
+                              setActiveMarket(market);
+                            }}
+                          >
+                            <div className="relative group cursor-pointer">
+                              <div className="absolute -inset-4 bg-brand-teal/20 rounded-full blur-md animate-pulse"></div>
+                              <div className="relative bg-brand-teal text-white p-2 rounded-full shadow-lg border-2 border-white/20 group-hover:scale-110 transition-transform">
+                                <MapPin size={16} />
+                              </div>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-brand-navy text-white px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                {market.countries || market.name}
+                              </div>
+                            </div>
+                          </Marker>
+                        );
+                      })}
+
+                      {activeMarket && !isNaN(parseFloat(activeMarket.lat)) && !isNaN(parseFloat(activeMarket.lng)) && (
+                        <Popup
+                          longitude={parseFloat(activeMarket.lng)}
+                          latitude={parseFloat(activeMarket.lat)}
+                          anchor="top"
+                          onClose={() => setActiveMarket(null)}
+                          closeOnClick={false}
+                          className="global-market-popup"
+                          maxWidth="240px"
+                        >
+                          <div className="p-4 bg-white rounded-xl text-brand-navy shadow-xl">
+                            <h3 className="font-serif text-lg mb-1">{activeMarket.name}</h3>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-teal mb-2">
+                              {activeMarket.countries || 'No countries defined'}
+                            </p>
+                            <p className="text-[10px] text-brand-navy/60 leading-relaxed">
+                              {activeMarket.description}
+                            </p>
+                          </div>
+                        </Popup>
+                      )}
+                    </Map>
+                    <div className="absolute bottom-6 left-6 right-6 bg-brand-navy/80 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">Visualization Mode</p>
+                      <p className="text-[10px] text-white/40">Showing market presence based on defined coordinates and country labels.</p>
+                    </div>
                   </div>
-                ))}
-                <button 
-                  onClick={() => saveSetting('global_markets', [...safeArray(settings.global_markets), { name: 'New Market', description: '' }])}
-                  className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus size={16} /> Add Market
-                </button>
+                </div>
               </div>
             </div>
           )}
@@ -3242,35 +3207,83 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                 <TextInput 
                   label="Main Title" 
                   value={settings.platform_excellence?.title || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, title: val })} 
+                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, title: val }))} 
                 />
                 <TextAreaInput 
                   label="Main Description" 
                   value={settings.platform_excellence?.description || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, description: val })} 
+                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, description: val }))} 
                 />
                 <LogoInput 
                   label="Main Image" 
                   value={settings.platform_excellence?.image_url || ''} 
                   onUpload={async (file: File) => {
                     const url = await uploadFile(file, 'excellence');
-                    if (url) saveSetting('platform_excellence', { ...settings.platform_excellence, image_url: url });
+                    if (url) saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: url }));
                   }}
-                  onChange={(val: string) => saveSetting('platform_excellence', { ...settings.platform_excellence, image_url: val })} 
+                  onChange={(val: string) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: val }))} 
                 />
                 <TextInput 
                   label="Floating Badge Text" 
                   value={settings.platform_excellence?.badge_text || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', { ...settings.platform_excellence, badge_text: val })} 
+                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, badge_text: val }))} 
                 />
+                
+                <div className="space-y-4 mt-8">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Carousel Images</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {safeArray(settings.platform_excellence?.images).map((imgUrl: string, idx: number) => (
+                      <div key={idx} className="relative group aspect-video rounded-2xl overflow-hidden bg-brand-paper">
+                        <img src={imgUrl} className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => {
+                            saveSetting('platform_excellence', (prev: any) => {
+                              const newImages = safeArray(prev?.images).filter((_: any, i: number) => i !== idx);
+                              return { ...prev, images: newImages };
+                            });
+                          }}
+                          className="absolute top-2 right-2 p-2 bg-white/90 text-brand-coral rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const url = await uploadFile(file, 'platform');
+                            if (url) {
+                              saveSetting('platform_excellence', (prev: any) => ({
+                                ...prev,
+                                images: [...safeArray(prev?.images), url]
+                              }));
+                            }
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="aspect-video border-2 border-dashed border-brand-navy/20 rounded-2xl flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
+                    >
+                      <Plus size={24} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Add Image</span>
+                    </button>
+                  </div>
+                </div>
                 
                 <h4 className="text-lg font-serif text-brand-navy mt-8">Features</h4>
                 {safeArray(settings.platform_excellence?.features).map((item: any, idx: number) => (
                   <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4 relative">
                     <button 
                       onClick={() => {
-                        const newFeatures = safeArray(settings.platform_excellence?.features).filter((_: any, i: number) => i !== idx);
-                        saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
+                        saveSetting('platform_excellence', (prev: any) => {
+                          const newFeatures = safeArray(prev?.features).filter((_: any, i: number) => i !== idx);
+                          return { ...prev, features: newFeatures };
+                        });
                       }}
                       className="absolute top-4 right-4 p-2 bg-brand-coral/10 text-brand-coral rounded-full hover:bg-brand-coral hover:text-white transition-all"
                     >
@@ -3282,18 +3295,22 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           label="Feature Title" 
                           value={item.title} 
                           onChange={(val) => {
-                            const newFeatures = [...safeArray(settings.platform_excellence?.features)];
-                            newFeatures[idx].title = val;
-                            saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
+                            saveSetting('platform_excellence', (prev: any) => {
+                              const newFeatures = [...safeArray(prev?.features)];
+                              newFeatures[idx] = { ...newFeatures[idx], title: val };
+                              return { ...prev, features: newFeatures };
+                            });
                           }} 
                         />
                         <TextAreaInput 
                           label="Feature Description" 
                           value={item.description} 
                           onChange={(val) => {
-                            const newFeatures = [...safeArray(settings.platform_excellence?.features)];
-                            newFeatures[idx].description = val;
-                            saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
+                            saveSetting('platform_excellence', (prev: any) => {
+                              const newFeatures = [...safeArray(prev?.features)];
+                              newFeatures[idx] = { ...newFeatures[idx], description: val };
+                              return { ...prev, features: newFeatures };
+                            });
                           }} 
                         />
                       </div>
@@ -3304,15 +3321,19 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           onUpload={async (file: File) => {
                             const url = await uploadFile(file, 'excellence-icons');
                             if (url) {
-                              const newFeatures = [...safeArray(settings.platform_excellence?.features)];
-                              newFeatures[idx].icon_url = url;
-                              saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
+                              saveSetting('platform_excellence', (prev: any) => {
+                                const newFeatures = [...safeArray(prev?.features)];
+                                newFeatures[idx] = { ...newFeatures[idx], icon_url: url };
+                                return { ...prev, features: newFeatures };
+                              });
                             }
                           }}
                           onChange={(val: string) => {
-                            const newFeatures = [...safeArray(settings.platform_excellence?.features)];
-                            newFeatures[idx].icon_url = val;
-                            saveSetting('platform_excellence', { ...settings.platform_excellence, features: newFeatures });
+                            saveSetting('platform_excellence', (prev: any) => {
+                              const newFeatures = [...safeArray(prev?.features)];
+                              newFeatures[idx] = { ...newFeatures[idx], icon_url: val };
+                              return { ...prev, features: newFeatures };
+                            });
                           }} 
                         />
                       </div>
@@ -3320,10 +3341,10 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   </div>
                 ))}
                 <button 
-                  onClick={() => saveSetting('platform_excellence', { 
-                    ...settings.platform_excellence, 
-                    features: [...safeArray(settings.platform_excellence?.features), { title: 'New Feature', description: '' }] 
-                  })}
+                  onClick={() => saveSetting('platform_excellence', (prev: any) => ({ 
+                    ...prev, 
+                    features: [...safeArray(prev?.features), { title: 'New Feature', description: '' }] 
+                  }))}
                   className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={16} /> Add Excellence Feature
@@ -3342,29 +3363,29 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     value={settings.ceo_message?.photo_url || ''} 
                     onUpload={async (file: File) => {
                       const url = await uploadFile(file, 'ceo');
-                      if (url) saveSetting('ceo_message', { ...settings.ceo_message, photo_url: url });
+                      if (url) saveSetting('ceo_message', (prev: any) => ({ ...prev, photo_url: url }));
                     }}
-                    onChange={(val: string) => saveSetting('ceo_message', { ...settings.ceo_message, photo_url: val })} 
+                    onChange={(val: string) => saveSetting('ceo_message', (prev: any) => ({ ...prev, photo_url: val }))} 
                   />
                   <TextInput 
                     label="CEO Name" 
                     value={settings.ceo_message?.name || ''} 
-                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, name: val })} 
+                    onChange={(val) => saveSetting('ceo_message', (prev: any) => ({ ...prev, name: val }))} 
                   />
                   <TextInput 
                     label="CEO Title" 
                     value={settings.ceo_message?.title || ''} 
-                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, title: val })} 
+                    onChange={(val) => saveSetting('ceo_message', (prev: any) => ({ ...prev, title: val }))} 
                   />
                   <TextInput 
                     label="Quote" 
                     value={settings.ceo_message?.quote || ''} 
-                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, quote: val })} 
+                    onChange={(val) => saveSetting('ceo_message', (prev: any) => ({ ...prev, quote: val }))} 
                   />
                   <TextAreaInput 
                     label="Message" 
                     value={settings.ceo_message?.message || ''} 
-                    onChange={(val) => saveSetting('ceo_message', { ...settings.ceo_message, message: val })} 
+                    onChange={(val) => saveSetting('ceo_message', (prev: any) => ({ ...prev, message: val }))} 
                   />
                 </div>
               </section>
@@ -3381,19 +3402,19 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     value={settings.our_story?.image_url || ''} 
                     onUpload={async (file: File) => {
                       const url = await uploadFile(file, 'story');
-                      if (url) saveSetting('our_story', { ...settings.our_story, image_url: url });
+                      if (url) saveSetting('our_story', (prev: any) => ({ ...prev, image_url: url }));
                     }}
-                    onChange={(val: string) => saveSetting('our_story', { ...settings.our_story, image_url: val })} 
+                    onChange={(val: string) => saveSetting('our_story', (prev: any) => ({ ...prev, image_url: val }))} 
                   />
                   <TextInput 
                     label="Section Title" 
                     value={settings.our_story?.title || ''} 
-                    onChange={(val) => saveSetting('our_story', { ...settings.our_story, title: val })} 
+                    onChange={(val) => saveSetting('our_story', (prev: any) => ({ ...prev, title: val }))} 
                   />
                   <TextAreaInput 
                     label="Story Content" 
                     value={settings.our_story?.content || ''} 
-                    onChange={(val) => saveSetting('our_story', { ...settings.our_story, content: val })} 
+                    onChange={(val) => saveSetting('our_story', (prev: any) => ({ ...prev, content: val }))} 
                   />
                 </div>
               </section>
@@ -3408,12 +3429,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   <TextInput 
                     label="Section Title" 
                     value={settings.awards?.title || ''} 
-                    onChange={(val) => saveSetting('awards', { ...settings.awards, title: val })} 
+                    onChange={(val) => saveSetting('awards', (prev: any) => ({ ...prev, title: val }))} 
                   />
                   <TextAreaInput 
                     label="Summary" 
                     value={settings.awards?.summary || ''} 
-                    onChange={(val) => saveSetting('awards', { ...settings.awards, summary: val })} 
+                    onChange={(val) => saveSetting('awards', (prev: any) => ({ ...prev, summary: val }))} 
                   />
                   
                   <div className="space-y-4">
@@ -3432,9 +3453,11 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                                 if (file) {
                                   const url = await uploadFile(file, 'awards');
                                   if (url) {
-                                    const newItems = [...safeArray(settings.awards?.items)];
-                                    newItems[idx] = { ...newItems[idx], url };
-                                    saveSetting('awards', { ...settings.awards, items: newItems });
+                                    saveSetting('awards', (prev: any) => {
+                                      const newItems = [...safeArray(prev?.items)];
+                                      newItems[idx] = { ...newItems[idx], url };
+                                      return { ...prev, items: newItems };
+                                    });
                                   }
                                 }
                               };
@@ -3446,8 +3469,10 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           </button>
                           <button 
                             onClick={() => {
-                              const newItems = safeArray(settings.awards?.items).filter((_: any, i: number) => i !== idx);
-                              saveSetting('awards', { ...settings.awards, items: newItems });
+                              saveSetting('awards', (prev: any) => {
+                                const newItems = safeArray(prev?.items).filter((_: any, i: number) => i !== idx);
+                                return { ...prev, items: newItems };
+                              });
                             }}
                             className="absolute top-2 right-2 p-2 bg-brand-coral text-white rounded-full opacity-0 group-hover:opacity-100 transition-all z-10 hover:scale-110"
                           >
@@ -3465,8 +3490,10 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                             if (file) {
                               const url = await uploadFile(file, 'awards');
                               if (url) {
-                                const newItems = [...safeArray(settings.awards?.items), { url }];
-                                saveSetting('awards', { ...settings.awards, items: newItems });
+                                saveSetting('awards', (prev: any) => ({
+                                  ...prev,
+                                  items: [...safeArray(prev?.items), { url }]
+                                }));
                               }
                             }
                           };
@@ -3494,12 +3521,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     <TextInput 
                       label="Title" 
                       value={settings.ctas?.partner_title || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, partner_title: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, partner_title: val }))} 
                     />
                     <TextInput 
                       label="Button Text" 
                       value={settings.ctas?.partner_btn || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, partner_btn: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, partner_btn: val }))} 
                     />
                   </div>
                   <div className="p-6 bg-brand-paper/30 rounded-3xl space-y-4">
@@ -3507,12 +3534,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     <TextInput 
                       label="Title" 
                       value={settings.ctas?.guide_title || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, guide_title: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, guide_title: val }))} 
                     />
                     <TextInput 
                       label="Button Text" 
                       value={settings.ctas?.guide_btn || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, guide_btn: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, guide_btn: val }))} 
                     />
                   </div>
                   <div className="p-6 bg-brand-paper/30 rounded-3xl space-y-4">
@@ -3520,13 +3547,24 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     <TextInput 
                       label="Title" 
                       value={settings.ctas?.retreats_title || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, retreats_title: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, retreats_title: val }))} 
                     />
                     <TextInput 
                       label="Button Text" 
                       value={settings.ctas?.retreats_btn || ''} 
-                      onChange={(val) => saveSetting('ctas', { ...settings.ctas, retreats_btn: val })} 
+                      onChange={(val) => saveSetting('ctas', (prev: any) => ({ ...prev, retreats_btn: val }))} 
                     />
+                    <div className="pt-4">
+                      <LogoInput 
+                        label="CTA Background Image"
+                        value={settings.ctas?.bg_image_url || ''}
+                        onUpload={async (file: File) => {
+                          const url = await uploadFile(file, 'ctas');
+                          if (url) saveSetting('ctas', (prev: any) => ({ ...prev, bg_image_url: url }));
+                        }}
+                        onChange={(val: string) => saveSetting('ctas', (prev: any) => ({ ...prev, bg_image_url: val }))}
+                      />
+                    </div>
                   </div>
                 </div>
               </section>
@@ -3542,15 +3580,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     <div key={resort.id} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4">
                       <h4 className="text-sm font-bold text-brand-navy">{resort.name}</h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {safeArray(resort.photos).map((photoUrl: string, idx: number) => (
+                        {safeArray(resort.images).map((photoUrl: string, idx: number) => (
                           <div key={idx} className="relative group">
                             <img src={photoUrl} alt="Resort" className="w-full aspect-square object-cover rounded-xl" />
                             <button 
                               onClick={async () => {
-                                const newPhotos = safeArray(resort.photos).filter((_: any, i: number) => i !== idx);
+                                const newPhotos = safeArray(resort.images).filter((_: any, i: number) => i !== idx);
                                 const { error } = await supabase
                                   .from('resorts')
-                                  .update({ photos: newPhotos })
+                                  .update({ images: newPhotos })
                                   .eq('id', resort.id);
                                 if (!error) fetchResorts();
                               }}
@@ -3576,7 +3614,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                                 }
                                 const { error } = await supabase
                                   .from('resorts')
-                                  .update({ photos: [...safeArray(resort.photos), ...newPhotos] })
+                                  .update({ images: [...safeArray(resort.images), ...newPhotos] })
                                   .eq('id', resort.id);
                                 if (!error) fetchResorts();
                               }
@@ -3860,6 +3898,42 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   </div>
                 </div>
               </section>
+            </div>
+          )}
+          {activeTab === 'system' && (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-serif text-brand-navy">Database & System Schema</h3>
+                  <p className="text-brand-navy/60 font-sans text-sm mt-1">Ensure your database is up to date with the latest features.</p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    showNotification('Please copy and run the SQL below in your Supabase SQL Editor to ensure all features work correctly.');
+                  }}
+                  className="px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal/90 transition-all"
+                >
+                  Check Schema
+                </button>
+              </div>
+
+              <div className="bg-brand-paper/30 p-6 rounded-3xl border border-brand-navy/5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Required SQL Setup</h4>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(schemaSql);
+                      showNotification('SQL copied to clipboard');
+                    }}
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:text-brand-teal/80 transition-all"
+                  >
+                    <Copy size={14} /> Copy SQL
+                  </button>
+                </div>
+                <pre className="bg-brand-navy text-white/90 p-6 rounded-2xl text-[10px] font-mono overflow-x-auto max-h-[400px] leading-relaxed">
+                  {schemaSql}
+                </pre>
+              </div>
             </div>
           )}
         </motion.div>

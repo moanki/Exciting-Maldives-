@@ -38,4 +38,14 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Maplibre Popup Styling */
+  .global-market-popup .maplibregl-popup-content {
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+  .global-market-popup .maplibregl-popup-tip {
+    border-top-color: white;
+  }
 }

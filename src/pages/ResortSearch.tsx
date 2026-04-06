@@ -57,9 +57,9 @@ export default function ResortSearch() {
   const atolls = ['All', ...new Set(resorts.map(r => r.atoll))];
 
   return (
-    <div className="pt-10 pb-24 px-4 max-w-7xl mx-auto">
+    <div className="pt-24 pb-24 px-4 max-w-7xl mx-auto">
       <div className="mb-12">
-        <h1 className="text-5xl font-serif mb-4 text-brand-navy">Explore <span className="italic text-brand-teal">Resorts</span></h1>
+        <h1 className="text-3xl md:text-5xl font-serif mb-4 text-brand-navy">Explore <span className="italic text-brand-teal">Resorts</span></h1>
         <p className="text-brand-navy/50 font-bold tracking-[0.3em] uppercase text-[10px] font-sans">Discover your next Maldivian escape</p>
       </div>
 
