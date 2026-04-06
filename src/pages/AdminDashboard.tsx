@@ -1299,45 +1299,70 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
       current: 0,
       completed: 0,
       failed: 0,
-      status: 'Fetching from Google Drive...'
+      status: 'Listing files from Google Drive...'
     });
 
     try {
-      const response = await fetch('/api/fetch-drive-pdfs', {
+      const listResponse = await fetch('/api/list-drive-pdfs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: driveUrl }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch from Google Drive');
+      if (!listResponse.ok) {
+        let errorMessage = 'Failed to list files from Google Drive';
+        try {
+          const errorData = await listResponse.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          const errorText = await listResponse.text();
+          console.error('Non-JSON error response:', listResponse.status, errorText.substring(0, 200));
+          errorMessage = `Server error (${listResponse.status}). The server might have crashed or timed out.`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      const pdfs = data.pdfs; // Array of base64 strings
+      const listData = await listResponse.json();
+      const files = listData.files; // Array of { id, name }
 
-      if (!pdfs || pdfs.length === 0) {
+      if (!files || files.length === 0) {
         throw new Error('No PDFs found in the provided Google Drive folder.');
       }
 
       setSmartUploadProgress({
-        total: pdfs.length,
+        total: files.length,
         current: 0,
         completed: 0,
         failed: 0,
         status: 'Processing PDFs...'
       });
 
-      for (let i = 0; i < pdfs.length; i++) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         setSmartUploadProgress(prev => prev ? { 
           ...prev, 
           current: i + 1, 
-          status: `Processing PDF ${i + 1} of ${pdfs.length}...` 
+          status: `Processing ${file.name} (${i + 1} of ${files.length})...` 
         } : null);
 
         try {
-          const extracted = await extractResortDataFromPDF(pdfs[i]);
+          // Fetch the individual PDF
+          const pdfResponse = await fetch('/api/fetch-drive-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: file.id }),
+          });
+
+          if (!pdfResponse.ok) {
+            throw new Error(`Failed to download ${file.name}`);
+          }
+
+          const pdfData = await pdfResponse.json();
+          const base64 = pdfData.base64;
+
+          if (!base64) throw new Error(`Empty PDF data for ${file.name}`);
+
+          const extracted = await extractResortDataFromPDF(base64);
           
           // Check if resort already exists
           const { data: existingResort } = await supabase
@@ -1363,7 +1388,7 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
           setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
           fetchResorts();
         } catch (err) {
-          console.error('AI Extraction failed for Drive PDF:', err);
+          console.error(`Failed processing ${file.name}:`, err);
           setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
         }
       }

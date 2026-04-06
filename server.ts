@@ -98,12 +98,11 @@ async function startServer() {
     }
   });
 
-  app.post("/api/fetch-drive-pdfs", async (req, res) => {
+  app.post("/api/list-drive-pdfs", async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     try {
-      // Extract folder ID from URL
       const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
       const folderId = match ? match[1] : null;
 
@@ -112,8 +111,6 @@ async function startServer() {
       }
 
       let auth;
-      
-      // Check for service account JSON file
       const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
       if (fs.existsSync(serviceAccountPath)) {
         auth = new google.auth.GoogleAuth({
@@ -121,7 +118,6 @@ async function startServer() {
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
       } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        // Fallback to environment variable if file doesn't exist (e.g., in production)
         const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
         auth = new google.auth.GoogleAuth({
           credentials,
@@ -130,49 +126,65 @@ async function startServer() {
       } else if (process.env.GOOGLE_DRIVE_API_KEY) {
         auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        return res.status(500).json({ error: "Google Drive credentials not found. Please provide GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_DRIVE_API_KEY env var." });
+        return res.status(500).json({ error: "Google Drive credentials not found." });
       }
 
       const drive = google.drive({ version: 'v3', auth });
 
-      // Fetch list of PDFs in the folder
       const listResponse = await drive.files.list({
         q: `'${folderId}' in parents and mimeType='application/pdf'`,
         fields: 'files(id, name)',
       });
 
-      const files = listResponse.data.files;
-
-      if (!files || files.length === 0) {
-        return res.json({ pdfs: [] });
-      }
-
-      const pdfs: string[] = [];
-
-      // Download each PDF and convert to base64
-      for (const file of files) {
-        if (!file.id) continue;
-        try {
-          const response = await drive.files.get(
-            { fileId: file.id, alt: 'media' },
-            { responseType: 'stream' }
-          );
-          
-          const chunks: Buffer[] = [];
-          for await (const chunk of response.data) {
-            chunks.push(Buffer.from(chunk));
-          }
-          const base64 = Buffer.concat(chunks).toString('base64');
-          pdfs.push(base64);
-        } catch (err) {
-          console.error(`Failed to download file ${file.name}:`, err);
-        }
-      }
-
-      res.json({ pdfs });
+      const files = listResponse.data.files || [];
+      res.json({ files });
     } catch (error: any) {
-      console.error("Drive API error:", error);
-      res.status(500).json({ error: "Failed to fetch from Google Drive. Ensure the service account has access to the folder." });
+      console.error("Drive API list error:", error);
+      res.status(500).json({ error: "Failed to list files from Google Drive. Ensure the service account has access to the folder." });
+    }
+  });
+
+  app.post("/api/fetch-drive-pdf", async (req, res) => {
+    const { fileId } = req.body;
+    if (!fileId) return res.status(400).json({ error: "File ID is required" });
+
+    try {
+      let auth;
+      const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+      if (fs.existsSync(serviceAccountPath)) {
+        auth = new google.auth.GoogleAuth({
+          keyFile: serviceAccountPath,
+          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+        });
+      } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        auth = new google.auth.GoogleAuth({
+          credentials,
+          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+        });
+      } else if (process.env.GOOGLE_DRIVE_API_KEY) {
+        auth = process.env.GOOGLE_DRIVE_API_KEY;
+      } else {
+        return res.status(500).json({ error: "Google Drive credentials not found." });
+      }
+
+      const drive = google.drive({ version: 'v3', auth });
+
+      const response = await drive.files.get(
+        { fileId: fileId, alt: 'media' },
+        { responseType: 'stream' }
+      );
+      
+      const chunks: Buffer[] = [];
+      for await (const chunk of response.data) {
+        chunks.push(Buffer.from(chunk));
+      }
+      const base64 = Buffer.concat(chunks).toString('base64');
+      
+      res.json({ base64 });
+    } catch (error: any) {
+      console.error("Drive API fetch error:", error);
+      res.status(500).json({ error: "Failed to download PDF from Google Drive." });
     }
   });
 
