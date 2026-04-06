@@ -96,8 +96,12 @@ function Newsletter({ settings }: { settings: any }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Submitting newsletter:', formData);
     const { error } = await supabase.from('newsletter_submissions').insert([formData]);
-    if (!error) {
+    if (error) {
+      console.error('Newsletter submission error:', error);
+    } else {
+      console.log('Newsletter submission successful');
       setSubmitted(true);
     }
   };
@@ -194,58 +198,15 @@ export default function Home({ settings }: { settings: any }) {
 
       if (resortsResult.error) {
         console.error('Error fetching featured resorts:', resortsResult.error);
-      }
-      
-      if (resortsResult.data && resortsResult.data.length > 0) {
+      } else if (resortsResult.data) {
         setFeaturedResorts(resortsResult.data);
-      } else {
-        const fallback = await supabase.from('resorts').select('*, resort_media(*)').limit(6);
-        if (fallback.data) setFeaturedResorts(fallback.data);
       }
     };
     fetchResorts();
   }, []);
 
   // Static Data for B2B
-  const whyUsPillars = [
-    { title: 'Local Expertise', desc: 'Deep-rooted knowledge and on-ground presence in the Maldives.', icon: MapPin },
-    { title: 'Exclusive Resort Partnerships', desc: 'Direct contracts and priority access to the finest island retreats.', icon: Star },
-    { title: 'Seamless Operations', desc: 'Flawless execution from arrival to departure.', icon: CheckCircle2 },
-    { title: '24/7 Guest Support', desc: 'Round-the-clock dedicated assistance for your VIP clients.', icon: Clock }
-  ];
-
-  const dmcServices = [
-    { title: 'Luxury Resort Reservations', icon: Hotel, link: '/services/reservations' },
-    { title: 'Private Transfers & Aviation', icon: Plane, link: '/services/transfers' },
-    { title: 'Tailor-Made Itineraries', icon: Calendar, link: '/services/itineraries' },
-    { title: 'VIP Guest Services', icon: Star, link: '/services/vip' },
-    { title: 'Experiences & Excursions', icon: Ship, link: '/services/experiences' },
-    { title: 'Event & Group Travel', icon: Users, link: '/services/events' }
-  ];
-
-  const globalMarkets = [
-    { name: 'Europe', desc: 'Supporting luxury agencies across the UK, DACH, and Southern Europe.', lat: '48.8566', lng: '2.3522', countries: 'UK, Germany, France, Italy' },
-    { name: 'Middle East', desc: 'Curated VIP and ultra-luxury services for GCC travelers.', lat: '25.2048', lng: '55.2708', countries: 'UAE, Saudi Arabia, Qatar' },
-    { name: 'Asia', desc: 'Tailored solutions for high-net-worth clients from emerging Asian markets.', lat: '1.3521', lng: '103.8198', countries: 'Singapore, China, Japan' },
-    { name: 'North America', desc: 'Seamless long-haul travel planning and exclusive access.', lat: '40.7128', lng: '-74.0060', countries: 'USA, Canada' },
-    { name: 'Australia', desc: 'Bespoke itineraries for discerning travelers from Oceania.', lat: '-33.8688', lng: '151.2093', countries: 'Australia, New Zealand' }
-  ];
-
-  const travelGuideArticles = [
-    { title: 'Best Atolls in the Maldives', category: 'Destination', img: 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=80&w=800' },
-    { title: 'When to Visit Maldives', category: 'Planning', img: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=800' },
-    { title: 'Seaplane vs Speedboat Transfers', category: 'Logistics', img: 'https://images.unsplash.com/photo-1544550581-5f7ceaf7f992?auto=format&fit=crop&q=80&w=800' },
-    { title: 'Luxury Resorts Guide', category: 'Resorts', img: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=800' }
-  ];
-
-  const partnerLogos = [
-    { name: 'Soneva', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Soneva_Logo.svg/512px-Soneva_Logo.svg.png' },
-    { name: 'Joali', url: '' },
-    { name: 'Cheval Blanc', url: '' },
-    { name: 'Six Senses', url: '' },
-    { name: 'Patina', url: '' }
-  ];
-
+  
   return (
     <div ref={containerRef} className="relative min-h-screen bg-brand-paper text-brand-navy selection:bg-brand-teal/20">
       
@@ -305,7 +266,7 @@ export default function Home({ settings }: { settings: any }) {
                 transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
                 style={{ willChange: 'transform' }}
               >
-                {safeArray(settings.hero_partners).length > 0 ? (
+                {safeArray(settings.hero_partners).length > 0 && (
                   [...safeArray(settings.hero_partners), ...safeArray(settings.hero_partners)].map((logo: any, i: number) => (
                     <div key={i} className="flex-shrink-0">
                       <img 
@@ -315,12 +276,6 @@ export default function Home({ settings }: { settings: any }) {
                         referrerPolicy="no-referrer" 
                         loading="lazy"
                       />
-                    </div>
-                  ))
-                ) : (
-                  [...partnerLogos, ...partnerLogos].map((logo, i) => (
-                    <div key={i} className="flex-shrink-0 text-white font-serif text-2xl md:text-3xl tracking-wide">
-                      {logo.name}
                     </div>
                   ))
                 )}
@@ -470,7 +425,7 @@ export default function Home({ settings }: { settings: any }) {
           
           <div className="w-full h-[400px] md:h-[600px] rounded-3xl overflow-hidden border border-white/10 relative luxury-shadow">
             <Suspense fallback={<div className="w-full h-full bg-brand-navy/50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full animate-spin"></div></div>}>
-              <GlobalMarketsMap settings={settings} globalMarkets={globalMarkets} />
+              <GlobalMarketsMap settings={settings} globalMarkets={settings.global_markets} />
             </Suspense>
             
             {/* Overlay gradient to blend map edges */}
@@ -487,8 +442,7 @@ export default function Home({ settings }: { settings: any }) {
             <p className="text-brand-navy/60 font-sans text-xs md:text-sm uppercase tracking-widest mt-4">Comprehensive on-ground support for our partners</p>
           </div>
           <div className="flex flex-wrap justify-center gap-4 md:gap-8">
-            {safeArray(settings.services).length > 0 ? (
-              safeArray(settings.services).map((service: any, i: number) => {
+            {safeArray(settings.services).map((service: any, i: number) => {
                 const Icon = service.icon === 'Hotel' ? Hotel :
                              service.icon === 'Plane' ? Plane :
                              service.icon === 'Ship' ? Ship :
@@ -508,19 +462,7 @@ export default function Home({ settings }: { settings: any }) {
                   </Link>
                 );
               })
-            ) : (
-              dmcServices.map((service: any, i: number) => {
-                const Icon = service.icon;
-                return (
-                  <Link to={service.link} key={i} className="w-full sm:w-[calc(50%-1rem)] md:w-[calc(33.333%-1.5rem)] group flex flex-col items-center text-center space-y-4 md:space-y-6 p-6 md:p-10 rounded-3xl border border-brand-navy/5 hover:bg-brand-paper hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-12 h-12 md:w-16 md:h-16 bg-brand-paper rounded-2xl flex items-center justify-center text-brand-teal shadow-sm group-hover:bg-brand-teal group-hover:text-white transition-all duration-300 group-hover:scale-110">
-                      <Icon size={24} className="md:size-32" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-serif text-lg md:text-xl text-brand-navy">{service.title}</h3>
-                  </Link>
-                );
-              })
-            )}
+            }
           </div>
         </div>
       </section>
@@ -563,7 +505,7 @@ export default function Home({ settings }: { settings: any }) {
               </motion.div>
 
               <div className="space-y-6 md:space-y-8">
-                {(safeArray(settings.why_us).length > 0 ? safeArray(settings.why_us) : whyUsPillars).map((pillar: any, i: number) => (
+                {safeArray(settings.why_us).map((pillar: any, i: number) => (
                   <motion.div 
                     key={i}
                     initial={{ opacity: 0, x: -10 }}
@@ -691,8 +633,7 @@ export default function Home({ settings }: { settings: any }) {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {safeArray(settings.travel_guide).length > 0 ? (
-            safeArray(settings.travel_guide).map((post: any, i: number) => (
+          {safeArray(settings.travel_guide).map((post: any, i: number) => (
               <Link to="/guide" key={i} className="group cursor-pointer block">
                 <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6">
                   <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
@@ -701,17 +642,7 @@ export default function Home({ settings }: { settings: any }) {
                 <h3 className="font-serif text-xl text-brand-navy mb-4 group-hover:text-brand-teal transition-colors">{post.title}</h3>
               </Link>
             ))
-          ) : (
-            travelGuideArticles.map((post: any, i: number) => (
-              <Link to="/guide" key={i} className="group cursor-pointer block">
-                <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6">
-                  <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
-                </div>
-                <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] mb-3 block font-bold">{post.category}</span>
-                <h3 className="font-serif text-xl text-brand-navy mb-4 group-hover:text-brand-teal transition-colors">{post.title}</h3>
-              </Link>
-            ))
-          )}
+          }
         </div>
       </section>
 

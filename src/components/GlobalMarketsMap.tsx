@@ -34,7 +34,7 @@ export default function GlobalMarketsMap({ settings, globalMarkets }: { settings
       scrollZoom={false}
       attributionControl={false}
     >
-      {(safeArray(settings.global_markets).length > 0 ? safeArray(settings.global_markets) : globalMarkets).map((market: any, i: number) => {
+      {safeArray(settings.global_markets).map((market: any, i: number) => {
         const lat = parseFloat(market.lat);
         const lng = parseFloat(market.lng);
         
