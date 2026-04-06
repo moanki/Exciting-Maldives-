@@ -421,6 +421,7 @@ export default function Home() {
               interactive={true}
               dragPan={true}
               scrollZoom={false}
+              attributionControl={false}
             >
               {(safeArray(settings.global_markets).length > 0 ? safeArray(settings.global_markets) : globalMarkets).map((market: any, i: number) => {
                 const lat = parseFloat(market.lat);

@@ -75,6 +75,7 @@ export default function MaldivesMap() {
               onMove={evt => setViewState(evt.viewState)}
               mapStyle="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
               style={{ width: '100%', height: '100%', position: 'absolute' }}
+              attributionControl={false}
             >
               <NavigationControl position="bottom-right" />
               

@@ -2969,6 +2969,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       interactive={true}
                       dragPan={true}
                       scrollZoom={true}
+                      attributionControl={false}
                     >
                       {safeArray(settings.global_markets).map((market: any, i: number) => {
                         const lat = parseFloat(market.lat);
