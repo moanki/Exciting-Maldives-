@@ -31,12 +31,24 @@ export default function ResortDetail() {
   if (!resort && !loading) return <div className="h-screen flex items-center justify-center font-serif text-xl text-brand-navy">Resort not found</div>;
   if (!resort) return null;
 
+  // Categorized Galleries
+  const diningMedia = resort.resort_media?.filter((m: any) => m.category === 'dining');
+  const spaMedia = resort.resort_media?.filter((m: any) => m.category === 'spa');
+  const activityMedia = resort.resort_media?.filter((m: any) => m.category === 'activities');
+  const roomMedia = resort.resort_media?.filter((m: any) => m.category === 'rooms');
+  const mapMedia = resort.resort_media?.filter((m: any) => m.category === 'maps');
+
+  const heroImage = resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
+                    resort.resort_media?.find((m: any) => m.category === 'banner')?.storage_path ||
+                    resort.resort_media?.[0]?.storage_path || 
+                    `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
+
   return (
     <div className="pb-24 bg-brand-paper/20">
       {/* Hero Gallery */}
       <div className="relative h-[70vh] group">
         <img 
-          src={(resort.resort_media && resort.resort_media.find((m: any) => m.is_hero)?.storage_path) || (resort.resort_media && resort.resort_media.find((m: any) => m.category === 'hero')?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`} 
+          src={heroImage} 
           alt={resort.name}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -78,16 +90,19 @@ export default function ResortDetail() {
           </section>
 
           {/* Categorized Gallery */}
-          {['dining', 'spa', 'activity'].map(cat => {
-            const items = resort.resort_media?.filter((m: any) => m.category === cat);
-            if (!items || items.length === 0) return null;
+          {[
+            { id: 'dining', label: 'Dining', items: diningMedia },
+            { id: 'spa', label: 'Spa & Wellness', items: spaMedia },
+            { id: 'activities', label: 'Experiences', items: activityMedia }
+          ].map(section => {
+            if (!section.items || section.items.length === 0) return null;
             return (
-              <section key={cat} className="space-y-6">
-                <h2 className="text-3xl font-serif text-brand-navy capitalize">{cat} <span className="italic text-brand-teal">Experiences</span></h2>
+              <section key={section.id} className="space-y-6">
+                <h2 className="text-3xl font-serif text-brand-navy capitalize">{section.label} <span className="italic text-brand-teal">Gallery</span></h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {items.map((m: any) => (
+                  {section.items.map((m: any) => (
                     <div key={m.id} className="aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                      <img src={m.storage_path} alt={cat} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
+                      <img src={m.storage_path} alt={section.label} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
                     </div>
                   ))}
                 </div>
@@ -133,30 +148,48 @@ export default function ResortDetail() {
           <section>
             <h2 className="text-3xl font-serif mb-8 text-brand-navy">Room <span className="italic text-brand-teal">Types</span></h2>
             <div className="space-y-6">
-              {resort.room_types?.map((room: any, i: number) => (
-                <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">
-                  <div className="md:w-1/3 aspect-video md:aspect-auto">
-                    <img 
-                      src={`${room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${room.image?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=600' : '?auto=format&fit=crop&q=80&w=600'}`} 
-                      alt={room.name} 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                  <div className="p-8 flex-1">
-                    <h3 className="text-2xl font-serif mb-2 text-brand-navy">{room.name}</h3>
-                    <p className="text-brand-navy/60 text-sm font-sans font-light mb-4 leading-relaxed">{room.description}</p>
-                    <div className="flex gap-4 text-[10px] uppercase tracking-widest font-bold text-brand-teal font-sans">
-                      <span>Max Guests: {room.max_guests}</span>
-                      <span>Size: {room.size}</span>
+              {resort.room_types?.map((room: any, i: number) => {
+                // Try to find a matching image from roomMedia based on room name
+                const matchingMedia = roomMedia?.find((m: any) => 
+                  m.subcategory?.toLowerCase() === room.name?.toLowerCase() || 
+                  m.original_filename?.toLowerCase().includes(room.name?.toLowerCase())
+                );
+                const roomImage = matchingMedia?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
+
+                return (
+                  <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">
+                    <div className="md:w-1/3 aspect-video md:aspect-auto">
+                      <img 
+                        src={`${roomImage}${roomImage.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=600' : ''}`} 
+                        alt={room.name} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                    <div className="p-8 flex-1">
+                      <h3 className="text-2xl font-serif mb-2 text-brand-navy">{room.name}</h3>
+                      <p className="text-brand-navy/60 text-sm font-sans font-light mb-4 leading-relaxed">{room.description}</p>
+                      <div className="flex gap-4 text-[10px] uppercase tracking-widest font-bold text-brand-teal font-sans">
+                        <span>Max Guests: {room.max_guests}</span>
+                        <span>Size: {room.size}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
+
+          {mapMedia && mapMedia.length > 0 && (
+            <section className="space-y-6">
+              <h2 className="text-3xl font-serif text-brand-navy">Resort <span className="italic text-brand-teal">Map</span></h2>
+              <div className="rounded-3xl overflow-hidden border border-brand-navy/5 shadow-lg">
+                <img src={mapMedia[0].storage_path} alt="Resort Map" className="w-full h-auto" referrerPolicy="no-referrer" />
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Booking Sidebar */}

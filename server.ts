@@ -8,8 +8,53 @@ import * as cheerio from "cheerio";
 import { google } from "googleapis";
 import fs from "fs";
 import dotenv from "dotenv";
+import { Dropbox } from "dropbox";
+import sizeOf from "image-size";
 
 dotenv.config();
+
+// Helper for classification
+const classifyMedia = (folderName: string, fileName: string) => {
+  const combined = `${folderName.toLowerCase()} ${fileName.toLowerCase()}`;
+  
+  // Priority keywords
+  const keywords = {
+    banner: ['hero', 'banner', 'cover', 'main', 'landing', 'exterior', 'aerial'],
+    rooms: ['room', 'villa', 'suite', 'residence', 'bedroom', 'accommodation', 'stay', 'living'],
+    dining: ['dining', 'restaurant', 'bar', 'breakfast', 'lunch', 'dinner', 'culinary', 'food', 'drink', 'kitchen'],
+    spa: ['spa', 'wellness', 'treatment', 'massage', 'therapy', 'gym', 'fitness', 'yoga', 'pool'],
+    activities: ['activity', 'experience', 'diving', 'snorkel', 'excursion', 'marine', 'dolphin', 'cruise', 'sport', 'kids', 'club'],
+    maps: ['map', 'floorplan', 'floor plan', 'site plan', 'layout', 'location'],
+    logos: ['logo', 'brand', 'wordmark', 'emblem', 'asset']
+  };
+
+  const subcategories = {
+    'water villa': ['water villa', 'overwater', 'ocean villa'],
+    'beach villa': ['beach villa', 'sand villa'],
+    'residence': ['residence', 'estate', 'mansion'],
+    'suite': ['suite'],
+    'deluxe room': ['deluxe'],
+    'family room': ['family']
+  };
+
+  let detectedCategory = 'uncategorized';
+  for (const [cat, words] of Object.entries(keywords)) {
+    if (words.some(word => combined.includes(word))) {
+      detectedCategory = cat;
+      break;
+    }
+  }
+
+  let detectedSubcategory = null;
+  for (const [sub, words] of Object.entries(subcategories)) {
+    if (words.some(word => combined.includes(word))) {
+      detectedSubcategory = sub;
+      break;
+    }
+  }
+
+  return { category: detectedCategory, subcategory: detectedSubcategory };
+};
 
 async function startServer() {
   const app = express();
@@ -212,7 +257,78 @@ async function startServer() {
     try {
       console.log(`Importing media for resort ${resort_id} from ${url}`);
       
-      // If it's a Google Drive folder or file
+      // Dropbox Check
+      const dropboxMatch = url.match(/dropbox\.com\/(sh|scl\/fo)\/([a-zA-Z0-9-_]+)/);
+      if (dropboxMatch) {
+        const accessToken = process.env.DROPBOX_ACCESS_TOKEN;
+        if (!accessToken) {
+          return res.status(500).json({ error: "Dropbox access token missing. Please configure DROPBOX_ACCESS_TOKEN." });
+        }
+        
+        const dbx = new Dropbox({ accessToken });
+        const media: any[] = [];
+        
+        async function scanDropbox(sharedLink: string, path: string = "", currentCategory: string = 'uncategorized') {
+          const response = await dbx.filesListFolder({
+            path,
+            shared_link: { url: sharedLink }
+          });
+          
+          for (const entry of response.result.entries) {
+            if (entry['.tag'] === 'folder') {
+              const { category } = classifyMedia(entry.name, "");
+              await scanDropbox(sharedLink, entry.path_lower || "", category !== 'uncategorized' ? category : currentCategory);
+            } else if (entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name)) {
+              // Get temporary link for the file
+              const linkResponse = await dbx.sharingGetSharedLinkFile({
+                url: sharedLink,
+                path: entry.path_lower
+              });
+              
+              const { category, subcategory } = classifyMedia(path, entry.name);
+              media.push({
+                id: entry.id,
+                storage_path: url.replace('?dl=0', '?raw=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com') + '&path=' + encodeURIComponent(entry.path_lower || ""), // This is a bit hacky for dropbox shared links
+                // Better way for dropbox shared links:
+                webContentLink: url.replace('?dl=0', '?raw=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com') + '&path=' + encodeURIComponent(entry.path_lower || ""),
+                category: category !== 'uncategorized' ? category : currentCategory,
+                subcategory,
+                original_filename: entry.name,
+                source_type: 'dropbox',
+                source_url: url
+              });
+            }
+          }
+        }
+        
+        // Dropbox shared links for folders are tricky. 
+        // For now, let's use a simpler approach if it's a direct shared link to a folder.
+        // The above recursive scan is more for a full app integration.
+        // Let's try to just get the files in that shared link.
+        const response = await dbx.filesListFolder({
+          path: "",
+          shared_link: { url }
+        });
+        
+        for (const entry of response.result.entries) {
+          if (entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name)) {
+             const { category, subcategory } = classifyMedia("", entry.name);
+             media.push({
+                id: entry.id,
+                storage_path: url.replace(/\?dl=[01]/, '') + '?raw=1&path=' + encodeURIComponent(entry.path_lower || ""),
+                category,
+                subcategory,
+                original_filename: entry.name,
+                source_type: 'dropbox',
+                source_url: url
+             });
+          }
+        }
+
+        return res.json({ success: true, media, source_type: 'dropbox' });
+      }
+
+      // Google Drive Check
       const folderMatch = url.match(/folders\/([a-zA-Z0-9-_]+)/);
       const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
       const idMatch = url.match(/[?&]id=([a-zA-Z0-9-_]+)/);
@@ -248,7 +364,7 @@ async function startServer() {
           if (folderId) {
             const media: any[] = [];
             
-            async function scanFolder(fId: string, currentCategory: string = 'villa') {
+            async function scanFolder(fId: string, currentCategory: string = 'uncategorized', path: string = "") {
               const requestParams: any = {
                 q: `'${fId}' in parents`,
                 fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
@@ -259,31 +375,25 @@ async function startServer() {
 
               for (const file of files) {
                 if (file.mimeType === 'application/vnd.google-apps.folder') {
-                  // Determine category from folder name
-                  const folderName = file.name.toLowerCase();
-                  let nextCategory = currentCategory;
-                  if (folderName.includes('hero') || folderName.includes('banner')) nextCategory = 'hero';
-                  else if (folderName.includes('room') || folderName.includes('villa') || folderName.includes('accommodation')) nextCategory = 'villa';
-                  else if (folderName.includes('din') || folderName.includes('rest')) nextCategory = 'dining';
-                  else if (folderName.includes('spa') || folderName.includes('well')) nextCategory = 'spa';
-                  else if (folderName.includes('act') || folderName.includes('exp')) nextCategory = 'activity';
-                  else if (folderName.includes('map')) nextCategory = 'map';
-                  else if (folderName.includes('logo')) nextCategory = 'logo';
-                  
-                  await scanFolder(file.id, nextCategory);
+                  const { category } = classifyMedia(file.name, "");
+                  await scanFolder(file.id, category !== 'uncategorized' ? category : currentCategory, path + "/" + file.name);
                 } else if (file.mimeType?.startsWith('image/')) {
+                  const { category, subcategory } = classifyMedia(path, file.name);
                   media.push({
                     id: file.id,
-                    storage_path: file.thumbnailLink?.replace('=s220', '=s1000') || file.webContentLink,
-                    category: currentCategory,
-                    original_filename: file.name
+                    storage_path: file.thumbnailLink?.replace('=s220', '=s1600') || file.webContentLink,
+                    category: category !== 'uncategorized' ? category : currentCategory,
+                    subcategory,
+                    original_filename: file.name,
+                    source_type: 'google_drive',
+                    source_url: url
                   });
                 }
               }
             }
 
             await scanFolder(folderId);
-            return res.json({ success: true, media });
+            return res.json({ success: true, media, source_type: 'google_drive' });
           } else if (fileId) {
             const requestParams: any = {
               fileId: fileId,
@@ -291,38 +401,44 @@ async function startServer() {
             };
 
             const fileResponse = await drive.files.get(requestParams);
-            
             const f = fileResponse.data;
+            const { category, subcategory } = classifyMedia("", f.name || "");
+            
             const media = [{
               id: f.id,
-              storage_path: f.thumbnailLink?.replace('=s220', '=s1000') || f.webContentLink,
-              category: 'villa',
-              original_filename: f.name
+              storage_path: f.thumbnailLink?.replace('=s220', '=s1600') || f.webContentLink,
+              category,
+              subcategory,
+              original_filename: f.name,
+              source_type: 'google_drive',
+              source_url: url
             }];
             
-            return res.json({ success: true, media });
+            return res.json({ success: true, media, source_type: 'google_drive' });
           }
-        } else {
-          console.warn("Google Drive import attempted but no credentials found.");
         }
       }
       
-      // Fallback to scraping if not a drive folder
+      // Fallback to scraping
       const { data } = await axios.get(url);
       const $ = cheerio.load(data);
       const images: any[] = [];
       $("img").each((i, el) => {
         const src = $(el).attr("src");
         if (src && src.startsWith("http") && !src.includes("logo") && !src.includes("icon")) {
+          const { category, subcategory } = classifyMedia("", path.basename(src));
           images.push({
             id: `scraped-${i}`,
             storage_path: src,
-            category: 'villa'
+            category,
+            subcategory,
+            original_filename: path.basename(src),
+            source_type: 'local_upload'
           });
         }
       });
 
-      res.json({ success: true, media: images.slice(0, 20) });
+      res.json({ success: true, media: images.slice(0, 20), source_type: 'local_upload' });
     } catch (error: any) {
       console.error("Import error details:", {
         message: error.message,
