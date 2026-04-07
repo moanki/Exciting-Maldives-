@@ -36,7 +36,7 @@ export default function ResortDetail() {
       {/* Hero Gallery */}
       <div className="relative h-[70vh] group">
         <img 
-          src={(resort.resort_media && resort.resort_media.find((m: any) => m.category === 'hero')?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`} 
+          src={(resort.resort_media && resort.resort_media.find((m: any) => m.is_hero)?.storage_path) || (resort.resort_media && resort.resort_media.find((m: any) => m.category === 'hero')?.storage_path) || (resort.resort_media && resort.resort_media[0]?.storage_path) || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`} 
           alt={resort.name}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -76,6 +76,24 @@ export default function ResortDetail() {
               <ReactMarkdown>{resort.description}</ReactMarkdown>
             </div>
           </section>
+
+          {/* Categorized Gallery */}
+          {['dining', 'spa', 'activity'].map(cat => {
+            const items = resort.resort_media?.filter((m: any) => m.category === cat);
+            if (!items || items.length === 0) return null;
+            return (
+              <section key={cat} className="space-y-6">
+                <h2 className="text-3xl font-serif text-brand-navy capitalize">{cat} <span className="italic text-brand-teal">Experiences</span></h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {items.map((m: any) => (
+                    <div key={m.id} className="aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                      <img src={m.storage_path} alt={cat} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
 
           <section className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12 border-y border-brand-navy/5">
             <div className="text-center">

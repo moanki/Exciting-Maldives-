@@ -138,14 +138,11 @@ async function startServer() {
         return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
-      const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+      const drive = google.drive({ version: 'v3', auth });
       const requestParams: any = {
         q: `'${folderId}' in parents and mimeType='application/pdf'`,
         fields: 'files(id, name)',
       };
-      if (typeof auth === 'string') {
-        requestParams.key = auth;
-      }
 
       const listResponse = await drive.files.list(requestParams);
 
@@ -187,11 +184,8 @@ async function startServer() {
         return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
-      const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+      const drive = google.drive({ version: 'v3', auth });
       const requestParams: any = { fileId: fileId, alt: 'media' };
-      if (typeof auth === 'string') {
-        requestParams.key = auth;
-      }
 
       const response = await drive.files.get(
         requestParams,
@@ -249,36 +243,52 @@ async function startServer() {
         }
 
         if (auth) {
-          const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+          const drive = google.drive({ version: 'v3', auth });
           
           if (folderId) {
-            const requestParams: any = {
-              q: `'${folderId}' in parents and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')`,
-              fields: 'files(id, name, webContentLink, thumbnailLink)',
-            };
-            if (typeof auth === 'string') {
-              requestParams.key = auth;
+            const media: any[] = [];
+            
+            async function scanFolder(fId: string, currentCategory: string = 'villa') {
+              const requestParams: any = {
+                q: `'${fId}' in parents`,
+                fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
+              };
+
+              const response = await drive.files.list(requestParams);
+              const files = response.data.files || [];
+
+              for (const file of files) {
+                if (file.mimeType === 'application/vnd.google-apps.folder') {
+                  // Determine category from folder name
+                  const folderName = file.name.toLowerCase();
+                  let nextCategory = currentCategory;
+                  if (folderName.includes('hero') || folderName.includes('banner')) nextCategory = 'hero';
+                  else if (folderName.includes('room') || folderName.includes('villa') || folderName.includes('accommodation')) nextCategory = 'villa';
+                  else if (folderName.includes('din') || folderName.includes('rest')) nextCategory = 'dining';
+                  else if (folderName.includes('spa') || folderName.includes('well')) nextCategory = 'spa';
+                  else if (folderName.includes('act') || folderName.includes('exp')) nextCategory = 'activity';
+                  else if (folderName.includes('map')) nextCategory = 'map';
+                  else if (folderName.includes('logo')) nextCategory = 'logo';
+                  
+                  await scanFolder(file.id, nextCategory);
+                } else if (file.mimeType?.startsWith('image/')) {
+                  media.push({
+                    id: file.id,
+                    storage_path: file.thumbnailLink?.replace('=s220', '=s1000') || file.webContentLink,
+                    category: currentCategory,
+                    original_filename: file.name
+                  });
+                }
+              }
             }
 
-            const listResponse = await drive.files.list(requestParams);
-            
-            const files = listResponse.data.files || [];
-            const media = files.map(f => ({
-              id: f.id,
-              storage_path: f.thumbnailLink?.replace('=s220', '=s1000') || f.webContentLink,
-              category: 'villa',
-              original_filename: f.name
-            }));
-            
+            await scanFolder(folderId);
             return res.json({ success: true, media });
           } else if (fileId) {
             const requestParams: any = {
               fileId: fileId,
               fields: 'id, name, webContentLink, thumbnailLink',
             };
-            if (typeof auth === 'string') {
-              requestParams.key = auth;
-            }
 
             const fileResponse = await drive.files.get(requestParams);
             
@@ -314,8 +324,17 @@ async function startServer() {
 
       res.json({ success: true, media: images.slice(0, 20) });
     } catch (error: any) {
-      console.error("Import error:", error);
-      res.status(500).json({ error: "Failed to import media" });
+      console.error("Import error details:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        stack: error.stack
+      });
+      res.status(500).json({ 
+        error: "Failed to import media", 
+        details: error.message,
+        code: error.response?.status
+      });
     }
   });
 

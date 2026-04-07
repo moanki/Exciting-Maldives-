@@ -88,11 +88,11 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to import');
+        throw new Error(errorData.details || errorData.error || 'Failed to import');
       }
       
       const data = await response.json();
-      if (data.media) {
+      if (data.media && data.media.length > 0) {
         setImportedMedia(data.media);
         showNotification(`Found ${data.media.length} images. Please review and assign.`);
       } else {
@@ -100,9 +100,9 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       }
       
       setImportUrl('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Import error:', error);
-      showNotification('Failed to import media');
+      showNotification(error.message || 'Failed to import media');
     } finally {
       setIsImporting(false);
     }
@@ -145,6 +145,11 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 {media.filter(m => m.category === category).map(m => (
                   <div key={m.id} className="relative group">
                     <img src={m.storage_path} alt={m.alt_text} className="w-full h-24 object-cover rounded-lg" />
+                    {m.is_hero && (
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-brand-teal text-white text-[8px] font-bold uppercase tracking-widest rounded shadow-sm">
+                        Hero
+                      </div>
+                    )}
                     <button type="button" onClick={() => handleDeleteMedia(m.id, m.storage_path)} className="absolute top-2 right-2 p-1 bg-white/80 rounded-full opacity-0 group-hover:opacity-100"><Trash2 size={14} className="text-brand-coral" /></button>
                   </div>
                 ))}
@@ -156,120 +161,173 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
 
       {activeTab === 'Import Media' && (
         <div className="space-y-6">
-          <h3 className="text-xl font-serif text-brand-navy">Import Media</h3>
-          {importedMedia.length > 0 ? (
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Review & Assign</h4>
-              <div className="grid grid-cols-2 gap-4">
-                {importedMedia.map((m, i) => (
-                  <div key={m.id} className="p-4 bg-brand-paper/30 rounded-2xl flex gap-4 items-center">
-                    <img src={m.storage_path} alt="Imported" className="w-16 h-16 object-cover rounded-lg" />
-                    <div className="flex-1">
-                      <select value={m.category} onChange={(e) => {
-                        const newMedia = [...importedMedia];
-                        newMedia[i] = { ...newMedia[i], category: e.target.value };
-                        setImportedMedia(newMedia);
-                      }} className="w-full bg-white border border-brand-navy/10 rounded-lg px-2 py-1 text-xs">
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif text-brand-navy">Import Media</h3>
+            {importedMedia.length > 0 && (
               <button 
                 type="button" 
-                disabled={isSaving}
-                onClick={async () => {
-                  if (!editingResort?.id) {
-                    showNotification('Error: Resort ID missing');
-                    return;
-                  }
-                  
-                  setIsSaving(true);
-                  showNotification('Uploading and saving reviewed media...');
-                  try {
-                    const mediaToInsert = [];
-                    
-                    for (let i = 0; i < importedMedia.length; i++) {
-                      const item = importedMedia[i];
-                      let storagePath = item.storage_path;
-                      
-                      // If it's an external URL, upload it to our storage
-                      if (storagePath && storagePath.startsWith('http')) {
-                        try {
-                          // Use proxy to avoid CORS issues
-                          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(storagePath)}`;
-                          const response = await fetch(proxyUrl);
-                          if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-                          const blob = await response.blob();
-                          const fileName = item.original_filename || `imported_${i}_${Date.now()}.jpg`;
-                          const file = new File([blob], fileName, { type: blob.type });
-                          
-                          const internalUrl = await uploadResortFile(
-                            file, 
-                            formData.name || editingResort.name, 
-                            item.category, 
-                            setUploadProgress, 
-                            showNotification
-                          );
-                          
-                          if (internalUrl) {
-                            storagePath = internalUrl;
-                          }
-                        } catch (uploadErr) {
-                          console.error(`Failed to upload imported image ${i}:`, uploadErr);
-                          // Continue with others or fail? Let's fail if it's critical
-                          throw new Error(`Failed to upload image ${i + 1}. Please check your connection.`);
-                        }
-                      }
-                      
-                      if (!storagePath) {
-                        throw new Error(`Image ${i + 1} is missing a valid URL.`);
-                      }
-
-                      mediaToInsert.push({ 
-                        resort_id: editingResort.id,
-                        storage_path: storagePath,
-                        category: item.category,
-                        status: 'active',
-                        is_hero: item.category === 'hero',
-                        is_featured: ['hero', 'aerial'].includes(item.category)
-                      });
-                    }
-                    
-                    console.log('Inserting media:', mediaToInsert);
-                    const { error } = await supabase.from('resort_media').insert(mediaToInsert);
-                    
-                    if (error) {
-                      console.error('Insert error:', error);
-                      throw error;
-                    }
-
-                    // Post-save verification
-                    const { data: verifyData, error: verifyError } = await supabase
-                      .from('resort_media')
-                      .select('id')
-                      .eq('resort_id', editingResort.id);
-                    
-                    if (verifyError || !verifyData || verifyData.length === 0) {
-                      throw new Error('Media review did not save correctly. Please try again.');
-                    }
-
-                    await fetchMedia();
-                    setImportedMedia([]);
-                    showNotification('Media assigned and saved successfully');
-                  } catch (err: any) {
-                    console.error('Unexpected save error:', err);
-                    showNotification('Error: ' + (err.message || 'Failed to save media'));
-                  } finally {
-                    setIsSaving(false);
-                    setUploadProgress(null);
-                  }
-                }} 
-                className="bg-brand-teal text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50"
+                onClick={() => setImportedMedia([])}
+                className="text-[10px] font-bold uppercase tracking-widest text-brand-coral hover:underline"
               >
-                {isSaving ? 'Saving...' : 'Save All'}
+                Clear All
               </button>
+            )}
+          </div>
+
+          {importedMedia.length > 0 ? (
+            <div className="space-y-8">
+              <div className="bg-brand-teal/5 border border-brand-teal/20 p-4 rounded-2xl">
+                <p className="text-xs text-brand-teal font-medium">
+                  Found {importedMedia.length} images. Review the categories below and click "Save All" to permanently store them.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {categories.map(category => {
+                  const items = importedMedia.filter(m => m.category === category);
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div key={category} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/60">{category}</h4>
+                        <span className="px-2 py-0.5 bg-brand-navy/5 rounded-full text-[9px] font-bold text-brand-navy/40">{items.length}</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {importedMedia.map((m, i) => {
+                          if (m.category !== category) return null;
+                          return (
+                            <div key={i} className="group relative bg-white border border-brand-navy/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                              <div className="aspect-video relative">
+                                <img src={m.storage_path} alt="Imported" className="w-full h-full object-cover" />
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const newMedia = [...importedMedia];
+                                    newMedia.splice(i, 1);
+                                    setImportedMedia(newMedia);
+                                  }}
+                                  className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-full text-brand-coral opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                <select 
+                                  value={m.category} 
+                                  onChange={(e) => {
+                                    const newMedia = [...importedMedia];
+                                    newMedia[i] = { ...newMedia[i], category: e.target.value };
+                                    setImportedMedia(newMedia);
+                                  }} 
+                                  className="w-full bg-brand-paper/50 border border-brand-navy/10 rounded-lg px-2 py-1.5 text-[10px] font-medium focus:border-brand-teal outline-none"
+                                >
+                                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                </select>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={m.is_hero}
+                                    onChange={(e) => {
+                                      const newMedia = [...importedMedia];
+                                      newMedia[i] = { ...newMedia[i], is_hero: e.target.checked };
+                                      setImportedMedia(newMedia);
+                                    }}
+                                    className="w-3 h-3 rounded border-brand-navy/20 text-brand-teal focus:ring-brand-teal"
+                                  />
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-brand-navy/40">Hero Image</span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="sticky bottom-0 bg-white/80 backdrop-blur-md p-4 border-t border-brand-navy/10 flex justify-between items-center rounded-b-2xl">
+                <div className="text-[10px] font-bold text-brand-navy/40 uppercase tracking-widest">
+                  {importedMedia.length} Items Ready
+                </div>
+                <button 
+                  type="button" 
+                  disabled={isSaving}
+                  onClick={async () => {
+                    if (!editingResort?.id) {
+                      showNotification('Error: Resort ID missing');
+                      return;
+                    }
+                    
+                    setIsSaving(true);
+                    showNotification('Uploading and saving reviewed media...');
+                    try {
+                      const mediaToInsert = [];
+                      
+                      for (let i = 0; i < importedMedia.length; i++) {
+                        const item = importedMedia[i];
+                        let storagePath = item.storage_path;
+                        
+                        if (storagePath && storagePath.startsWith('http')) {
+                          try {
+                            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(storagePath)}`;
+                            const response = await fetch(proxyUrl);
+                            if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
+                            const blob = await response.blob();
+                            const fileName = item.original_filename || `imported_${i}_${Date.now()}.jpg`;
+                            const file = new File([blob], fileName, { type: blob.type });
+                            
+                            const internalUrl = await uploadResortFile(
+                              file, 
+                              formData.name || editingResort.name, 
+                              item.category, 
+                              setUploadProgress, 
+                              showNotification
+                            );
+                            
+                            if (internalUrl) {
+                              storagePath = internalUrl;
+                            }
+                          } catch (uploadErr) {
+                            console.error(`Failed to upload imported image ${i}:`, uploadErr);
+                            throw new Error(`Failed to upload image ${i + 1}. Please check your connection.`);
+                          }
+                        }
+                        
+                        if (!storagePath) {
+                          throw new Error(`Image ${i + 1} is missing a valid URL.`);
+                        }
+
+                        mediaToInsert.push({ 
+                          resort_id: editingResort.id,
+                          storage_path: storagePath,
+                          category: item.category,
+                          status: 'active',
+                          is_hero: item.is_hero || item.category === 'hero',
+                          is_featured: item.is_hero || ['hero', 'aerial'].includes(item.category)
+                        });
+                      }
+                      
+                      const { error } = await supabase.from('resort_media').insert(mediaToInsert);
+                      if (error) throw error;
+
+                      await fetchMedia();
+                      setImportedMedia([]);
+                      showNotification('Media assigned and saved successfully');
+                    } catch (err: any) {
+                      console.error('Unexpected save error:', err);
+                      showNotification('Error: ' + (err.message || 'Failed to save media'));
+                    } finally {
+                      setIsSaving(false);
+                      setUploadProgress(null);
+                    }
+                  }} 
+                  className="bg-brand-teal text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save All'}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="p-8 border-2 border-dashed border-brand-navy/10 rounded-2xl text-center space-y-4">
