@@ -21,18 +21,17 @@ export async function uploadFile(file: File, path: string, bucket: string = 'sit
     .from(bucket)
     .upload(filePath, file);
 
-  if (setUploadProgress) setUploadProgress(null);
-
   if (uploadError) {
+    if (setUploadProgress) setUploadProgress(null);
     console.error('Upload error:', uploadError);
     if (uploadError.message.includes('Bucket not found')) {
-      console.error(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
+      throw new Error(`Storage bucket "${bucket}" not found. Please click "Copy SQL" at the top of the dashboard and run it in your Supabase SQL Editor to create the required tables and buckets.`);
     } else {
-      console.error(`Upload error: ${uploadError.message}`);
+      throw new Error(`Upload error: ${uploadError.message}`);
     }
-    return null;
   }
 
+  if (setUploadProgress) setUploadProgress(null);
   if (showNotification) showNotification('Uploaded Successfully');
 
   const { data: { publicUrl } } = supabase.storage
@@ -52,13 +51,13 @@ export async function uploadResortFile(file: File, resortName: string, category:
     .from('site-assets')
     .upload(filePath, file);
 
-  if (setUploadProgress) setUploadProgress(null);
-
   if (uploadError) {
+    if (setUploadProgress) setUploadProgress(null);
     console.error('Upload error:', uploadError);
-    return null;
+    throw new Error(uploadError.message || 'Upload failed');
   }
 
+  if (setUploadProgress) setUploadProgress(null);
   if (showNotification) showNotification('Uploaded Successfully');
 
   const { data: { publicUrl } } = supabase.storage
@@ -280,14 +279,14 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30 relative">
           <Routes>
             <Route path="/" element={<AdminOverview />} />
-            <Route path="/resorts" element={<AdminResorts showNotification={showNotification} />} />
+            <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
             <Route path="/partners" element={<AdminPartners />} />
             <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
             <Route path="/page-manager" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
             <Route path="/newsletter" element={<AdminNewsletter />} />
-            <Route path="/password-manager" element={<AdminPasswordManager />} />
-            <Route path="/resources" element={<AdminResources />} />
+            <Route path="/password-manager" element={<AdminPasswordManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            <Route path="/resources" element={<AdminResources showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
           </Routes>
         </main>
       </div>
@@ -295,7 +294,7 @@ export default function AdminDashboard() {
   );
 }
 
-function AdminPasswordManager() {
+function AdminPasswordManager({ showNotification, setUploadProgress }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void }) {
   const [resources, setResources] = useState<any[]>([]);
   const [isAddingProtected, setIsAddingProtected] = useState(false);
 
@@ -321,6 +320,8 @@ function AdminPasswordManager() {
       
       {isAddingProtected && (
         <ProtectedResourceModal 
+          showNotification={showNotification}
+          setUploadProgress={setUploadProgress}
           onClose={() => setIsAddingProtected(false)} 
           onAdd={() => {
             setIsAddingProtected(false);
@@ -438,20 +439,23 @@ function AdminNewsletter() {
   );
 }
 
-function AdminResources() {
+function AdminResources({ showNotification, setUploadProgress }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void }) {
   const [resources, setResources] = useState<any[]>([]);
   const [protectedResources, setProtectedResources] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingProtected, setIsAddingProtected] = useState(false);
+  const [editingResource, setEditingResource] = useState<any>(null);
+  const [editingProtected, setEditingProtected] = useState<any>(null);
+
+  const fetchResources = async () => {
+    const { data: resData } = await supabase.from('resources').select('*').order('created_at', { ascending: false });
+    const { data: protData } = await supabase.from('protected_resources').select('*').order('created_at', { ascending: false });
+    
+    if (resData) setResources(resData);
+    if (protData) setProtectedResources(protData);
+  };
 
   useEffect(() => {
-    const fetchResources = async () => {
-      const { data: resData } = await supabase.from('resources').select('*');
-      const { data: protData } = await supabase.from('protected_resources').select('*');
-      
-      if (resData) setResources(resData);
-      if (protData) setProtectedResources(protData);
-    };
     fetchResources();
   }, []);
 
@@ -475,30 +479,35 @@ function AdminResources() {
         </div>
       </div>
 
-      {isAdding && (
+      {(isAdding || editingResource) && (
         <ResourceModal 
-          onClose={() => setIsAdding(false)} 
+          initialData={editingResource}
+          showNotification={showNotification}
+          setUploadProgress={setUploadProgress}
+          onClose={() => {
+            setIsAdding(false);
+            setEditingResource(null);
+          }} 
           onAdd={() => {
             setIsAdding(false);
-            const fetchResources = async () => {
-              const { data: resData } = await supabase.from('resources').select('*');
-              if (resData) setResources(resData);
-            };
+            setEditingResource(null);
             fetchResources();
           }} 
         />
       )}
 
-      {isAddingProtected && (
+      {(isAddingProtected || editingProtected) && (
         <ProtectedResourceModal 
-          onClose={() => setIsAddingProtected(false)} 
+          initialData={editingProtected}
+          showNotification={showNotification}
+          setUploadProgress={setUploadProgress}
+          onClose={() => {
+            setIsAddingProtected(false);
+            setEditingProtected(null);
+          }} 
           onAdd={() => {
             setIsAddingProtected(false);
-            // Re-fetch resources
-            const fetchResources = async () => {
-              const { data: protData } = await supabase.from('protected_resources').select('*');
-              if (protData) setProtectedResources(protData);
-            };
+            setEditingProtected(null);
             fetchResources();
           }} 
         />
@@ -516,8 +525,23 @@ function AdminResources() {
             <div className="flex justify-between items-center">
               <span className="text-[10px] text-brand-navy/30 font-bold font-sans">{resource.size}</span>
               <div className="flex gap-2">
-                <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
-                <button className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"><Trash2 size={16} /></button>
+                <button 
+                  onClick={() => setEditingResource(resource)}
+                  className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"
+                >
+                  <Edit2 size={16} />
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to delete this resource?')) {
+                      const { error } = await supabase.from('resources').delete().eq('id', resource.id);
+                      if (!error) fetchResources();
+                    }
+                  }}
+                  className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
           </div>
@@ -536,13 +560,17 @@ function AdminResources() {
             <div className="flex justify-between items-center">
               <span className="text-[10px] text-brand-navy/30 font-bold font-sans">{resource.passwords?.length || 0} Passwords</span>
               <div className="flex gap-2">
-                <button className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"><Edit2 size={16} /></button>
+                <button 
+                  onClick={() => setEditingProtected(resource)}
+                  className="p-2 text-brand-navy/30 hover:text-brand-teal transition-colors"
+                >
+                  <Edit2 size={16} />
+                </button>
                 <button 
                   onClick={async () => {
-                    const { error } = await supabase.from('protected_resources').delete().eq('id', resource.id);
-                    if (!error) {
-                      const { data } = await supabase.from('protected_resources').select('*');
-                      if (data) setProtectedResources(data);
+                    if (window.confirm('Are you sure you want to delete this protected resource?')) {
+                      const { error } = await supabase.from('protected_resources').delete().eq('id', resource.id);
+                      if (!error) fetchResources();
                     }
                   }}
                   className="p-2 text-brand-navy/30 hover:text-brand-coral transition-colors"
@@ -587,60 +615,63 @@ function SubSidebarLink({ to, label, active, onClick }: any) {
   );
 }
 
-function ResourceModal({ onClose, onAdd }: any) {
-  const [title, setTitle] = useState('');
+function ResourceModal({ onClose, onAdd, initialData, showNotification, setUploadProgress }: any) {
+  const [title, setTitle] = useState(initialData?.title || '');
   const [file, setFile] = useState<File | null>(null);
-  const [type, setType] = useState('PDF');
+  const [type, setType] = useState(initialData?.type || 'PDF');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!title || !file) return;
+    if (!title || (!file && !initialData)) return;
+    setLoading(true);
     
-    // Upload file
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(`public/${fileName}`, file);
-    
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return;
-    }
+    try {
+      let publicUrl = initialData?.file_url || '';
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(`public/${fileName}`);
+      if (file) {
+        publicUrl = await uploadFile(file, 'public', 'documents', setUploadProgress, showNotification);
+      }
 
-    // Save to DB
-    const { error } = await supabase
-      .from('resources')
-      .insert({
+      // Save to DB
+      const resourceData = {
         title,
         type,
         file_url: publicUrl,
-        size: `${(file.size / 1024 / 1024).toFixed(2)} MB`
-      });
-    
-    if (!error) {
+        size: file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : initialData?.size
+      };
+
+      const { error } = initialData 
+        ? await supabase.from('resources').update(resourceData).eq('id', initialData.id)
+        : await supabase.from('resources').insert(resourceData);
+      
+      if (error) throw error;
+
       onAdd();
       onClose();
+    } catch (err: any) {
+      console.error('Resource save error:', err);
+      showNotification('Error: ' + (err.message || 'Failed to save resource'));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-brand-navy/20 backdrop-blur-sm">
       <div className="bg-white w-full max-w-lg rounded-[32px] p-8 shadow-2xl">
-        <h3 className="text-xl font-serif text-brand-navy mb-6">Add Resource</h3>
+        <h3 className="text-xl font-serif text-brand-navy mb-6">{initialData ? 'Edit Resource' : 'Add Resource'}</h3>
         <div className="space-y-4">
           <TextInput label="Title" value={title} onChange={setTitle} />
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File</label>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File {initialData && '(Leave empty to keep current)'}</label>
             <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm font-sans" />
           </div>
           <TextInput label="Type (e.g. PDF, DOCX)" value={type} onChange={setType} />
           <div className="flex gap-4 mt-8">
             <button onClick={onClose} className="flex-1 px-6 py-3 bg-brand-paper rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy/10 transition-all">Cancel</button>
-            <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Add Resource</button>
+            <button onClick={handleSubmit} disabled={loading} className="flex-1 px-6 py-3 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50">
+              {loading ? 'Saving...' : (initialData ? 'Update Resource' : 'Add Resource')}
+            </button>
           </div>
         </div>
       </div>
@@ -648,43 +679,44 @@ function ResourceModal({ onClose, onAdd }: any) {
   );
 }
 
-function ProtectedResourceModal({ onClose, onAdd }: any) {
-  const [title, setTitle] = useState('');
+function ProtectedResourceModal({ onClose, onAdd, initialData, showNotification, setUploadProgress }: any) {
+  const [title, setTitle] = useState(initialData?.title || '');
   const [file, setFile] = useState<File | null>(null);
-  const [passwords, setPasswords] = useState('');
+  const [passwords, setPasswords] = useState(initialData?.passwords?.join(', ') || '');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!title || !file || !passwords) return;
+    if (!title || (!file && !initialData) || !passwords) return;
+    setLoading(true);
     
-    // Upload file
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const { error: uploadError, data } = await supabase.storage
-      .from('documents')
-      .upload(`protected/${fileName}`, file);
-    
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return;
-    }
+    try {
+      let publicUrl = initialData?.file_url || '';
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(`protected/${fileName}`);
+      if (file) {
+        publicUrl = await uploadFile(file, 'protected', 'documents', setUploadProgress, showNotification);
+      }
 
-    // Save to DB
-    const { error } = await supabase
-      .from('protected_resources')
-      .insert({
+      // Save to DB
+      const resourceData = {
         title,
         file_url: publicUrl,
         passwords: passwords.split(',').map(p => p.trim())
-      });
-    
-    if (!error) {
+      };
+
+      const { error } = initialData
+        ? await supabase.from('protected_resources').update(resourceData).eq('id', initialData.id)
+        : await supabase.from('protected_resources').insert(resourceData);
+      
+      if (error) throw error;
+
       onAdd();
       onClose();
+    } catch (err: any) {
+      console.error('Protected resource save error:', err);
+      showNotification('Error: ' + (err.message || 'Failed to save protected resource'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1016,7 +1048,7 @@ function StatCard({ icon, label, value, color }: any) {
   );
 }
 
-function AdminResorts({ showNotification }: { showNotification: (msg: string) => void }) {
+function AdminResorts({ showNotification, setUploadProgress }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void }) {
   const [resorts, setResorts] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingResort, setEditingResort] = useState<any>(null);
@@ -1029,7 +1061,6 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
     failed: number;
     status: string;
   } | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [scrapedImages, setScrapedImages] = useState<string[]>([]);
   const [isFetchingImages, setIsFetchingImages] = useState(false);
   const [formData, setFormData] = useState({
@@ -1488,6 +1519,7 @@ function AdminResorts({ showNotification }: { showNotification: (msg: string) =>
                     handleSave={handleSave}
                     setIsAdding={setIsAdding}
                     showNotification={showNotification}
+                    setUploadProgress={setUploadProgress}
                   />
                 </ErrorBoundary>
               </div>
@@ -2170,8 +2202,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="Primary Logo" 
                     value={settings.logos?.primary || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, primary: url }));
+                      try {
+                        const url = await uploadFile(file, 'logos', 'site-assets', setUploadProgress, showNotification);
+                        if (url) saveSetting('logos', (prev: any) => ({ ...prev, primary: url }));
+                      } catch (err: any) {
+                        showNotification(err.message);
+                      }
                     }}
                     onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, primary: val }))} 
                   />
@@ -2179,8 +2215,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="White Logo" 
                     value={settings.logos?.white || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, white: url }));
+                      try {
+                        const url = await uploadFile(file, 'logos', 'site-assets', setUploadProgress, showNotification);
+                        if (url) saveSetting('logos', (prev: any) => ({ ...prev, white: url }));
+                      } catch (err: any) {
+                        showNotification(err.message);
+                      }
                     }}
                     onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, white: val }))} 
                   />
@@ -2188,8 +2228,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="Black Logo" 
                     value={settings.logos?.black || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'logos');
-                      if (url) saveSetting('logos', (prev: any) => ({ ...prev, black: url }));
+                      try {
+                        const url = await uploadFile(file, 'logos', 'site-assets', setUploadProgress, showNotification);
+                        if (url) saveSetting('logos', (prev: any) => ({ ...prev, black: url }));
+                      } catch (err: any) {
+                        showNotification(err.message);
+                      }
                     }}
                     onChange={(val: string) => saveSetting('logos', (prev: any) => ({ ...prev, black: val }))} 
                   />
@@ -2303,10 +2347,14 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     value={settings.hero?.banner_url || ''}
                     type={settings.hero?.banner_type || 'image'}
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'banners');
-                      if (url) {
-                        const type = file.type.startsWith('video/') ? 'video' : 'image';
-                        saveSetting('hero', (prev: any) => ({ ...prev, banner_url: url, banner_type: type }));
+                      try {
+                        const url = await uploadFile(file, 'banners', 'site-assets', setUploadProgress, showNotification);
+                        if (url) {
+                          const type = file.type.startsWith('video/') ? 'video' : 'image';
+                          saveSetting('hero', (prev: any) => ({ ...prev, banner_url: url, banner_type: type }));
+                        }
+                      } catch (err: any) {
+                        showNotification(err.message);
                       }
                     }}
                     onChange={(val: string) => saveSetting('hero', (prev: any) => ({ ...prev, banner_url: val }))}
@@ -2387,11 +2435,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                             label={`Partner Logo ${idx + 1}`}
                             value={partner.url || ''}
                             onUpload={async (file: File) => {
-                              const url = await uploadFile(file, 'partners');
-                              if (url) {
-                                const newPartners = [...safeArray(settings.hero_partners)];
-                                newPartners[idx] = { ...newPartners[idx], url };
-                                saveSetting('hero_partners', newPartners);
+                              try {
+                                const url = await uploadFile(file, 'partners', 'site-assets', setUploadProgress, showNotification);
+                                if (url) {
+                                  const newPartners = [...safeArray(settings.hero_partners)];
+                                  newPartners[idx] = { ...newPartners[idx], url };
+                                  saveSetting('hero_partners', newPartners);
+                                }
+                              } catch (err: any) {
+                                showNotification(err.message);
                               }
                             }}
                             onChange={(val: string) => {
@@ -2569,11 +2621,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                       label="Cover Image" 
                       value={post.img || ''} 
                       onUpload={async (file: File) => {
-                        const url = await uploadFile(file, 'guide');
-                        if (url) {
-                          const newPosts = [...safeArray(settings.travel_guide)];
-                          newPosts[idx].img = url;
-                          saveSetting('travel_guide', newPosts);
+                        try {
+                          const url = await uploadFile(file, 'guide', 'site-assets', setUploadProgress, showNotification);
+                          if (url) {
+                            const newPosts = [...safeArray(settings.travel_guide)];
+                            newPosts[idx].img = url;
+                            saveSetting('travel_guide', newPosts);
+                          }
+                        } catch (err: any) {
+                          showNotification(err.message);
                         }
                       }}
                       onChange={(val: string) => {
@@ -2748,14 +2804,14 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
               </div>
             </div>
           )}
-          {activeTab === 'why' && (
+          {activeTab === 'why-us' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-serif text-brand-navy">Featured Retreats</h3>
               </div>
               <div className="bg-brand-paper/30 p-6 rounded-3xl space-y-4">
                 <TextInput 
-                  label="Section Title" 
+                  label="Featured Retreats Section Title" 
                   value={settings.featured_retreats_title || 'Featured Retreats'} 
                   onChange={(val) => saveSetting('featured_retreats_title', val)} 
                 />
@@ -2812,11 +2868,13 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="Pillar Image" 
                     value={pillar.image_url || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'why-us');
-                      if (url) {
+                      try {
+                        const url = await uploadFile(file, 'why-us', 'site-assets', setUploadProgress, showNotification);
                         const newPillars = [...safeArray(settings.why_us)];
                         newPillars[idx].image_url = url;
                         saveSetting('why_us', newPillars);
+                      } catch (err) {
+                        console.error('Upload error:', err);
                       }
                     }}
                     onChange={(val: string) => {
@@ -2961,8 +3019,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   label="Main Image" 
                   value={settings.platform_excellence?.image_url || ''} 
                   onUpload={async (file: File) => {
-                    const url = await uploadFile(file, 'excellence');
-                    if (url) saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: url }));
+                    try {
+                      const url = await uploadFile(file, 'excellence', 'site-assets', setUploadProgress, showNotification);
+                      saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: url }));
+                    } catch (err) {
+                      console.error('Upload error:', err);
+                    }
                   }}
                   onChange={(val: string) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: val }))} 
                 />
@@ -2999,12 +3061,14 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                         input.onchange = async (e: any) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const url = await uploadFile(file, 'platform');
-                            if (url) {
+                            try {
+                              const url = await uploadFile(file, 'platform', 'site-assets', setUploadProgress, showNotification);
                               saveSetting('platform_excellence', (prev: any) => ({
                                 ...prev,
                                 images: [...safeArray(prev?.images), url]
                               }));
+                            } catch (err) {
+                              console.error('Upload error:', err);
                             }
                           }
                         };
@@ -3062,13 +3126,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           label="Feature Icon/Image" 
                           value={item.icon_url || ''} 
                           onUpload={async (file: File) => {
-                            const url = await uploadFile(file, 'excellence-icons');
-                            if (url) {
+                            try {
+                              const url = await uploadFile(file, 'excellence-icons', 'site-assets', setUploadProgress, showNotification);
                               saveSetting('platform_excellence', (prev: any) => {
                                 const newFeatures = [...safeArray(prev?.features)];
                                 newFeatures[idx] = { ...newFeatures[idx], icon_url: url };
                                 return { ...prev, features: newFeatures };
                               });
+                            } catch (err) {
+                              console.error('Upload error:', err);
                             }
                           }}
                           onChange={(val: string) => {
@@ -3105,8 +3171,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="CEO Photo" 
                     value={settings.ceo_message?.photo_url || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'ceo');
-                      if (url) saveSetting('ceo_message', (prev: any) => ({ ...prev, photo_url: url }));
+                      try {
+                        const url = await uploadFile(file, 'ceo', 'site-assets', setUploadProgress, showNotification);
+                        saveSetting('ceo_message', (prev: any) => ({ ...prev, photo_url: url }));
+                      } catch (err) {
+                        console.error('Upload error:', err);
+                      }
                     }}
                     onChange={(val: string) => saveSetting('ceo_message', (prev: any) => ({ ...prev, photo_url: val }))} 
                   />
@@ -3144,8 +3214,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                     label="Story Photo" 
                     value={settings.our_story?.image_url || ''} 
                     onUpload={async (file: File) => {
-                      const url = await uploadFile(file, 'story');
-                      if (url) saveSetting('our_story', (prev: any) => ({ ...prev, image_url: url }));
+                      try {
+                        const url = await uploadFile(file, 'story', 'site-assets', setUploadProgress, showNotification);
+                        saveSetting('our_story', (prev: any) => ({ ...prev, image_url: url }));
+                      } catch (err) {
+                        console.error('Upload error:', err);
+                      }
                     }}
                     onChange={(val: string) => saveSetting('our_story', (prev: any) => ({ ...prev, image_url: val }))} 
                   />
@@ -3194,13 +3268,15 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                               input.onchange = async (e: any) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const url = await uploadFile(file, 'awards');
-                                  if (url) {
+                                  try {
+                                    const url = await uploadFile(file, 'awards', 'site-assets', setUploadProgress, showNotification);
                                     saveSetting('awards', (prev: any) => {
                                       const newItems = [...safeArray(prev?.items)];
                                       newItems[idx] = { ...newItems[idx], url };
                                       return { ...prev, items: newItems };
                                     });
+                                  } catch (err) {
+                                    console.error('Upload error:', err);
                                   }
                                 }
                               };
@@ -3231,12 +3307,14 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           input.onchange = async (e: any) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const url = await uploadFile(file, 'awards');
-                              if (url) {
+                              try {
+                                const url = await uploadFile(file, 'awards', 'site-assets', setUploadProgress, showNotification);
                                 saveSetting('awards', (prev: any) => ({
                                   ...prev,
                                   items: [...safeArray(prev?.items), { url }]
                                 }));
+                              } catch (err) {
+                                console.error('Upload error:', err);
                               }
                             }
                           };
@@ -3302,8 +3380,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                         label="CTA Background Image"
                         value={settings.ctas?.bg_image_url || ''}
                         onUpload={async (file: File) => {
-                          const url = await uploadFile(file, 'ctas');
-                          if (url) saveSetting('ctas', (prev: any) => ({ ...prev, bg_image_url: url }));
+                          try {
+                            const url = await uploadFile(file, 'ctas', 'site-assets', setUploadProgress, showNotification);
+                            saveSetting('ctas', (prev: any) => ({ ...prev, bg_image_url: url }));
+                          } catch (err) {
+                            console.error('Upload error:', err);
+                          }
                         }}
                         onChange={(val: string) => saveSetting('ctas', (prev: any) => ({ ...prev, bg_image_url: val }))}
                       />
@@ -3351,13 +3433,34 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                               if (files) {
                                 const newMedia = [];
                                 for (let i = 0; i < files.length; i++) {
-                                  const url = await uploadFile(files[i], 'resorts');
-                                  if (url) newMedia.push({ resort_id: resort.id, storage_path: url, category: 'gallery' });
+                                  try {
+                                    const url = await uploadFile(files[i], 'resorts', 'site-assets', setUploadProgress, showNotification);
+                                    if (url) {
+                                      newMedia.push({ 
+                                        resort_id: resort.id, 
+                                        storage_path: url, 
+                                        category: 'gallery',
+                                        status: 'active'
+                                      });
+                                    }
+                                  } catch (err: any) {
+                                    showNotification('Upload failed: ' + err.message);
+                                    // Continue with other files or stop?
+                                  }
                                 }
-                                const { error } = await supabase
-                                  .from('resort_media')
-                                  .insert(newMedia);
-                                if (!error) fetchResorts();
+                                
+                                if (newMedia.length > 0) {
+                                  const { error } = await supabase
+                                    .from('resort_media')
+                                    .insert(newMedia);
+                                  
+                                  if (!error) {
+                                    fetchResorts();
+                                    showNotification(`Successfully added ${newMedia.length} photos`);
+                                  } else {
+                                    showNotification('Failed to save media records: ' + error.message);
+                                  }
+                                }
                               }
                             };
                             input.click();
@@ -3462,11 +3565,13 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                               input.onchange = async (e: any) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const url = await uploadFile(file, 'footer');
-                                  if (url) {
+                                  try {
+                                    const url = await uploadFile(file, 'footer', 'site-assets', setUploadProgress, showNotification);
                                     const newItems = [...safeArray(settings.footer?.memberships)];
                                     newItems[idx] = { ...newItems[idx], url };
                                     saveSetting('footer', { ...settings.footer, memberships: newItems });
+                                  } catch (err) {
+                                    console.error('Upload error:', err);
                                   }
                                 }
                               };
@@ -3495,10 +3600,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           input.onchange = async (e: any) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const url = await uploadFile(file, 'footer');
-                              if (url) {
+                              try {
+                                const url = await uploadFile(file, 'footer', 'site-assets', setUploadProgress, showNotification);
                                 const newItems = [...safeArray(settings.footer?.memberships || []), { url }];
                                 saveSetting('footer', { ...settings.footer, memberships: newItems });
+                              } catch (err) {
+                                console.error('Upload error:', err);
                               }
                             }
                           };
@@ -3524,11 +3631,13 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                               input.onchange = async (e: any) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const url = await uploadFile(file, 'footer');
-                                  if (url) {
+                                  try {
+                                    const url = await uploadFile(file, 'footer', 'site-assets', setUploadProgress, showNotification);
                                     const newItems = [...safeArray(settings.footer?.awards)];
                                     newItems[idx] = { ...newItems[idx], url };
                                     saveSetting('footer', { ...settings.footer, awards: newItems });
+                                  } catch (err) {
+                                    console.error('Upload error:', err);
                                   }
                                 }
                               };
@@ -3557,10 +3666,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                           input.onchange = async (e: any) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const url = await uploadFile(file, 'footer');
-                              if (url) {
+                              try {
+                                const url = await uploadFile(file, 'footer', 'site-assets', setUploadProgress, showNotification);
                                 const newItems = [...safeArray(settings.footer?.awards || []), { url }];
                                 saveSetting('footer', { ...settings.footer, awards: newItems });
+                              } catch (err) {
+                                console.error('Upload error:', err);
                               }
                             }
                           };
@@ -3733,6 +3844,9 @@ function TextInput({ label, value, onChange, icon, type = 'text' }: any) {
           type={type}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
           className={`w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy ${icon ? 'pl-10' : ''}`}
         />
       </div>
@@ -3748,6 +3862,9 @@ function TextAreaInput({ label, value, onChange }: any) {
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         rows={4}
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
         className="w-full bg-brand-paper/50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy resize-none"
       />
     </div>
@@ -3790,6 +3907,9 @@ function LogoInput({ label, value, onUpload, onChange }: any) {
         placeholder="Logo URL"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
         className="w-full bg-white border-none rounded-lg px-3 py-2 text-[10px] focus:ring-1 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy"
       />
     </div>
@@ -3837,6 +3957,9 @@ function BannerInput({ label, value, type, onUpload, onChange }: any) {
         placeholder="Media URL"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
         className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-teal/20 transition-all font-sans text-brand-navy"
       />
     </div>

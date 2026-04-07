@@ -117,12 +117,22 @@ create table if not exists public.resources (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 7. Protected Resources (Access Logs/Permissions)
+-- 7. PROTECTED RESOURCES (PASSWORD PROTECTED)
+-- Rename old table if it exists to avoid conflict
+do $$ 
+begin
+  if exists (select from pg_tables where schemaname = 'public' and tablename = 'protected_resources') then
+    if not exists (select from pg_attribute where attrelid = 'public.protected_resources'::regclass and attname = 'passwords') then
+      alter table public.protected_resources rename to resource_access_requests;
+    end if;
+  end if;
+end $$;
+
 create table if not exists public.protected_resources (
   id uuid default gen_random_uuid() primary key,
-  resource_id uuid references public.resources(id) on delete cascade,
-  agent_id uuid references auth.users(id) on delete cascade,
-  status text check (status in ('pending', 'granted', 'revoked')) default 'pending',
+  title text not null,
+  file_url text not null,
+  passwords text[] not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -206,14 +216,19 @@ create policy "Admins can manage site settings" on public.site_settings for all 
 -- Resources: Public can read, Admins can manage
 create policy "Public can read resources" on public.resources for select using (not is_protected);
 create policy "Agents can read granted resources" on public.resources for select using (
-  id in (select resource_id from public.protected_resources where agent_id = auth.uid() and status = 'granted')
+  id in (select resource_id from public.resource_access_requests where agent_id = auth.uid() and status = 'granted')
 );
 create policy "Admins can manage resources" on public.resources for all using (auth.uid() in (select id from public.profiles));
 
--- Protected Resources: Admins can manage, Agents can read own
-create policy "Admins can manage protected resources" on public.protected_resources for all using (auth.uid() in (select id from public.profiles));
-create policy "Agents can view own resource requests" on public.protected_resources for select using (agent_id = auth.uid());
-create policy "Agents can request resources" on public.protected_resources for insert with check (agent_id = auth.uid());
+-- Protected Resources: Admins can manage, Public can view metadata (if they have the link)
+create policy "Public can view protected resources metadata" on public.protected_resources for select using (true);
+create policy "Admins can manage protected resources" on public.protected_resources for all using (auth.uid() in (select id from public.profiles where role in ('superadmin', 'admin', 'content_manager')));
+
+-- Resource Access Requests (Old Protected Resources)
+alter table public.resource_access_requests enable row level security;
+create policy "Admins can manage resource requests" on public.resource_access_requests for all using (auth.uid() in (select id from public.profiles));
+create policy "Agents can view own resource requests" on public.resource_access_requests for select using (agent_id = auth.uid());
+create policy "Agents can request resources" on public.resource_access_requests for insert with check (agent_id = auth.uid());
 
 -- Messages: Users can manage own, Admins can read all, Guests can manage by chat_id
 create policy "Users can manage own messages" on public.messages for all using (

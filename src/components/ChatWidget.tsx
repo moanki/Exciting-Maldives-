@@ -132,6 +132,11 @@ export default function ChatWidget() {
     }
   };
 
+  const isOwnMessage = (msg: any) => {
+    if (user) return msg.sender_id === user.id;
+    return msg.sender_type === 'guest';
+  };
+
   if (!isAuthReady) return null;
 
   return (
@@ -169,17 +174,17 @@ export default function ChatWidget() {
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex ${msg.sender_id === user?.id && msg.sender_id !== null ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${isOwnMessage(msg) ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
                     className={`max-w-[85%] p-3 rounded-2xl text-sm font-sans leading-relaxed ${
-                      msg.sender_id === user?.id && msg.sender_id !== null
+                      isOwnMessage(msg)
                         ? 'bg-brand-teal text-white rounded-tr-none shadow-sm'
                         : 'bg-white border border-gray-100 text-brand-navy rounded-tl-none shadow-sm'
                     }`}
                   >
                     {msg.content}
-                    <div className={`text-[9px] mt-1 opacity-50 ${msg.sender_id === user?.id && msg.sender_id !== null ? 'text-right' : 'text-left'}`}>
+                    <div className={`text-[9px] mt-1 opacity-50 ${isOwnMessage(msg) ? 'text-right' : 'text-left'}`}>
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>

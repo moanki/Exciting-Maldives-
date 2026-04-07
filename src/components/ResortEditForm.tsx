@@ -23,9 +23,12 @@ interface ResortEditFormProps {
   handleSave: (e: React.FormEvent) => void;
   setIsAdding: (val: boolean) => void;
   showNotification: (msg: string) => void;
+  setUploadProgress: (p: number | null) => void;
 }
 
-export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification }) => {
+import { uploadResortFile } from '../pages/AdminDashboard';
+
+export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification, setUploadProgress }) => {
   const [activeTab, setActiveTab] = useState('Overview');
   const tabs = ['Overview', 'Accommodation', 'Dining', 'Experiences', 'Media', 'Documents', 'Import Media'];
   const [media, setMedia] = useState<any[]>([]);
@@ -83,17 +86,20 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
         body: JSON.stringify({ url: importUrl, resort_id: editingResort.id }),
       });
       
-      if (!response.ok) throw new Error('Failed to import');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to import');
+      }
       
-      // Simulate receiving media to review
-      const mockImportedMedia = [
-        { id: 'new-1', storage_path: 'https://picsum.photos/seed/1/200/200', category: 'hero' },
-        { id: 'new-2', storage_path: 'https://picsum.photos/seed/2/200/200', category: 'villa' },
-      ];
-      setImportedMedia(mockImportedMedia);
+      const data = await response.json();
+      if (data.media) {
+        setImportedMedia(data.media);
+        showNotification(`Found ${data.media.length} images. Please review and assign.`);
+      } else {
+        showNotification('No images found at the provided URL.');
+      }
       
       setImportUrl('');
-      showNotification('Media imported. Please review and assign.');
     } catch (error) {
       console.error('Import error:', error);
       showNotification('Failed to import media');
@@ -180,32 +186,84 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   }
                   
                   setIsSaving(true);
+                  showNotification('Uploading and saving reviewed media...');
                   try {
-                    // Save importedMedia to database - Omit mock IDs to let Supabase generate them
-                    const mediaToInsert = importedMedia.map(({ id, ...rest }) => ({ 
-                      ...rest, 
-                      resort_id: editingResort.id,
-                      status: 'active',
-                      is_hero: rest.category === 'hero',
-                      is_featured: ['hero', 'aerial'].includes(rest.category)
-                    }));
+                    const mediaToInsert = [];
+                    
+                    for (let i = 0; i < importedMedia.length; i++) {
+                      const item = importedMedia[i];
+                      let storagePath = item.storage_path;
+                      
+                      // If it's an external URL, upload it to our storage
+                      if (storagePath && storagePath.startsWith('http')) {
+                        try {
+                          // Use proxy to avoid CORS issues
+                          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(storagePath)}`;
+                          const response = await fetch(proxyUrl);
+                          if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
+                          const blob = await response.blob();
+                          const fileName = item.original_filename || `imported_${i}_${Date.now()}.jpg`;
+                          const file = new File([blob], fileName, { type: blob.type });
+                          
+                          const internalUrl = await uploadResortFile(
+                            file, 
+                            formData.name || editingResort.name, 
+                            item.category, 
+                            setUploadProgress, 
+                            showNotification
+                          );
+                          
+                          if (internalUrl) {
+                            storagePath = internalUrl;
+                          }
+                        } catch (uploadErr) {
+                          console.error(`Failed to upload imported image ${i}:`, uploadErr);
+                          // Continue with others or fail? Let's fail if it's critical
+                          throw new Error(`Failed to upload image ${i + 1}. Please check your connection.`);
+                        }
+                      }
+                      
+                      if (!storagePath) {
+                        throw new Error(`Image ${i + 1} is missing a valid URL.`);
+                      }
+
+                      mediaToInsert.push({ 
+                        resort_id: editingResort.id,
+                        storage_path: storagePath,
+                        category: item.category,
+                        status: 'active',
+                        is_hero: item.category === 'hero',
+                        is_featured: ['hero', 'aerial'].includes(item.category)
+                      });
+                    }
                     
                     console.log('Inserting media:', mediaToInsert);
                     const { error } = await supabase.from('resort_media').insert(mediaToInsert);
                     
                     if (error) {
                       console.error('Insert error:', error);
-                      showNotification('Failed to save media: ' + error.message);
-                    } else {
-                      await fetchMedia();
-                      setImportedMedia([]);
-                      showNotification('Media assigned successfully');
+                      throw error;
                     }
+
+                    // Post-save verification
+                    const { data: verifyData, error: verifyError } = await supabase
+                      .from('resort_media')
+                      .select('id')
+                      .eq('resort_id', editingResort.id);
+                    
+                    if (verifyError || !verifyData || verifyData.length === 0) {
+                      throw new Error('Media review did not save correctly. Please try again.');
+                    }
+
+                    await fetchMedia();
+                    setImportedMedia([]);
+                    showNotification('Media assigned and saved successfully');
                   } catch (err: any) {
                     console.error('Unexpected save error:', err);
-                    showNotification('Error: ' + err.message);
+                    showNotification('Error: ' + (err.message || 'Failed to save media'));
                   } finally {
                     setIsSaving(false);
+                    setUploadProgress(null);
                   }
                 }} 
                 className="bg-brand-teal text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50"

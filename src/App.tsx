@@ -51,7 +51,8 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
             {isPageActive('home') && <Route path="/" element={<Home settings={settings} />} />}
             {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
             {isPageActive('resorts') && <Route path="/resorts/:id" element={<ResortDetail />} />}
-            {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo />} />}
+            {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo settings={settings} />} />}
+            {isPageActive('tourist-info') && <Route path="/guide" element={<TouristInfo settings={settings} />} />}
             {isPageActive('map') && <Route path="/map" element={<MaldivesMap />} />}
             {isPageActive('legal') && <Route path="/legal" element={<Legal />} />}
             <Route path="/p/:slug" element={<CustomPage />} />

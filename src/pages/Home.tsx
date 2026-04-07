@@ -109,12 +109,12 @@ function Newsletter({ settings }: { settings: any }) {
   const markets = settings.primary_markets || ['Europe', 'Middle East', 'Asia', 'Russia (CIS)', 'Other'];
 
   return (
-    <section className="py-32 bg-brand-paper text-brand-navy relative overflow-hidden">
+    <section className="py-20 bg-brand-paper text-brand-navy relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
-          <div className="h-full min-h-[600px] bg-brand-navy/5 rounded-2xl overflow-hidden shadow-inner">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div className="h-full min-h-[400px] bg-brand-navy/5 rounded-2xl overflow-hidden shadow-inner">
             {settings.newsletter?.image_url ? (
-              <img src={settings.newsletter.image_url} alt="Newsletter" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img src={settings.newsletter.image_url} alt="Newsletter" className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
             ) : (
               <div className="w-full h-full bg-brand-navy/10 flex items-center justify-center">
                 <Mail size={48} className="text-brand-navy/20" />
@@ -124,11 +124,11 @@ function Newsletter({ settings }: { settings: any }) {
           
           {/* Form Block */}
           <div>
-            <div className="mb-16">
-              <span className="text-[11px] font-bold text-brand-teal uppercase tracking-[0.4em] mb-6 block">Stay Connected</span>
-              <h2 className="text-5xl md:text-6xl font-serif mb-10 tracking-tight">Be in Touch</h2>
-              <p className="text-lg text-brand-navy/60 font-light leading-relaxed max-w-md">
-                We would be delighted to stay connected and learn more about your business. Please share your details below, and our team will keep you informed with carefully selected updates, opportunities, and insights relevant to your market.
+            <div className="mb-10">
+              <span className="text-[10px] font-bold text-brand-teal uppercase tracking-[0.4em] mb-4 block">Stay Connected</span>
+              <h2 className="text-4xl md:text-5xl font-serif mb-6 tracking-tight">Be in Touch</h2>
+              <p className="text-base text-brand-navy/60 font-light leading-relaxed max-w-md">
+                We would be delighted to stay connected and learn more about your business.
               </p>
             </div>
 
@@ -545,7 +545,13 @@ export default function Home({ settings }: { settings: any }) {
             </div>
 
             {/* Right: Interactive Parallax Stack */}
-            <div className="relative h-[300px] md:h-[400px] w-full max-w-md mx-auto flex items-center justify-center perspective-1000">
+            <div className="relative h-auto w-full max-w-md mx-auto flex flex-col items-center justify-center perspective-1000">
+              {settings.platform_excellence?.title && (
+                <div className="mb-8 text-center lg:text-left w-full">
+                  <h3 className="font-serif text-2xl text-brand-navy mb-3">{settings.platform_excellence.title}</h3>
+                  <p className="text-xs text-brand-navy/60 leading-relaxed">{settings.platform_excellence.description}</p>
+                </div>
+              )}
               {safeArray(settings.platform_excellence?.images).length > 0 && (
                 <StackedPhotoCarousel 
                   onIndexChange={setActiveIndex}
@@ -558,23 +564,24 @@ export default function Home({ settings }: { settings: any }) {
       </section>
 
       {/* 8. PRESTIGIOUS AWARDS */}
-      <section className="py-24 bg-white overflow-hidden border-y border-brand-navy/5 relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 400px' }}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12 mb-16 text-center">
-          <h2 className="font-serif text-3xl md:text-4xl text-brand-navy">{settings.awards?.title || 'Prestigious Awards'}</h2>
+      <section className="py-16 bg-white overflow-hidden border-y border-brand-navy/5 relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 300px' }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12 mb-12 text-center">
+          <h2 className="font-serif text-2xl md:text-3xl text-brand-navy">{settings.awards?.title || 'Prestigious Awards'}</h2>
           {settings.awards?.summary && (
-            <p className="mt-4 text-brand-navy/60 max-w-2xl mx-auto">{settings.awards.summary}</p>
+            <p className="mt-3 text-brand-navy/60 max-w-2xl mx-auto text-sm">{settings.awards.summary}</p>
           )}
         </div>
         <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-wrap justify-center gap-12 md:gap-24 items-center">
+          <div className="flex flex-wrap justify-center gap-8 md:gap-16 items-center">
             {safeArray(settings.awards?.items).map((item: any, i: number) => (
               <div key={i} className="flex items-center justify-center transition-transform hover:scale-105 duration-300">
                 <img 
                   src={item.url} 
                   alt="Award" 
-                  className="h-48 md:h-56 lg:h-64 w-auto object-contain" 
+                  className="h-32 md:h-40 w-auto object-contain" 
                   referrerPolicy="no-referrer" 
                   loading="lazy" 
+                  decoding="async"
                 />
               </div>
             ))}

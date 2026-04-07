@@ -1,8 +1,8 @@
 import { motion } from 'motion/react';
-import { Info, Plane, Sun, Wallet, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Info, Plane, Sun, Wallet, ShieldCheck, HelpCircle, BookOpen } from 'lucide-react';
 
-export default function TouristInfo() {
-  const sections = [
+export default function TouristInfo({ settings }: { settings: any }) {
+  const defaultSections = [
     {
       title: "Visa & Entry",
       icon: <ShieldCheck size={32} />,
@@ -25,6 +25,8 @@ export default function TouristInfo() {
     }
   ];
 
+  const travelGuides = settings?.travel_guide || [];
+
   return (
     <div className="pb-24 bg-brand-paper/30">
       <div className="bg-brand-navy text-white py-32 px-4 text-center">
@@ -35,11 +37,48 @@ export default function TouristInfo() {
         >
           Travel <span className="italic text-brand-beige">Guide</span>
         </motion.h1>
-        <p className="text-white/60 uppercase tracking-[0.4em] text-[10px] font-bold font-sans">Everything you need to know before you go</p>
+        <p className="text-white/60 uppercase tracking-[0.4em] text-[10px] font-bold font-sans">
+          {settings?.ctas?.guide_subtitle || 'Everything you need to know before you go'}
+        </p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 -mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-        {sections.map((section, idx) => (
+      {/* Dynamic Travel Guides from Settings */}
+      {travelGuides.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 -mt-16 mb-24">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {travelGuides.map((guide: any, idx: number) => (
+              <motion.div 
+                key={idx}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.1 }}
+                className="bg-white rounded-3xl shadow-xl shadow-brand-navy/5 overflow-hidden group border border-brand-navy/5"
+              >
+                <div className="aspect-[4/3] overflow-hidden">
+                  <img 
+                    src={guide.img} 
+                    alt={guide.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="p-8">
+                  <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] mb-3 block font-bold">{guide.category}</span>
+                  <h3 className="text-2xl font-serif mb-4 text-brand-navy">{guide.title}</h3>
+                  <div className="flex items-center gap-2 text-brand-navy/40 text-[10px] font-bold uppercase tracking-widest">
+                    <BookOpen size={14} />
+                    <span>Professional Insight</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Default Info Sections */}
+      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-8">
+        {defaultSections.map((section, idx) => (
           <motion.div 
             key={idx}
             initial={{ opacity: 0, y: 20 }}

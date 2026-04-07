@@ -7,6 +7,9 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { google } from "googleapis";
 import fs from "fs";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 async function startServer() {
   const app = express();
@@ -110,8 +113,8 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid Google Drive folder URL" });
       }
 
-      let auth;
-      const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+      let auth: any;
+      const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
       if (fs.existsSync(serviceAccountPath)) {
         auth = new google.auth.GoogleAuth({
           keyFile: serviceAccountPath,
@@ -131,16 +134,20 @@ async function startServer() {
       } else if (process.env.GOOGLE_DRIVE_API_KEY) {
         auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        console.error("Google Drive credentials missing (list). Checked: service-account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
+        console.error("Google Drive credentials missing (list). Checked: service_account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
         return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
-      const drive = google.drive({ version: 'v3', auth });
-
-      const listResponse = await drive.files.list({
+      const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+      const requestParams: any = {
         q: `'${folderId}' in parents and mimeType='application/pdf'`,
         fields: 'files(id, name)',
-      });
+      };
+      if (typeof auth === 'string') {
+        requestParams.key = auth;
+      }
+
+      const listResponse = await drive.files.list(requestParams);
 
       const files = listResponse.data.files || [];
       res.json({ files });
@@ -155,8 +162,8 @@ async function startServer() {
     if (!fileId) return res.status(400).json({ error: "File ID is required" });
 
     try {
-      let auth;
-      const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+      let auth: any;
+      const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
       if (fs.existsSync(serviceAccountPath)) {
         auth = new google.auth.GoogleAuth({
           keyFile: serviceAccountPath,
@@ -176,14 +183,18 @@ async function startServer() {
       } else if (process.env.GOOGLE_DRIVE_API_KEY) {
         auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        console.error("Google Drive credentials missing (fetch). Checked: service-account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
+        console.error("Google Drive credentials missing (fetch). Checked: service_account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
         return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
-      const drive = google.drive({ version: 'v3', auth });
+      const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+      const requestParams: any = { fileId: fileId, alt: 'media' };
+      if (typeof auth === 'string') {
+        requestParams.key = auth;
+      }
 
       const response = await drive.files.get(
-        { fileId: fileId, alt: 'media' },
+        requestParams,
         { responseType: 'stream' }
       );
       
@@ -205,17 +216,125 @@ async function startServer() {
     if (!url || !resort_id) return res.status(400).json({ error: "URL and Resort ID are required" });
 
     try {
-      // Placeholder: In a real implementation, this would trigger a background job
-      // to process the URL based on its type (Google Drive, Dropbox, etc.)
       console.log(`Importing media for resort ${resort_id} from ${url}`);
       
-      // Simulate processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // If it's a Google Drive folder or file
+      const folderMatch = url.match(/folders\/([a-zA-Z0-9-_]+)/);
+      const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+      const idMatch = url.match(/[?&]id=([a-zA-Z0-9-_]+)/);
       
-      res.json({ success: true, message: "Import started" });
+      const folderId = folderMatch ? folderMatch[1] : null;
+      const fileId = fileMatch ? fileMatch[1] : (idMatch ? idMatch[1] : null);
+
+      if (folderId || fileId) {
+        let auth: any;
+        const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
+        if (fs.existsSync(serviceAccountPath)) {
+          auth = new google.auth.GoogleAuth({
+            keyFile: serviceAccountPath,
+            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+          });
+        } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+          try {
+            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            auth = new google.auth.GoogleAuth({
+              credentials,
+              scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+            });
+          } catch (e) {
+            console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (import):", e);
+          }
+        } else if (process.env.GOOGLE_DRIVE_API_KEY) {
+          auth = process.env.GOOGLE_DRIVE_API_KEY;
+        }
+
+        if (auth) {
+          const drive = google.drive({ version: 'v3', auth: typeof auth === 'string' ? undefined : auth });
+          
+          if (folderId) {
+            const requestParams: any = {
+              q: `'${folderId}' in parents and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')`,
+              fields: 'files(id, name, webContentLink, thumbnailLink)',
+            };
+            if (typeof auth === 'string') {
+              requestParams.key = auth;
+            }
+
+            const listResponse = await drive.files.list(requestParams);
+            
+            const files = listResponse.data.files || [];
+            const media = files.map(f => ({
+              id: f.id,
+              storage_path: f.thumbnailLink?.replace('=s220', '=s1000') || f.webContentLink,
+              category: 'villa',
+              original_filename: f.name
+            }));
+            
+            return res.json({ success: true, media });
+          } else if (fileId) {
+            const requestParams: any = {
+              fileId: fileId,
+              fields: 'id, name, webContentLink, thumbnailLink',
+            };
+            if (typeof auth === 'string') {
+              requestParams.key = auth;
+            }
+
+            const fileResponse = await drive.files.get(requestParams);
+            
+            const f = fileResponse.data;
+            const media = [{
+              id: f.id,
+              storage_path: f.thumbnailLink?.replace('=s220', '=s1000') || f.webContentLink,
+              category: 'villa',
+              original_filename: f.name
+            }];
+            
+            return res.json({ success: true, media });
+          }
+        } else {
+          console.warn("Google Drive import attempted but no credentials found.");
+        }
+      }
+      
+      // Fallback to scraping if not a drive folder
+      const { data } = await axios.get(url);
+      const $ = cheerio.load(data);
+      const images: any[] = [];
+      $("img").each((i, el) => {
+        const src = $(el).attr("src");
+        if (src && src.startsWith("http") && !src.includes("logo") && !src.includes("icon")) {
+          images.push({
+            id: `scraped-${i}`,
+            storage_path: src,
+            category: 'villa'
+          });
+        }
+      });
+
+      res.json({ success: true, media: images.slice(0, 20) });
     } catch (error: any) {
       console.error("Import error:", error);
-      res.status(500).json({ error: "Failed to start import" });
+      res.status(500).json({ error: "Failed to import media" });
+    }
+  });
+
+  app.get("/api/proxy-image", async (req, res) => {
+    const { url } = req.query;
+    if (!url || typeof url !== 'string') return res.status(400).send("URL required");
+    
+    try {
+      const response = await axios.get(url, { 
+        responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+      res.set("Content-Type", response.headers["content-type"]);
+      res.send(response.data);
+    } catch (error: any) {
+      console.error("Proxy error:", error.message);
+      res.status(500).send("Failed to proxy image");
     }
   });
 
