@@ -3,7 +3,7 @@ import { useRef, useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { getSiteSettings } from '../lib/settings';
-import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, ChevronLeft, Zap, Check, MessageSquare, Hotel, Calendar, Smile, Globe, Award, HeartHandshake, PhoneCall, UserCheck } from 'lucide-react';
+import { ArrowRight, MapPin, Plane, Ship, CheckCircle2, Star, ShieldCheck, Users, Clock, Search, ChevronRight, ChevronLeft, Zap, Check, MessageSquare, Hotel, Calendar, Smile, Globe, Award, HeartHandshake, PhoneCall, UserCheck, Mail, History } from 'lucide-react';
 
 const GlobalMarketsMap = lazy(() => import('../components/GlobalMarketsMap'));
 
@@ -112,9 +112,14 @@ function Newsletter({ settings }: { settings: any }) {
     <section className="py-32 bg-brand-paper text-brand-navy relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
-          {/* Image Block - Proportional to form height */}
           <div className="h-full min-h-[600px] bg-brand-navy/5 rounded-2xl overflow-hidden shadow-inner">
-            <img src="https://picsum.photos/seed/maldives/800/1000" alt="Maldives" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            {settings.newsletter?.image_url ? (
+              <img src={settings.newsletter.image_url} alt="Newsletter" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-full h-full bg-brand-navy/10 flex items-center justify-center">
+                <Mail size={48} className="text-brand-navy/20" />
+              </div>
+            )}
           </div>
           
           {/* Form Block */}
@@ -210,22 +215,23 @@ export default function Home({ settings }: { settings: any }) {
   return (
     <div ref={containerRef} className="relative min-h-screen bg-brand-paper text-brand-navy selection:bg-brand-teal/20">
       
-      {/* Floating Chat Button */}
-      <button className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-[#128C7E] transition-all">
-        <MessageSquare size={28} strokeWidth={1.5} />
-      </button>
+      {/* Floating Chat Button - Removed to avoid overlap with ChatWidget */}
 
       {/* 1. HERO EXPERIENCE (Parallax) */}
       <section ref={heroRef} style={{ position: 'relative' }} className="relative h-[100dvh] min-h-[600px] flex items-center overflow-hidden bg-brand-navy">
         <motion.div style={{ y: heroBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
-          <img 
-            src={`${settings.hero?.banner_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&q=85&w=1920"}${settings.hero?.banner_url?.includes('unsplash') ? '&auto=format&fit=crop&q=85&w=1920' : (settings.hero?.banner_url ? '' : '')}`} 
-            alt="Luxury Maldives" 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-            fetchPriority="high"
-            loading="eager"
-          />
+          {settings.hero?.banner_url ? (
+            <img 
+              src={settings.hero.banner_url} 
+              alt="Luxury Maldives" 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              fetchPriority="high"
+              loading="eager"
+            />
+          ) : (
+            <div className="w-full h-full bg-brand-navy" />
+          )}
         </motion.div>
         
         {/* Dark gradient overlay stays stable */}
@@ -357,14 +363,20 @@ export default function Home({ settings }: { settings: any }) {
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20 items-center">
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5]">
-              <img 
-                src={`${settings.ceo_message?.photo_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2"}${settings.ceo_message?.photo_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : (settings.ceo_message?.photo_url ? '' : '?auto=format&fit=crop&q=80&w=800')}`} 
-                alt="CEO" 
-                className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-              />
+              {settings.ceo_message?.photo_url ? (
+                <img 
+                  src={settings.ceo_message.photo_url} 
+                  alt="CEO" 
+                  className="absolute inset-0 w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-brand-paper flex items-center justify-center">
+                  <UserCheck size={48} className="text-brand-navy/10" />
+                </div>
+              )}
             </div>
             <div className="space-y-6 md:space-y-10">
               <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] block font-bold">CEO's Message</span>
@@ -401,15 +413,21 @@ export default function Home({ settings }: { settings: any }) {
               </div>
             </div>
             <div className="relative rounded-[2rem] overflow-hidden luxury-shadow aspect-[4/5] order-1 lg:order-2">
-              <motion.img 
-                style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
-                src={`${settings.our_story?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8"}${settings.our_story?.image_url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : (settings.our_story?.image_url ? '' : '?auto=format&fit=crop&q=80&w=800')}`} 
-                alt="Our Story" 
-                className="absolute inset-0 w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-              />
+              {settings.our_story?.image_url ? (
+                <motion.img 
+                  style={{ y: storyImgY, scale: 1.1, willChange: 'transform' }}
+                  src={settings.our_story.image_url} 
+                  alt="Our Story" 
+                  className="absolute inset-0 w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-brand-paper flex items-center justify-center">
+                  <History size={48} className="text-brand-navy/10" />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -471,12 +489,7 @@ export default function Home({ settings }: { settings: any }) {
       <section className="py-16 md:py-20 bg-brand-navy text-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center md:divide-x divide-white/10">
-            {(safeArray(settings.expertise_stats).length > 0 ? safeArray(settings.expertise_stats) : [
-              { value: '198+', label: 'Resorts' },
-              { value: '20+', label: 'Years Experience' },
-              { value: '24/7', label: 'Local Support' },
-              { value: 'Global', label: 'Travel Partners' }
-            ]).map((stat: any, i: number) => (
+            {safeArray(settings.expertise_stats).map((stat: any, i: number) => (
               <div key={i} className="px-2 md:px-4">
                 <h4 className="text-3xl md:text-5xl font-serif text-brand-teal mb-2">{stat.value}</h4>
                 <p className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] text-white/70 font-bold">{stat.label}</p>
@@ -533,14 +546,12 @@ export default function Home({ settings }: { settings: any }) {
 
             {/* Right: Interactive Parallax Stack */}
             <div className="relative h-[300px] md:h-[400px] w-full max-w-md mx-auto flex items-center justify-center perspective-1000">
-              <StackedPhotoCarousel 
-                onIndexChange={setActiveIndex}
-                images={safeArray(settings.platform_excellence?.images).length > 0 ? safeArray(settings.platform_excellence.images) : [
-                  (settings.platform_excellence?.image_url || "https://images.unsplash.com/photo-1514282401047-d79a71a590e8") + (settings.platform_excellence?.image_url?.includes('?') ? '&' : '?') + "auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=800",
-                  "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&q=80&w=800"
-                ]}
-              />
+              {safeArray(settings.platform_excellence?.images).length > 0 && (
+                <StackedPhotoCarousel 
+                  onIndexChange={setActiveIndex}
+                  images={safeArray(settings.platform_excellence.images)}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -556,30 +567,17 @@ export default function Home({ settings }: { settings: any }) {
         </div>
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-wrap justify-center gap-12 md:gap-24 items-center">
-            {safeArray(settings.awards?.items).length > 0 ? (
-              safeArray(settings.awards.items).map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-center transition-transform hover:scale-105 duration-300">
-                  <img 
-                    src={`${item.url}${item.url?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=400' : ''}`} 
-                    alt="Award" 
-                    className="h-48 md:h-56 lg:h-64 w-auto object-contain" 
-                    referrerPolicy="no-referrer" 
-                    loading="lazy" 
-                  />
-                </div>
-              ))
-            ) : (
-              [1, 2, 3].map((item, i) => (
-                <div key={i} className="flex items-center justify-center transition-transform hover:scale-105 duration-300">
-                  <div className="text-center">
-                    <Award size={100} strokeWidth={1} className="mx-auto mb-4 text-brand-teal" />
-                    <p className="font-serif text-2xl text-brand-navy">
-                      {item === 1 ? 'World Travel Awards' : item === 2 ? 'Luxury Travel Awards' : 'Travel & Hospitality Awards'}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
+            {safeArray(settings.awards?.items).map((item: any, i: number) => (
+              <div key={i} className="flex items-center justify-center transition-transform hover:scale-105 duration-300">
+                <img 
+                  src={item.url} 
+                  alt="Award" 
+                  className="h-48 md:h-56 lg:h-64 w-auto object-contain" 
+                  referrerPolicy="no-referrer" 
+                  loading="lazy" 
+                />
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -587,14 +585,18 @@ export default function Home({ settings }: { settings: any }) {
       {/* 9. JOIN OUR GLOBAL NETWORK (CTA Parallax) */}
       <section ref={ctaRef} style={{ position: 'relative' }} className="relative py-[160px] overflow-hidden bg-brand-navy">
         <motion.div style={{ y: ctaBgY, willChange: 'transform' }} className="absolute inset-[-20%] z-0">
-          <img 
-            src={settings.ctas?.bg_image_url || "https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&q=80&w=1920"} 
-            alt="Maldives Aerial" 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            decoding="async"
-          />
+          {settings.ctas?.bg_image_url ? (
+            <img 
+              src={settings.ctas.bg_image_url} 
+              alt="Maldives Aerial" 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <div className="w-full h-full bg-brand-navy" />
+          )}
         </motion.div>
         <div className="absolute inset-0 z-10 bg-brand-navy/80"></div>
         

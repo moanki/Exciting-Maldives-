@@ -48,7 +48,7 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
       <main className="relative">
         <Suspense fallback={null}>
           <Routes>
-            {isPageActive('') && <Route path="/" element={<Home settings={settings} />} />}
+            {isPageActive('home') && <Route path="/" element={<Home settings={settings} />} />}
             {isPageActive('resorts') && <Route path="/resorts" element={<ResortSearch />} />}
             {isPageActive('resorts') && <Route path="/resorts/:id" element={<ResortDetail />} />}
             {isPageActive('tourist-info') && <Route path="/tourist-info" element={<TouristInfo />} />}
@@ -63,7 +63,7 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
             {/* Protected Routes */}
             <Route 
               path="/admin/*" 
-              element={['super_admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
+              element={['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
             />
             
             {/* Fallback route for inactive pages */}
@@ -118,7 +118,7 @@ export default function App() {
         user_metadata: { full_name: 'Demo Admin' }
       } as any;
       setUser(mockUser);
-      setRole('super_admin');
+      setRole('superadmin');
       setLoading(false);
       return;
     }

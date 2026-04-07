@@ -40,9 +40,9 @@ export default function Login() {
       if (user) {
         // Check if admin
         const { data: adminData } = await supabase
-          .from('users')
+          .from('profiles')
           .select('role')
-          .eq('uid', user.id)
+          .eq('id', user.id)
           .single();
 
         if (adminData) {

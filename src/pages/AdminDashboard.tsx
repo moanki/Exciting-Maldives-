@@ -11,180 +11,6 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { ResortEditForm } from '../components/ResortEditForm';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
-const schemaSql = `-- Supabase Schema for Exciting Maldives
-
--- 1. Profiles (Admins)
-create table if not exists public.profiles (
-  id uuid references auth.users on delete cascade primary key,
-  email text unique not null,
-  role text check (role in ('admin', 'superadmin')) default 'admin',
-  full_name text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 2. Agents (Partners)
-create table if not exists public.agents (
-  id uuid references auth.users on delete cascade primary key,
-  email text unique not null,
-  full_name text not null,
-  company_name text not null,
-  country text not null,
-  website text,
-  phone text,
-  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 2.5 Partner Requests (Public Form Submissions)
-create table if not exists public.partner_requests (
-  id uuid default gen_random_uuid() primary key,
-  email text not null,
-  full_name text not null,
-  company_name text not null,
-  country text not null,
-  website text,
-  phone text,
-  status text check (status in ('pending', 'approved', 'rejected')) default 'pending',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 3. Resorts
-create table if not exists public.resorts (
-  id uuid default gen_random_uuid() primary key,
-  name text not null,
-  atoll text not null,
-  location text,
-  category text not null,
-  transfer_type text not null,
-  description text,
-  images text[],
-  banner_url text,
-  resort_url text,
-  highlights text[],
-  meal_plans text[],
-  is_featured boolean default false,
-  room_types jsonb[],
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Add missing columns if table already exists
-do $$ 
-begin 
-  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='location') then
-    alter table public.resorts add column location text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='banner_url') then
-    alter table public.resorts add column banner_url text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='resort_url') then
-    alter table public.resorts add column resort_url text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name='resorts' and column_name='is_featured') then
-    alter table public.resorts add column is_featured boolean default false;
-  end if;
-end $$;
-
--- 4. Booking Requests
-create table if not exists public.booking_requests (
-  id uuid default gen_random_uuid() primary key,
-  agent_id uuid references auth.users on delete set null,
-  resort_id uuid references public.resorts on delete set null,
-  resort_name text not null,
-  check_in date not null,
-  check_out date not null,
-  guests integer not null,
-  room_type text not null,
-  notes text,
-  status text check (status in ('new', 'processing', 'confirmed', 'cancelled')) default 'new',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 5. Site Settings
-create table if not exists public.site_settings (
-  key text primary key,
-  value jsonb not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 6. Resources
-create table if not exists public.resources (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  category text not null,
-  type text not null,
-  size text,
-  file_url text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 6.5 Protected Resources
-create table if not exists public.protected_resources (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  file_url text not null,
-  passwords text[] not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 7. Messages
-create table if not exists public.messages (
-  id uuid default gen_random_uuid() primary key,
-  chat_id text not null,
-  text text not null,
-  sender_id uuid references auth.users on delete set null,
-  sender_name text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 8. Storage Buckets
-insert into storage.buckets (id, name, public) values 
-  ('site-assets', 'site-assets', true),
-  ('resort-images', 'resort-images', true),
-  ('documents', 'documents', true)
-on conflict do nothing;
-
-create policy "Public Access site-assets" on storage.objects for select using (bucket_id = 'site-assets');
-create policy "Admin Insert site-assets" on storage.objects for insert with check (bucket_id = 'site-assets');
-create policy "Admin Update site-assets" on storage.objects for update using (bucket_id = 'site-assets');
-create policy "Admin Delete site-assets" on storage.objects for delete using (bucket_id = 'site-assets');
-
-create policy "Public Access resort-images" on storage.objects for select using (bucket_id = 'resort-images');
-create policy "Admin Insert resort-images" on storage.objects for insert with check (bucket_id = 'resort-images');
-create policy "Admin Update resort-images" on storage.objects for update using (bucket_id = 'resort-images');
-create policy "Admin Delete resort-images" on storage.objects for delete using (bucket_id = 'resort-images');
-
-create policy "Public Access documents" on storage.objects for select using (bucket_id = 'documents');
-create policy "Admin Insert documents" on storage.objects for insert with check (bucket_id = 'documents');
-create policy "Admin Update documents" on storage.objects for update using (bucket_id = 'documents');
-create policy "Admin Delete documents" on storage.objects for delete using (bucket_id = 'documents');
-
--- Enable RLS
-alter table public.profiles enable row level security;
-alter table public.agents enable row level security;
-alter table public.partner_requests enable row level security;
-alter table public.resorts enable row level security;
-alter table public.booking_requests enable row level security;
-alter table public.site_settings enable row level security;
-alter table public.resources enable row level security;
-alter table public.messages enable row level security;
-
--- RLS Policies (Simplified for setup)
-create policy "Public read site_settings" on public.site_settings for select using (true);
-create policy "Admin manage site_settings" on public.site_settings for all using (true);
-create policy "Public read resorts" on public.resorts for select using (true);
-create policy "Admin manage resorts" on public.resorts for all using (true);
-create policy "Public insert partner_requests" on public.partner_requests for insert with check (true);
-create policy "Admin manage partner_requests" on public.partner_requests for all using (true);
-create policy "Public insert agents" on public.agents for insert with check (true);
-create policy "Admin manage agents" on public.agents for all using (true);
-create policy "Agents read own record" on public.agents for select using (auth.uid() = id);
-create policy "Public read profiles" on public.profiles for select using (true);
-
-create policy "Public manage messages" on public.messages for all using (true);
-
--- Enable Realtime for messages
-alter publication supabase_realtime add table messages;`;
-
 export async function uploadFile(file: File, path: string, bucket: string = 'site-assets', setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void) {
   if (setUploadProgress) setUploadProgress(0);
   const fileExt = file.name.split('.').pop();
@@ -256,6 +82,24 @@ export async function uploadResortFile(file: File, resortName: string, category:
  */
 export default function AdminDashboard() {
   const location = useLocation();
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        setProfile(profileData);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSiteContentOpen, setIsSiteContentOpen] = useState(true);
@@ -415,10 +259,10 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4 md:gap-6">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-bold text-brand-navy">Administrator</span>
-              <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">Super Admin</span>
-            </div>
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-xs font-bold text-brand-navy">{profile?.full_name || 'Administrator'}</span>
+                <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">{profile?.role || 'Admin'}</span>
+              </div>
             <button 
               onClick={() => {
                 localStorage.removeItem('demo_mode');
@@ -433,7 +277,7 @@ export default function AdminDashboard() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30 relative">
           <Routes>
             <Route path="/" element={<AdminOverview />} />
             <Route path="/resorts" element={<AdminResorts showNotification={showNotification} />} />
@@ -1136,7 +980,7 @@ function AdminOverview() {
               <h3 className="text-xl font-serif">SQL Schema</h3>
               <button 
                 onClick={() => {
-                  navigator.clipboard.writeText(schemaSql);
+                  navigator.clipboard.writeText('Schema is managed in supabase_schema.sql');
                   console.log('SQL copied to clipboard!');
                 }}
                 className="text-[10px] font-bold uppercase tracking-widest bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-all font-sans"
@@ -1145,7 +989,7 @@ function AdminOverview() {
               </button>
             </div>
             <pre className="text-[10px] font-mono bg-black/20 p-6 rounded-3xl overflow-auto flex-1 max-h-[400px] scrollbar-thin scrollbar-thumb-white/10">
-              {schemaSql}
+              Schema is managed in supabase_schema.sql
             </pre>
           </div>
         )}
@@ -1889,8 +1733,9 @@ function AdminChats() {
 
     const messageData = {
       chat_id: selectedChat,
-      text: inputText,
+      content: inputText,
       sender_id: null, // Admin sender
+      sender_type: 'admin',
       sender_name: 'Admin Support',
     };
 
@@ -1952,7 +1797,7 @@ function AdminChats() {
                       ? 'bg-brand-navy text-white rounded-tr-none shadow-lg' 
                       : 'bg-white text-brand-navy rounded-tl-none shadow-md border border-brand-navy/5'
                   }`}>
-                    {msg.text}
+                    {msg.content}
                     <div className={`text-[8px] mt-2 opacity-50 ${msg.sender_name === 'Admin Support' ? 'text-right' : 'text-left'}`}>
                       {new Date(msg.created_at).toLocaleTimeString()}
                     </div>
@@ -2645,32 +2490,46 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
             <div className="space-y-6">
               <h3 className="text-xl font-serif text-brand-navy mb-6">Trust Indicators</h3>
               <div className="space-y-4">
-                {safeArray(settings.trust_indicators).map((item: any, idx: number) => (
-                  <div key={idx} className="flex gap-4 items-center bg-brand-paper/30 p-4 rounded-2xl">
-                    <div className="flex-1">
-                      <TextInput 
-                        label="Indicator Title" 
-                        value={item.title || ''} 
-                        onChange={(val) => {
-                          const newItems = [...safeArray(settings.trust_indicators)];
-                          newItems[idx].title = val;
-                          saveSetting('trust_indicators', newItems);
-                        }} 
-                      />
+                {safeArray(settings.footer?.trust_indicators).map((item: any, idx: number) => (
+                  <div key={idx} className="flex flex-col gap-4 bg-brand-paper/30 p-4 rounded-2xl">
+                    <div className="flex gap-4 items-center">
+                      <div className="flex-1">
+                        <TextInput 
+                          label="Indicator Title" 
+                          value={item.title || ''} 
+                          onChange={(val) => {
+                            const newItems = [...safeArray(settings.footer?.trust_indicators)];
+                            newItems[idx] = { ...item, title: val };
+                            saveSetting('footer', { ...settings.footer, trust_indicators: newItems });
+                          }} 
+                        />
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const newItems = safeArray(settings.footer?.trust_indicators).filter((_: any, i: number) => i !== idx);
+                          saveSetting('footer', { ...settings.footer, trust_indicators: newItems });
+                        }}
+                        className="mt-6 p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => {
-                        const newItems = safeArray(settings.trust_indicators).filter((_: any, i: number) => i !== idx);
-                        saveSetting('trust_indicators', newItems);
-                      }}
-                      className="mt-6 p-2 text-brand-coral hover:bg-brand-coral/10 rounded-lg transition-all"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <TextInput 
+                      label="Logo URL" 
+                      value={item.logo || ''} 
+                      onChange={(val) => {
+                        const newItems = [...safeArray(settings.footer?.trust_indicators)];
+                        newItems[idx] = { ...item, logo: val };
+                        saveSetting('footer', { ...settings.footer, trust_indicators: newItems });
+                      }} 
+                    />
                   </div>
                 ))}
                 <button 
-                  onClick={() => saveSetting('trust_indicators', [...safeArray(settings.trust_indicators), { title: 'New Indicator' }])}
+                  onClick={() => saveSetting('footer', { 
+                    ...settings.footer, 
+                    trust_indicators: [...safeArray(settings.footer?.trust_indicators), { title: 'New Indicator', logo: '' }] 
+                  })}
                   className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={16} /> Add Trust Indicator
@@ -3844,7 +3703,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Required SQL Setup</h4>
                   <button 
                     onClick={() => {
-                      navigator.clipboard.writeText(schemaSql);
+                      navigator.clipboard.writeText('Schema is managed in supabase_schema.sql');
                       showNotification('SQL copied to clipboard');
                     }}
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:text-brand-teal/80 transition-all"
@@ -3853,7 +3712,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   </button>
                 </div>
                 <pre className="bg-brand-navy text-white/90 p-6 rounded-2xl text-[10px] font-mono overflow-x-auto max-h-[400px] leading-relaxed">
-                  {schemaSql}
+                  Schema is managed in supabase_schema.sql
                 </pre>
               </div>
             </div>

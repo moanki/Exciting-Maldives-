@@ -31,6 +31,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const [media, setMedia] = useState<any[]>([]);
   const [importUrl, setImportUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [importedMedia, setImportedMedia] = useState<any[]>([]); // Media to review
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   }, [editingResort]);
 
   const fetchMedia = async () => {
+    if (!editingResort?.id) return;
     const { data, error } = await supabase
       .from('resort_media')
       .select('*')
@@ -50,17 +52,26 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const handleDeleteMedia = async (id: string, path: string) => {
     if (!confirm('Are you sure you want to delete this media?')) return;
     
-    // Delete from storage
-    await supabase.storage.from('resorts').remove([path]);
-    // Delete from database
-    await supabase.from('resort_media').delete().eq('id', id);
-    
-    setMedia(media.filter(m => m.id !== id));
-    showNotification('Media deleted successfully');
+    try {
+      // Delete from storage
+      await supabase.storage.from('resorts').remove([path]);
+      // Delete from database
+      await supabase.from('resort_media').delete().eq('id', id);
+      
+      setMedia(media.filter(m => m.id !== id));
+      showNotification('Media deleted successfully');
+    } catch (error) {
+      console.error('Delete error:', error);
+      showNotification('Failed to delete media');
+    }
   };
 
   const handleImport = async () => {
     if (!importUrl) return;
+    if (!editingResort?.id) {
+      showNotification('Please save the resort first before importing media');
+      return;
+    }
     setIsImporting(true);
     showNotification('Importing media...');
     
@@ -84,6 +95,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       setImportUrl('');
       showNotification('Media imported. Please review and assign.');
     } catch (error) {
+      console.error('Import error:', error);
       showNotification('Failed to import media');
     } finally {
       setIsImporting(false);
@@ -149,7 +161,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                     <div className="flex-1">
                       <select value={m.category} onChange={(e) => {
                         const newMedia = [...importedMedia];
-                        newMedia[i].category = e.target.value;
+                        newMedia[i] = { ...newMedia[i], category: e.target.value };
                         setImportedMedia(newMedia);
                       }} className="w-full bg-white border border-brand-navy/10 rounded-lg px-2 py-1 text-xs">
                         {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -158,14 +170,47 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   </div>
                 ))}
               </div>
-              <button type="button" onClick={async () => {
-                // Save importedMedia to database
-                await supabase.from('resort_media').insert(importedMedia.map(m => ({ ...m, resort_id: editingResort.id })));
-                await fetchMedia();
-                setImportedMedia([]);
-                showNotification('Media assigned successfully');
-              }} className="bg-brand-teal text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">
-                Save All
+              <button 
+                type="button" 
+                disabled={isSaving}
+                onClick={async () => {
+                  if (!editingResort?.id) {
+                    showNotification('Error: Resort ID missing');
+                    return;
+                  }
+                  
+                  setIsSaving(true);
+                  try {
+                    // Save importedMedia to database - Omit mock IDs to let Supabase generate them
+                    const mediaToInsert = importedMedia.map(({ id, ...rest }) => ({ 
+                      ...rest, 
+                      resort_id: editingResort.id,
+                      status: 'active',
+                      is_hero: rest.category === 'hero',
+                      is_featured: ['hero', 'aerial'].includes(rest.category)
+                    }));
+                    
+                    console.log('Inserting media:', mediaToInsert);
+                    const { error } = await supabase.from('resort_media').insert(mediaToInsert);
+                    
+                    if (error) {
+                      console.error('Insert error:', error);
+                      showNotification('Failed to save media: ' + error.message);
+                    } else {
+                      await fetchMedia();
+                      setImportedMedia([]);
+                      showNotification('Media assigned successfully');
+                    }
+                  } catch (err: any) {
+                    console.error('Unexpected save error:', err);
+                    showNotification('Error: ' + err.message);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }} 
+                className="bg-brand-teal text-white px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all disabled:opacity-50"
+              >
+                {isSaving ? 'Saving...' : 'Save All'}
               </button>
             </div>
           ) : (

@@ -118,15 +118,21 @@ async function startServer() {
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
       } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-        auth = new google.auth.GoogleAuth({
-          credentials,
-          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        });
+        try {
+          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+          auth = new google.auth.GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+          });
+        } catch (e) {
+          console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (list):", e);
+          return res.status(500).json({ error: "Invalid GOOGLE_SERVICE_ACCOUNT_JSON format." });
+        }
       } else if (process.env.GOOGLE_DRIVE_API_KEY) {
         auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        return res.status(500).json({ error: "Google Drive credentials not found." });
+        console.error("Google Drive credentials missing (list). Checked: service-account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
+        return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
       const drive = google.drive({ version: 'v3', auth });
@@ -157,15 +163,21 @@ async function startServer() {
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
       } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-        auth = new google.auth.GoogleAuth({
-          credentials,
-          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        });
+        try {
+          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+          auth = new google.auth.GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+          });
+        } catch (e) {
+          console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (fetch):", e);
+          return res.status(500).json({ error: "Invalid GOOGLE_SERVICE_ACCOUNT_JSON format." });
+        }
       } else if (process.env.GOOGLE_DRIVE_API_KEY) {
         auth = process.env.GOOGLE_DRIVE_API_KEY;
       } else {
-        return res.status(500).json({ error: "Google Drive credentials not found." });
+        console.error("Google Drive credentials missing (fetch). Checked: service-account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
+        return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
       }
 
       const drive = google.drive({ version: 'v3', auth });

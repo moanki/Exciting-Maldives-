@@ -1,8 +1,6 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { supabase } from '../supabase';
-import { useState, useEffect, memo } from 'react';
+import { Link } from 'react-router-dom';
+import { memo } from 'react';
 import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin, X } from 'lucide-react';
-import { getSiteSettings } from '../lib/settings';
 
 interface FooterProps {
   settings: any;

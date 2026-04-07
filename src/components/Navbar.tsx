@@ -93,7 +93,7 @@ const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
             
             {user ? (
               <div className={`flex items-center space-x-6 pl-6 border-l ${isTransparent ? 'border-white/20' : 'border-brand-navy/10'}`}>
-                {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
+                {['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') && (
                   <Link to="/admin" className={`text-[10px] font-bold uppercase tracking-[0.3em] hover:opacity-80 transition-opacity ${isTransparent ? 'text-white' : 'text-brand-teal'}`}>Admin</Link>
                 )}
                 <button 
@@ -164,7 +164,7 @@ const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
               <div className="pt-6 border-t border-brand-navy/5 space-y-4">
                 {user ? (
                   <div className="space-y-4">
-                    {['super_admin', 'sales', 'content_manager'].includes(role || '') && (
+                    {['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') && (
                       <Link 
                         to="/admin" 
                         onClick={() => setIsOpen(false)}

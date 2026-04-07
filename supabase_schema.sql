@@ -4,7 +4,7 @@
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   email text unique not null,
-  role text check (role in ('admin', 'superadmin')) default 'admin',
+  role text check (role in ('admin', 'superadmin', 'sales', 'content_manager')) default 'admin',
   full_name text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -113,10 +113,32 @@ create table if not exists public.resources (
   type text not null, -- e.g., 'PDF', 'Image'
   size text,
   file_url text not null,
+  is_protected boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 8. Newsletter Submissions
+-- 7. Protected Resources (Access Logs/Permissions)
+create table if not exists public.protected_resources (
+  id uuid default gen_random_uuid() primary key,
+  resource_id uuid references public.resources(id) on delete cascade,
+  agent_id uuid references auth.users(id) on delete cascade,
+  status text check (status in ('pending', 'granted', 'revoked')) default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 8. Messages (Live Chat)
+create table if not exists public.messages (
+  id uuid default gen_random_uuid() primary key,
+  chat_id text not null, -- Can be guest_id or user_id
+  sender_id uuid references auth.users(id) on delete set null,
+  sender_type text check (sender_type in ('user', 'admin', 'guest')) not null,
+  sender_name text,
+  content text not null,
+  is_read boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 9. Newsletter Submissions
 create table if not exists public.newsletter_submissions (
   id uuid default gen_random_uuid() primary key,
   full_name text not null,
@@ -130,7 +152,6 @@ create table if not exists public.newsletter_submissions (
 );
 
 -- Enable RLS
--- Enable RLS
 alter table public.profiles enable row level security;
 alter table public.agents enable row level security;
 alter table public.resorts enable row level security;
@@ -139,6 +160,7 @@ alter table public.resort_documents enable row level security;
 alter table public.booking_requests enable row level security;
 alter table public.site_settings enable row level security;
 alter table public.resources enable row level security;
+alter table public.protected_resources enable row level security;
 alter table public.messages enable row level security;
 alter table public.newsletter_submissions enable row level security;
 alter table public.import_batches enable row level security;
@@ -182,10 +204,21 @@ create policy "Public can read site settings" on public.site_settings for select
 create policy "Admins can manage site settings" on public.site_settings for all using (auth.uid() in (select id from public.profiles));
 
 -- Resources: Public can read, Admins can manage
-create policy "Public can read resources" on public.resources for select using (true);
+create policy "Public can read resources" on public.resources for select using (not is_protected);
+create policy "Agents can read granted resources" on public.resources for select using (
+  id in (select resource_id from public.protected_resources where agent_id = auth.uid() and status = 'granted')
+);
 create policy "Admins can manage resources" on public.resources for all using (auth.uid() in (select id from public.profiles));
 
--- Messages: Users can read/insert own chat messages, Admins can read all
-create policy "Users can manage own messages" on public.messages for all using (chat_id = auth.uid()::text or chat_id = 'guest_' || auth.uid()::text);
-create policy "Admins can read all messages" on public.messages for select using (auth.uid() in (select id from public.profiles));
+-- Protected Resources: Admins can manage, Agents can read own
+create policy "Admins can manage protected resources" on public.protected_resources for all using (auth.uid() in (select id from public.profiles));
+create policy "Agents can view own resource requests" on public.protected_resources for select using (agent_id = auth.uid());
+create policy "Agents can request resources" on public.protected_resources for insert with check (agent_id = auth.uid());
+
+-- Messages: Users can manage own, Admins can read all, Guests can manage by chat_id
+create policy "Users can manage own messages" on public.messages for all using (
+  (auth.uid() is not null and (chat_id = auth.uid()::text or sender_id = auth.uid())) or
+  (auth.uid() is null and chat_id like 'guest_%')
+);
+create policy "Admins can manage all messages" on public.messages for all using (auth.uid() in (select id from public.profiles));
 create policy "Public can insert messages" on public.messages for insert with check (true);
