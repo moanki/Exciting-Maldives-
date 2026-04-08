@@ -109,8 +109,9 @@ const resizeImage = (file: File, maxWidth = 1920, maxHeight = 1080): Promise<Fil
 };
 
 export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification, setUploadProgress }) => {
+  console.log('ResortEditForm formData:', formData);
   const [activeTab, setActiveTab] = useState('Overview');
-  const tabs = ['Overview', 'Accommodation', 'Dining', 'Experiences', 'Media', 'Documents', 'Import Media'];
+  const tabs = ['Overview', 'Media', 'Import Media'];
   const [media, setMedia] = useState<any[]>([]);
   const [importUrl, setImportUrl] = useState('');
   const [importState, setImportState] = useState<'idle' | 'processing' | 'ready_for_review' | 'saving' | 'saved' | 'failed'>('idle');
@@ -129,25 +130,39 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const [roomTypes, setRoomTypes] = useState<any[]>(formData.room_types || []);
   const [highlights, setHighlights] = useState(formData.highlights?.join(', ') || '');
   const [category, setCategory] = useState(formData.category || '');
-
-  useEffect(() => {
-    setFormData({
-      ...formData,
-      description: about,
-      transfer_type: transfer,
-      meal_plans: mealPlans.split(',').map(s => s.trim()),
-      rooms: rooms.split(',').map(s => s.trim()),
-      room_types: roomTypes,
-      highlights: highlights.split(',').map(s => s.trim()),
-      category: category
-    });
-  }, [about, transfer, mealPlans, rooms, roomTypes, highlights, category]);
+  const [bannerUrl, setBannerUrl] = useState(formData.banner_url || '');
 
   useEffect(() => {
     if (editingResort) {
+      setAbout(editingResort.description || '');
+      setTransfer(editingResort.transfer_type || '');
+      setMealPlans(editingResort.meal_plans?.join(', ') || '');
+      setRooms(editingResort.rooms?.join(', ') || '');
+      setRoomTypes(editingResort.room_types || []);
+      setHighlights(editingResort.highlights?.join(', ') || '');
+      setCategory(editingResort.category || '');
+      setBannerUrl(editingResort.banner_url || '');
       fetchMedia();
     }
   }, [editingResort]);
+
+  useEffect(() => {
+    console.log('formData updated:', formData);
+  }, [formData]);
+
+  useEffect(() => {
+    setFormData((prev: any) => ({
+      ...prev,
+      description: about,
+      transfer_type: transfer,
+      meal_plans: mealPlans.split(',').map(s => s.trim()).filter(Boolean),
+      rooms: rooms.split(',').map(s => s.trim()).filter(Boolean),
+      room_types: roomTypes,
+      highlights: highlights.split(',').map(s => s.trim()).filter(Boolean),
+      category: category,
+      banner_url: bannerUrl
+    }));
+  }, [about, transfer, mealPlans, rooms, roomTypes, highlights, category, bannerUrl]);
 
   const fetchMedia = async () => {
     if (!editingResort?.id) return;
@@ -419,6 +434,32 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           <TextAreaInput label="Rooms" value={rooms} onChange={setRooms} placeholder="e.g. Overwater Villa, Beach Villa" />
           <TextAreaInput label="Highlights" value={highlights} onChange={setHighlights} placeholder="e.g. Overwater slide, Underwater restaurant" />
           <div className="space-y-4">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Banner Photo</label>
+            <div className="flex items-center gap-4">
+              <div className="w-40 h-20 rounded-lg overflow-hidden bg-brand-paper/50 border border-brand-navy/10 relative group">
+                {(() => {
+                  const preview = bannerUrl || 
+                                media.find(m => m.is_hero)?.storage_path || 
+                                media.find(m => m.category === 'banner')?.storage_path || 
+                                media[0]?.storage_path;
+                  
+                  return preview ? (
+                    <img src={preview} alt="Banner Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-brand-navy/20">
+                      <ImageIcon size={24} />
+                    </div>
+                  );
+                })()}
+              </div>
+              <button type="button" onClick={() => {
+                console.log('Setting activeMediaField to banner');
+                setActiveMediaField('banner');
+                setIsMediaLibraryOpen(true);
+              }} className="text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:underline">Change Photo</button>
+            </div>
+          </div>
+          <div className="space-y-4">
             <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Room Types</label>
             {roomTypes.map((rt, index) => (
               <div key={index} className="bg-brand-paper/30 border border-brand-navy/10 rounded-xl p-4 space-y-4">
@@ -433,7 +474,24 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   setRoomTypes(newTypes);
                 }} />
                 <div className="flex items-center gap-4">
-                  <img src={rt.image_url} alt={rt.name} className="w-20 h-20 object-cover rounded-lg" />
+                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-brand-paper/50 border border-brand-navy/10 relative">
+                    {(() => {
+                      const matchingMedia = media.find(m => 
+                        m.category === 'rooms' && 
+                        (m.subcategory?.toLowerCase() === rt.name?.toLowerCase() || 
+                         m.original_filename?.toLowerCase().includes(rt.name?.toLowerCase()))
+                      );
+                      const preview = rt.image_url || matchingMedia?.storage_path;
+                      
+                      return preview ? (
+                        <img src={preview} alt={rt.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-brand-navy/20">
+                          <ImageIcon size={16} />
+                        </div>
+                      );
+                    })()}
+                  </div>
                   <button type="button" onClick={() => {
                     setActiveMediaField(`room_type_${index}`);
                     setIsMediaLibraryOpen(true);
@@ -484,21 +542,46 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
             <MediaLibraryModal 
               onClose={() => setIsMediaLibraryOpen(false)}
               onSelect={(selectedMedia) => {
-                if (activeMediaField?.startsWith('room_type_')) {
+                console.log('onSelect called with:', selectedMedia, 'activeMediaField:', activeMediaField);
+                if (activeMediaField === 'banner') {
+                  setBannerUrl(selectedMedia.storage_path);
+                } else if (activeMediaField?.startsWith('room_type_')) {
                   const index = parseInt(activeMediaField.split('_')[2]);
                   const newTypes = [...roomTypes];
                   newTypes[index].image_url = selectedMedia.storage_path;
                   setRoomTypes(newTypes);
                 } else {
-                  // Add selected media to the local media state
-                  setMedia([...media, {
-                    ...selectedMedia,
-                    category: activeMediaField // Assign to the category that triggered the modal
-                  }]);
+                  // Add selected media to the local media state and persist it
+                  const addMedia = async () => {
+                    if (!editingResort?.id) return;
+                    
+                    const { data, error } = await supabase
+                      .from('resort_media')
+                      .insert({
+                        resort_id: editingResort.id,
+                        storage_path: selectedMedia.storage_path,
+                        category: activeMediaField,
+                        original_filename: selectedMedia.original_filename,
+                        source_type: 'library_reuse',
+                        status: 'active'
+                      })
+                      .select()
+                      .single();
+                    
+                    if (data) {
+                      setMedia(prev => [...prev, data]);
+                      showNotification('Media added to gallery');
+                    } else if (error) {
+                      console.error('Error adding media:', error);
+                      showNotification('Failed to add media to gallery');
+                    }
+                  };
+                  addMedia();
                 }
                 setIsMediaLibraryOpen(false);
               }}
               resortId={editingResort?.id}
+              initialCategory={activeMediaField?.startsWith('room_type_') ? 'rooms' : activeMediaField || 'all'}
             />
           )}
         </div>

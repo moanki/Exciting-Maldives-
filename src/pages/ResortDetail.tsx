@@ -38,7 +38,8 @@ export default function ResortDetail() {
   const roomMedia = resort.resort_media?.filter((m: any) => m.category === 'rooms');
   const mapMedia = resort.resort_media?.filter((m: any) => m.category === 'maps');
 
-  const heroImage = resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
+  const heroImage = resort.banner_url ||
+                    resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
                     resort.resort_media?.find((m: any) => m.category === 'banner')?.storage_path ||
                     resort.resort_media?.[0]?.storage_path || 
                     `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
@@ -154,7 +155,7 @@ export default function ResortDetail() {
                   m.subcategory?.toLowerCase() === room.name?.toLowerCase() || 
                   m.original_filename?.toLowerCase().includes(room.name?.toLowerCase())
                 );
-                const roomImage = matchingMedia?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
+                const roomImage = room.image_url || matchingMedia?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
 
                 return (
                   <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">

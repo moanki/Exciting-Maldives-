@@ -643,11 +643,8 @@ export default function Home({ settings }: { settings: any }) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {safeArray(settings.travel_guide).map((post: any, i: number) => {
-            const Wrapper = post.link ? 'a' : Link;
-            const wrapperProps = post.link ? { href: post.link, target: '_blank', rel: 'noopener noreferrer' } : { to: '/guide' };
-            
-            return (
-              <Wrapper {...wrapperProps} key={i} className="group cursor-pointer block flex flex-col h-full">
+            const content = (
+              <>
                 <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6">
                   <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                 </div>
@@ -656,7 +653,21 @@ export default function Home({ settings }: { settings: any }) {
                 {post.description && (
                   <p className="text-brand-navy/60 font-sans text-sm line-clamp-3 mt-auto">{post.description}</p>
                 )}
-              </Wrapper>
+              </>
+            );
+            
+            if (post.link) {
+              return (
+                <a href={post.link} target="_blank" rel="noopener noreferrer" key={i} className="group cursor-pointer block flex flex-col h-full">
+                  {content}
+                </a>
+              );
+            }
+
+            return (
+              <Link to="/guide" key={i} className="group cursor-pointer block flex flex-col h-full">
+                {content}
+              </Link>
             );
           })}
         </div>

@@ -116,7 +116,7 @@ export default function ResortSearch() {
             <Link to={`/resorts/${resort.id}`}>
               <div className="relative aspect-video overflow-hidden">
                 <img 
-                  src={`${resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${resort.images?.[0]?.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
+                  src={`${resort.banner_url || resort.images?.[0] || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`}${ (resort.banner_url || resort.images?.[0] || '').includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : '?auto=format&fit=crop&q=80&w=800'}`} 
                   alt={resort.name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"
