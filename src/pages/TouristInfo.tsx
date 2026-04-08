@@ -52,20 +52,40 @@ export default function TouristInfo({ settings }: { settings: any }) {
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.1 }}
-                className="bg-white rounded-3xl shadow-xl shadow-brand-navy/5 overflow-hidden group border border-brand-navy/5"
+                className="bg-white rounded-3xl shadow-xl shadow-brand-navy/5 overflow-hidden group border border-brand-navy/5 flex flex-col"
               >
-                <div className="aspect-[4/3] overflow-hidden">
-                  <img 
-                    src={guide.img} 
-                    alt={guide.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <div className="p-8">
+                {guide.link ? (
+                  <a href={guide.link} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] overflow-hidden">
+                    <img 
+                      src={guide.img} 
+                      alt={guide.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  </a>
+                ) : (
+                  <div className="aspect-[4/3] overflow-hidden">
+                    <img 
+                      src={guide.img} 
+                      alt={guide.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                )}
+                <div className="p-8 flex-1 flex flex-col">
                   <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] mb-3 block font-bold">{guide.category}</span>
-                  <h3 className="text-2xl font-serif mb-4 text-brand-navy">{guide.title}</h3>
-                  <div className="flex items-center gap-2 text-brand-navy/40 text-[10px] font-bold uppercase tracking-widest">
+                  {guide.link ? (
+                    <a href={guide.link} target="_blank" rel="noopener noreferrer" className="hover:text-brand-teal transition-colors">
+                      <h3 className="text-2xl font-serif mb-4 text-brand-navy">{guide.title}</h3>
+                    </a>
+                  ) : (
+                    <h3 className="text-2xl font-serif mb-4 text-brand-navy">{guide.title}</h3>
+                  )}
+                  {guide.description && (
+                    <p className="text-brand-navy/60 font-sans text-sm mb-6 flex-1">{guide.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 text-brand-navy/40 text-[10px] font-bold uppercase tracking-widest mt-auto">
                     <BookOpen size={14} />
                     <span>Professional Insight</span>
                   </div>

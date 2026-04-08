@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X, Send, Phone } from 'lucide-react';
 import { supabase } from '../supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -108,9 +108,10 @@ function useChatMessages(chatId: string, isOpen: boolean) {
 
 // --- Component ---
 
-export default function ChatWidget() {
+export default function ChatWidget({ settings }: { settings?: any }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const { user, chatId, isAuthReady } = useChatSession();
@@ -124,11 +125,13 @@ export default function ChatWidget() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSendError(null);
     try {
       await sendMessage(inputText, user);
       setInputText('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
+      setSendError(error.message || 'Failed to send message. Please try again.');
     }
   };
 
@@ -140,14 +143,14 @@ export default function ChatWidget() {
   if (!isAuthReady) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-white w-80 h-[450px] rounded-2xl shadow-2xl border border-gray-200 flex flex-col mb-4 overflow-hidden"
+            className="bg-white w-80 h-[450px] rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
           >
             <div className="bg-brand-navy p-4 flex justify-between items-center text-white">
               <div>
@@ -192,34 +195,57 @@ export default function ChatWidget() {
               ))}
             </div>
 
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex gap-2">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1 text-sm border-none focus:ring-0 bg-gray-50 rounded-xl px-4 py-3 font-sans"
-              />
-              <button 
-                type="submit" 
-                disabled={!inputText.trim()}
-                className="bg-brand-navy text-white p-3 rounded-xl hover:bg-brand-teal transition-all disabled:opacity-30 disabled:hover:bg-brand-navy"
-              >
-                <Send size={18} />
-              </button>
+            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2">
+              {sendError && (
+                <div className="text-xs text-red-500 px-2">{sendError}</div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Type your message..."
+                  className="flex-1 text-sm border-none focus:ring-0 bg-gray-50 rounded-xl px-4 py-3 font-sans"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!inputText.trim()}
+                  className="bg-brand-navy text-white p-3 rounded-xl hover:bg-brand-teal transition-all disabled:opacity-30 disabled:hover:bg-brand-navy"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </form>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center justify-center ${
-          isOpen ? 'bg-brand-navy text-white' : 'bg-brand-teal text-white'
-        }`}
-      >
-        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
-      </button>
+      <div className="flex flex-col gap-4">
+        {/* WhatsApp Floating Button */}
+        {!isOpen && settings?.whatsapp?.enabled && settings?.whatsapp?.number && (
+          <motion.a
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            href={`https://wa.me/${settings.whatsapp.number.replace(/\D/g, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-[#128C7E] transition-colors self-end"
+          >
+            <Phone size={28} fill="currentColor" />
+          </motion.a>
+        )}
+
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-14 h-14 rounded-full shadow-2xl transition-all transform hover:scale-110 active:scale-95 flex items-center justify-center self-end ${
+            isOpen ? 'bg-brand-navy text-white' : 'bg-brand-teal text-white'
+          }`}
+        >
+          {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
+        </button>
+      </div>
     </div>
   );
 }

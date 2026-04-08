@@ -195,13 +195,12 @@ export default function AdminDashboard() {
                         <SubSidebarLink to="/admin/page-manager/stats" label="Expertise Stats" active={location.pathname === '/admin/page-manager/stats'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/ceo" label="CEO Message" active={location.pathname === '/admin/page-manager/ceo'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/story" label="Our Story" active={location.pathname === '/admin/page-manager/story'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/excellence" label="Excellence" active={location.pathname === '/admin/page-manager/excellence'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/markets" label="Global Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/newsletter_markets" label="Newsletter Markets" active={location.pathname === '/admin/page-manager/newsletter_markets'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/services" label="Services" active={location.pathname === '/admin/page-manager/services'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
+                        <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us & Excellence" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/ctas" label="CTAs" active={location.pathname === '/admin/page-manager/ctas'} onClick={() => setIsMobileMenuOpen(false)} />
                         <SubSidebarLink to="/admin/page-manager/system" label="System & DB" active={location.pathname === '/admin/page-manager/system'} onClick={() => setIsMobileMenuOpen(false)} />
                       </div>
@@ -619,6 +618,7 @@ function ResourceModal({ onClose, onAdd, initialData, showNotification, setUploa
   const [title, setTitle] = useState(initialData?.title || '');
   const [file, setFile] = useState<File | null>(null);
   const [type, setType] = useState(initialData?.type || 'PDF');
+  const [category, setCategory] = useState(initialData?.category || 'General');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -629,13 +629,14 @@ function ResourceModal({ onClose, onAdd, initialData, showNotification, setUploa
       let publicUrl = initialData?.file_url || '';
 
       if (file) {
-        publicUrl = await uploadFile(file, 'public', 'documents', setUploadProgress, showNotification);
+        publicUrl = await uploadFile(file, 'documents/public', 'site-assets', setUploadProgress, showNotification);
       }
 
       // Save to DB
       const resourceData = {
         title,
         type,
+        category,
         file_url: publicUrl,
         size: file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : initialData?.size
       };
@@ -662,6 +663,7 @@ function ResourceModal({ onClose, onAdd, initialData, showNotification, setUploa
         <h3 className="text-xl font-serif text-brand-navy mb-6">{initialData ? 'Edit Resource' : 'Add Resource'}</h3>
         <div className="space-y-4">
           <TextInput label="Title" value={title} onChange={setTitle} />
+          <TextInput label="Category" value={category} onChange={setCategory} />
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">File {initialData && '(Leave empty to keep current)'}</label>
             <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm font-sans" />
@@ -694,7 +696,7 @@ function ProtectedResourceModal({ onClose, onAdd, initialData, showNotification,
       let publicUrl = initialData?.file_url || '';
 
       if (file) {
-        publicUrl = await uploadFile(file, 'protected', 'documents', setUploadProgress, showNotification);
+        publicUrl = await uploadFile(file, 'documents/protected', 'site-assets', setUploadProgress, showNotification);
       }
 
       // Save to DB
@@ -2617,6 +2619,16 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                         saveSetting('travel_guide', newPosts);
                       }} />
                     </div>
+                    <TextAreaInput label="Description" value={post.description || ''} onChange={(val) => {
+                      const newPosts = [...safeArray(settings.travel_guide)];
+                      newPosts[idx].description = val;
+                      saveSetting('travel_guide', newPosts);
+                    }} />
+                    <TextInput label="Link URL" value={post.link || ''} onChange={(val) => {
+                      const newPosts = [...safeArray(settings.travel_guide)];
+                      newPosts[idx].link = val;
+                      saveSetting('travel_guide', newPosts);
+                    }} />
                     <LogoInput 
                       label="Cover Image" 
                       value={post.img || ''} 
@@ -2641,7 +2653,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
                   </div>
                 ))}
                 <button 
-                  onClick={() => saveSetting('travel_guide', [...safeArray(settings.travel_guide), { title: 'New Guide', category: 'Travel', img: '' }])}
+                  onClick={() => saveSetting('travel_guide', [...safeArray(settings.travel_guide), { title: 'New Guide', category: 'Travel', img: '', description: '', link: '' }])}
                   className="w-full py-6 border-2 border-dashed border-brand-navy/10 rounded-3xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={16} /> Add Travel Guide
@@ -2909,6 +2921,165 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
               >
                 <Plus size={16} /> Add Pillar
               </button>
+
+              <div className="pt-12 mt-12 border-t border-brand-navy/10">
+                <h3 className="text-xl font-serif text-brand-navy mb-6">Platform Excellence</h3>
+                <div className="space-y-6">
+                  <TextInput 
+                    label="Main Title" 
+                    value={settings.platform_excellence?.title || ''} 
+                    onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, title: val }))} 
+                  />
+                  <TextAreaInput 
+                    label="Main Description" 
+                    value={settings.platform_excellence?.description || ''} 
+                    onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, description: val }))} 
+                  />
+                  <LogoInput 
+                    label="Main Image" 
+                    value={settings.platform_excellence?.image_url || ''} 
+                    onUpload={async (file: File) => {
+                      try {
+                        const url = await uploadFile(file, 'excellence', 'site-assets', setUploadProgress, showNotification);
+                        saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: url }));
+                      } catch (err) {
+                        console.error('Upload error:', err);
+                      }
+                    }}
+                    onChange={(val: string) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: val }))} 
+                  />
+                  <TextInput 
+                    label="Floating Badge Text" 
+                    value={settings.platform_excellence?.badge_text || ''} 
+                    onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, badge_text: val }))} 
+                  />
+                  
+                  <div className="space-y-4 mt-8">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Carousel Images</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {safeArray(settings.platform_excellence?.images).map((imgUrl: string, idx: number) => (
+                        <div key={idx} className="relative group aspect-video rounded-2xl overflow-hidden bg-brand-paper">
+                          <img src={imgUrl} className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => {
+                              saveSetting('platform_excellence', (prev: any) => {
+                                const newImages = safeArray(prev?.images).filter((_: any, i: number) => i !== idx);
+                                return { ...prev, images: newImages };
+                              });
+                            }}
+                            className="absolute top-2 right-2 p-2 bg-white/90 text-brand-coral rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = async (e: any) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              try {
+                                const url = await uploadFile(file, 'platform', 'site-assets', setUploadProgress, showNotification);
+                                saveSetting('platform_excellence', (prev: any) => ({
+                                  ...prev,
+                                  images: [...safeArray(prev?.images), url]
+                                }));
+                              } catch (err) {
+                                console.error('Upload error:', err);
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="aspect-video border-2 border-dashed border-brand-navy/20 rounded-2xl flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
+                      >
+                        <Plus size={24} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Add Image</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <h4 className="text-lg font-serif text-brand-navy mt-8">Features</h4>
+                  {safeArray(settings.platform_excellence?.features).map((item: any, idx: number) => (
+                    <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4 relative">
+                      <button 
+                        onClick={() => {
+                          saveSetting('platform_excellence', (prev: any) => {
+                            const newFeatures = safeArray(prev?.features).filter((_: any, i: number) => i !== idx);
+                            return { ...prev, features: newFeatures };
+                          });
+                        }}
+                        className="absolute top-4 right-4 p-2 bg-brand-coral/10 text-brand-coral rounded-full hover:bg-brand-coral hover:text-white transition-all"
+                      >
+                        <X size={14} />
+                      </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <TextInput 
+                            label="Feature Title" 
+                            value={item.title} 
+                            onChange={(val) => {
+                              saveSetting('platform_excellence', (prev: any) => {
+                                const newFeatures = [...safeArray(prev?.features)];
+                                newFeatures[idx] = { ...newFeatures[idx], title: val };
+                                return { ...prev, features: newFeatures };
+                              });
+                            }} 
+                          />
+                          <TextAreaInput 
+                            label="Feature Description" 
+                            value={item.description} 
+                            onChange={(val) => {
+                              saveSetting('platform_excellence', (prev: any) => {
+                                const newFeatures = [...safeArray(prev?.features)];
+                                newFeatures[idx] = { ...newFeatures[idx], description: val };
+                                return { ...prev, features: newFeatures };
+                              });
+                            }} 
+                          />
+                        </div>
+                        <div>
+                          <LogoInput 
+                            label="Feature Icon/Image" 
+                            value={item.icon_url || ''} 
+                            onUpload={async (file: File) => {
+                              try {
+                                const url = await uploadFile(file, 'excellence-icons', 'site-assets', setUploadProgress, showNotification);
+                                saveSetting('platform_excellence', (prev: any) => {
+                                  const newFeatures = [...safeArray(prev?.features)];
+                                  newFeatures[idx] = { ...newFeatures[idx], icon_url: url };
+                                  return { ...prev, features: newFeatures };
+                                });
+                              } catch (err) {
+                                console.error('Upload error:', err);
+                              }
+                            }}
+                            onChange={(val: string) => {
+                              saveSetting('platform_excellence', (prev: any) => {
+                                const newFeatures = [...safeArray(prev?.features)];
+                                newFeatures[idx] = { ...newFeatures[idx], icon_url: val };
+                                return { ...prev, features: newFeatures };
+                              });
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button 
+                    onClick={() => saveSetting('platform_excellence', (prev: any) => ({ 
+                      ...prev, 
+                      features: [...safeArray(prev?.features), { title: 'New Feature', description: '' }] 
+                    }))}
+                    className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Add Excellence Feature
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -3001,166 +3172,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
             </div>
           )}
 
-          {activeTab === 'excellence' && (
-            <div className="space-y-8">
-              <h3 className="text-xl font-serif text-brand-navy">Platform Excellence</h3>
-              <div className="space-y-6">
-                <TextInput 
-                  label="Main Title" 
-                  value={settings.platform_excellence?.title || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, title: val }))} 
-                />
-                <TextAreaInput 
-                  label="Main Description" 
-                  value={settings.platform_excellence?.description || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, description: val }))} 
-                />
-                <LogoInput 
-                  label="Main Image" 
-                  value={settings.platform_excellence?.image_url || ''} 
-                  onUpload={async (file: File) => {
-                    try {
-                      const url = await uploadFile(file, 'excellence', 'site-assets', setUploadProgress, showNotification);
-                      saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: url }));
-                    } catch (err) {
-                      console.error('Upload error:', err);
-                    }
-                  }}
-                  onChange={(val: string) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, image_url: val }))} 
-                />
-                <TextInput 
-                  label="Floating Badge Text" 
-                  value={settings.platform_excellence?.badge_text || ''} 
-                  onChange={(val) => saveSetting('platform_excellence', (prev: any) => ({ ...prev, badge_text: val }))} 
-                />
-                
-                <div className="space-y-4 mt-8">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy/30">Carousel Images</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {safeArray(settings.platform_excellence?.images).map((imgUrl: string, idx: number) => (
-                      <div key={idx} className="relative group aspect-video rounded-2xl overflow-hidden bg-brand-paper">
-                        <img src={imgUrl} className="w-full h-full object-cover" />
-                        <button 
-                          onClick={() => {
-                            saveSetting('platform_excellence', (prev: any) => {
-                              const newImages = safeArray(prev?.images).filter((_: any, i: number) => i !== idx);
-                              return { ...prev, images: newImages };
-                            });
-                          }}
-                          className="absolute top-2 right-2 p-2 bg-white/90 text-brand-coral rounded-full opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/*';
-                        input.onchange = async (e: any) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            try {
-                              const url = await uploadFile(file, 'platform', 'site-assets', setUploadProgress, showNotification);
-                              saveSetting('platform_excellence', (prev: any) => ({
-                                ...prev,
-                                images: [...safeArray(prev?.images), url]
-                              }));
-                            } catch (err) {
-                              console.error('Upload error:', err);
-                            }
-                          }
-                        };
-                        input.click();
-                      }}
-                      className="aspect-video border-2 border-dashed border-brand-navy/20 rounded-2xl flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
-                    >
-                      <Plus size={24} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Add Image</span>
-                    </button>
-                  </div>
-                </div>
-                
-                <h4 className="text-lg font-serif text-brand-navy mt-8">Features</h4>
-                {safeArray(settings.platform_excellence?.features).map((item: any, idx: number) => (
-                  <div key={idx} className="p-6 bg-brand-paper/30 rounded-2xl space-y-4 relative">
-                    <button 
-                      onClick={() => {
-                        saveSetting('platform_excellence', (prev: any) => {
-                          const newFeatures = safeArray(prev?.features).filter((_: any, i: number) => i !== idx);
-                          return { ...prev, features: newFeatures };
-                        });
-                      }}
-                      className="absolute top-4 right-4 p-2 bg-brand-coral/10 text-brand-coral rounded-full hover:bg-brand-coral hover:text-white transition-all"
-                    >
-                      <X size={14} />
-                    </button>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <TextInput 
-                          label="Feature Title" 
-                          value={item.title} 
-                          onChange={(val) => {
-                            saveSetting('platform_excellence', (prev: any) => {
-                              const newFeatures = [...safeArray(prev?.features)];
-                              newFeatures[idx] = { ...newFeatures[idx], title: val };
-                              return { ...prev, features: newFeatures };
-                            });
-                          }} 
-                        />
-                        <TextAreaInput 
-                          label="Feature Description" 
-                          value={item.description} 
-                          onChange={(val) => {
-                            saveSetting('platform_excellence', (prev: any) => {
-                              const newFeatures = [...safeArray(prev?.features)];
-                              newFeatures[idx] = { ...newFeatures[idx], description: val };
-                              return { ...prev, features: newFeatures };
-                            });
-                          }} 
-                        />
-                      </div>
-                      <div>
-                        <LogoInput 
-                          label="Feature Icon/Image" 
-                          value={item.icon_url || ''} 
-                          onUpload={async (file: File) => {
-                            try {
-                              const url = await uploadFile(file, 'excellence-icons', 'site-assets', setUploadProgress, showNotification);
-                              saveSetting('platform_excellence', (prev: any) => {
-                                const newFeatures = [...safeArray(prev?.features)];
-                                newFeatures[idx] = { ...newFeatures[idx], icon_url: url };
-                                return { ...prev, features: newFeatures };
-                              });
-                            } catch (err) {
-                              console.error('Upload error:', err);
-                            }
-                          }}
-                          onChange={(val: string) => {
-                            saveSetting('platform_excellence', (prev: any) => {
-                              const newFeatures = [...safeArray(prev?.features)];
-                              newFeatures[idx] = { ...newFeatures[idx], icon_url: val };
-                              return { ...prev, features: newFeatures };
-                            });
-                          }} 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <button 
-                  onClick={() => saveSetting('platform_excellence', (prev: any) => ({ 
-                    ...prev, 
-                    features: [...safeArray(prev?.features), { title: 'New Feature', description: '' }] 
-                  }))}
-                  className="w-full py-4 border-2 border-dashed border-brand-navy/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 hover:border-brand-teal hover:text-brand-teal transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus size={16} /> Add Excellence Feature
-                </button>
-              </div>
-            </div>
-          )}
+
 
           {activeTab === 'ceo' && (
             <div className="space-y-8">
@@ -3835,6 +3847,21 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
 }
 
 function TextInput({ label, value, onChange, icon, type = 'text' }: any) {
+  const [localValue, setLocalValue] = useState(value || '');
+
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (localValue !== (value || '')) {
+        onChange(localValue);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [localValue, onChange, value]);
+
   return (
     <div className="flex-1">
       <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">{label}</label>
@@ -3842,8 +3869,13 @@ function TextInput({ label, value, onChange, icon, type = 'text' }: any) {
         {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-navy/30">{icon}</div>}
         <input
           type={type}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          onBlur={() => {
+            if (localValue !== (value || '')) {
+              onChange(localValue);
+            }
+          }}
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
@@ -3855,12 +3887,32 @@ function TextInput({ label, value, onChange, icon, type = 'text' }: any) {
 }
 
 function TextAreaInput({ label, value, onChange }: any) {
+  const [localValue, setLocalValue] = useState(value || '');
+
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (localValue !== (value || '')) {
+        onChange(localValue);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [localValue, onChange, value]);
+
   return (
     <div>
       <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/30 mb-2 font-sans">{label}</label>
       <textarea
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => {
+          if (localValue !== (value || '')) {
+            onChange(localValue);
+          }
+        }}
         rows={4}
         autoCorrect="off"
         autoCapitalize="none"

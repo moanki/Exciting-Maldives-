@@ -642,16 +642,23 @@ export default function Home({ settings }: { settings: any }) {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {safeArray(settings.travel_guide).map((post: any, i: number) => (
-              <Link to="/guide" key={i} className="group cursor-pointer block">
+          {safeArray(settings.travel_guide).map((post: any, i: number) => {
+            const Wrapper = post.link ? 'a' : Link;
+            const wrapperProps = post.link ? { href: post.link, target: '_blank', rel: 'noopener noreferrer' } : { to: '/guide' };
+            
+            return (
+              <Wrapper {...wrapperProps} key={i} className="group cursor-pointer block flex flex-col h-full">
                 <div className="overflow-hidden rounded-2xl aspect-[4/3] mb-6">
                   <img src={post.img} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
                 </div>
                 <span className="text-brand-teal font-sans uppercase tracking-[0.2em] text-[10px] mb-3 block font-bold">{post.category}</span>
                 <h3 className="font-serif text-xl text-brand-navy mb-4 group-hover:text-brand-teal transition-colors">{post.title}</h3>
-              </Link>
-            ))
-          }
+                {post.description && (
+                  <p className="text-brand-navy/60 font-sans text-sm line-clamp-3 mt-auto">{post.description}</p>
+                )}
+              </Wrapper>
+            );
+          })}
         </div>
       </section>
 

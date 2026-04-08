@@ -301,8 +301,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           status: 'active',
           is_hero: item.is_hero,
           is_featured: item.is_hero || ['banner', 'aerial'].includes(item.category),
-          sort_order: i,
-          import_batch_id: `batch_${Date.now()}`
+          sort_order: i
         });
       }
       

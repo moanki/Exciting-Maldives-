@@ -359,7 +359,16 @@ async function startServer() {
         }
 
         if (auth) {
-          const drive = google.drive({ version: 'v3', auth });
+          let clientAuth = auth;
+          if (typeof auth !== 'string') {
+            try {
+              clientAuth = await auth.getClient();
+            } catch (e) {
+              console.error("Failed to get Google Auth client:", e);
+              return res.status(500).json({ error: "Failed to authenticate with Google Drive: " + e.message });
+            }
+          }
+          const drive = google.drive({ version: 'v3', auth: clientAuth });
           
           if (folderId) {
             const media: any[] = [];
