@@ -1162,12 +1162,11 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
     
     try {
       if (editingResort) {
-        const { banner_url, resort_url, crawl, ...dataToSave } = formData;
+        const { crawl, ...dataToSave } = formData;
         const { error } = await supabase
           .from('resorts')
           .update({
             ...dataToSave,
-            banner_url,
             images: typeof formData.images === 'string' ? formData.images.split(',').map(s => s.trim()).filter(Boolean) : formData.images,
             highlights: formData.highlights,
             meal_plans: formData.meal_plans,
@@ -1175,17 +1174,17 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
             transfer_type: formData.transfer_type,
             rooms: formData.rooms,
             room_types: formData.room_types,
-            category: formData.category
+            category: formData.category,
+            updated_at: new Date().toISOString()
           })
           .eq('id', editingResort.id);
         if (error) throw error;
       } else {
-        const { banner_url, resort_url, crawl, ...dataToSave } = formData;
+        const { crawl, ...dataToSave } = formData;
         const { error } = await supabase
           .from('resorts')
           .insert({
             ...dataToSave,
-            banner_url,
             images: typeof formData.images === 'string' ? formData.images.split(',').map(s => s.trim()).filter(Boolean) : formData.images,
             highlights: formData.highlights,
             meal_plans: formData.meal_plans,

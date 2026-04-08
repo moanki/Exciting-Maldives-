@@ -113,6 +113,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const [activeTab, setActiveTab] = useState('Overview');
   const tabs = ['Overview', 'Media', 'Import Media'];
   const [media, setMedia] = useState<any[]>([]);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [importUrl, setImportUrl] = useState('');
   const [importState, setImportState] = useState<'idle' | 'processing' | 'ready_for_review' | 'saving' | 'saved' | 'failed'>('idle');
   const [importedMedia, setImportedMedia] = useState<any[]>([]); 
@@ -143,6 +144,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       setCategory(editingResort.category || '');
       setBannerUrl(editingResort.banner_url || '');
       fetchMedia();
+      fetchCategories();
     }
   }, [editingResort]);
 
@@ -164,11 +166,21 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     }));
   }, [about, transfer, mealPlans, rooms, roomTypes, highlights, category, bannerUrl]);
 
+  const fetchCategories = async () => {
+    if (!editingResort?.id) return;
+    const { data } = await supabase
+      .from('resort_media_categories')
+      .select('*')
+      .eq('resort_id', editingResort.id)
+      .order('sort_order', { ascending: true });
+    if (data) setDbCategories(data);
+  };
+
   const fetchMedia = async () => {
     if (!editingResort?.id) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('resort_media')
-      .select('*')
+      .select('*, resort_media_categories(name, slug)')
       .eq('resort_id', editingResort.id)
       .order('sort_order', { ascending: true });
     if (data) setMedia(data);
@@ -507,12 +519,22 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       
   {activeTab === 'Media' && (
         <div className="space-y-6">
-          <h3 className="text-xl font-serif text-brand-navy">Media Management</h3>
-          {categories.map(category => (
-            <div key={category} className="space-y-2">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">{category}</h4>
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-serif text-brand-navy">Media Management</h3>
+            {dbCategories.length === 0 && (
+              <p className="text-[10px] text-brand-coral font-bold uppercase tracking-widest">
+                Warning: No categories found in database. Using defaults.
+              </p>
+            )}
+          </div>
+          {(dbCategories.length > 0 ? dbCategories : categories.map(c => ({ name: c, slug: c, id: null }))).map(category => (
+            <div key={category.id || category.slug} className="space-y-2">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">{category.name || category.slug}</h4>
               <div className="grid grid-cols-4 gap-4">
-                {media.filter(m => m.category === category).map(m => (
+                {media.filter(m => 
+                  (category.id && m.category_id === category.id) || 
+                  (!category.id && m.category === category.slug)
+                ).map(m => (
                   <div key={m.id} className="relative group">
                     <img src={m.storage_path} alt={m.original_filename} className="w-full h-24 object-cover rounded-lg" />
                     {m.is_hero && (
@@ -526,7 +548,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 <button 
                   type="button" 
                   onClick={() => {
-                    setActiveMediaField(category);
+                    setActiveMediaField(category.id ? `category_${category.id}` : category.slug);
                     setIsMediaLibraryOpen(true);
                   }}
                   className="w-full h-24 border-2 border-dashed border-brand-navy/10 rounded-lg flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
@@ -555,17 +577,24 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   const addMedia = async () => {
                     if (!editingResort?.id) return;
                     
+                    const insertData: any = {
+                      resort_id: editingResort.id,
+                      storage_path: selectedMedia.storage_path,
+                      original_filename: selectedMedia.original_filename,
+                      source_type: 'library_reuse',
+                      status: 'active'
+                    };
+
+                    if (activeMediaField?.startsWith('category_')) {
+                      insertData.category_id = activeMediaField.split('_')[1];
+                    } else {
+                      insertData.category = activeMediaField;
+                    }
+
                     const { data, error } = await supabase
                       .from('resort_media')
-                      .insert({
-                        resort_id: editingResort.id,
-                        storage_path: selectedMedia.storage_path,
-                        category: activeMediaField,
-                        original_filename: selectedMedia.original_filename,
-                        source_type: 'library_reuse',
-                        status: 'active'
-                      })
-                      .select()
+                      .insert(insertData)
+                      .select('*, resort_media_categories(name, slug)')
                       .single();
                     
                     if (data) {

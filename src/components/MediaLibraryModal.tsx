@@ -11,6 +11,7 @@ interface MediaLibraryModalProps {
 
 export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, onSelect, resortId, initialCategory }) => {
   const [media, setMedia] = useState<any[]>([]);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
@@ -19,20 +20,39 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
   const categories = ['all', 'banner', 'rooms', 'dining', 'spa', 'activities', 'maps', 'logos', 'uncategorized'];
 
   useEffect(() => {
+    if (resortId) {
+      fetchCategories();
+    }
+  }, [resortId]);
+
+  const fetchCategories = async () => {
+    const { data } = await supabase
+      .from('resort_media_categories')
+      .select('*')
+      .eq('resort_id', resortId)
+      .order('sort_order', { ascending: true });
+    if (data) setDbCategories(data);
+  };
+
+  useEffect(() => {
     fetchMedia();
   }, [selectedCategory, showThisResortOnly]);
 
   const fetchMedia = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('resort_media').select('*, resorts(name)');
+      let query = supabase.from('resort_media').select('*, resorts(name), resort_media_categories(name, slug)');
       
       if (showThisResortOnly && resortId) {
         query = query.eq('resort_id', resortId);
       }
       
       if (selectedCategory !== 'all') {
-        query = query.eq('category', selectedCategory);
+        if (selectedCategory.startsWith('category_')) {
+          query = query.eq('category_id', selectedCategory.split('_')[1]);
+        } else {
+          query = query.eq('category', selectedCategory);
+        }
       }
       
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -76,6 +96,9 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
             {categories.map(cat => (
               <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
             ))}
+            {dbCategories.map(cat => (
+              <option key={cat.id} value={`category_${cat.id}`}>{cat.name}</option>
+            ))}
           </select>
           {resortId && (
             <label className="flex items-center gap-2 cursor-pointer bg-brand-paper/30 border border-brand-navy/10 rounded-xl px-4 py-3">
@@ -110,7 +133,9 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
                 <div className="px-1">
                   <p className="text-[10px] font-bold text-brand-navy truncate">{m.original_filename}</p>
                   <div className="flex justify-between items-center mt-1">
-                    <p className="text-[8px] text-brand-navy/40 uppercase font-bold tracking-widest">{m.category}</p>
+                    <p className="text-[8px] text-brand-navy/40 uppercase font-bold tracking-widest">
+                      {m.resort_media_categories?.name || m.category}
+                    </p>
                     {m.resorts?.name && (
                       <p className="text-[8px] text-brand-teal font-bold truncate max-w-[60px]">{m.resorts.name}</p>
                     )}

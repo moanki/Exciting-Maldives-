@@ -35,15 +35,38 @@ create table if not exists public.resorts (
   meal_plans text[],
   room_types jsonb[], -- Array of room type objects
   status text check (status in ('draft', 'reviewed', 'published')) default 'draft',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  location text,
+  banner_url text,
+  resort_url text,
+  is_featured boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3.0.1 Resort Media Categories
+create table if not exists public.resort_media_categories (
+  id uuid primary key default gen_random_uuid(),
+  resort_id uuid not null references public.resorts(id) on delete cascade,
+  key text not null,
+  label text not null,
+  sort_order integer default 0,
+  parent_category_id uuid references public.resort_media_categories(id) on delete set null,
+  is_system boolean default false,
+  is_active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(resort_id, key)
 );
 
 -- 3.1 Resort Media
 create table if not exists public.resort_media (
   id uuid default gen_random_uuid() primary key,
   resort_id uuid references public.resorts on delete cascade,
-  category text not null, -- hero, aerial, villa, dining, spa, activity, map
+  category text not null, -- hero, aerial, villa, dining, spa, activity, map (Legacy)
+  category_id uuid references public.resort_media_categories(id) on delete set null,
   subcategory text,
+  room_type_name text,
+  asset_family text default 'gallery' check (asset_family in ('hero','gallery','thumb','document')),
   source_type text,
   source_url text,
   import_batch_id uuid, -- references public.import_batches added below
@@ -56,7 +79,8 @@ create table if not exists public.resort_media (
   width integer,
   height integer,
   status text check (status in ('pending', 'active', 'archived')) default 'active',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- 3.1.1 Import Batches
@@ -174,6 +198,55 @@ alter table public.protected_resources enable row level security;
 alter table public.messages enable row level security;
 alter table public.newsletter_submissions enable row level security;
 alter table public.import_batches enable row level security;
+
+-- 10. Seed default categories for all resorts
+insert into public.resort_media_categories (resort_id, key, label, sort_order, is_system)
+select
+  r.id,
+  c.key,
+  c.label,
+  c.sort_order,
+  true
+from public.resorts r
+cross join (
+  values
+    ('main_hero', 'Main Hero', 1),
+    ('overview', 'Overview', 2),
+    ('room_types', 'Room Types', 3),
+    ('spa', 'Spa', 4),
+    ('restaurants', 'Restaurants', 5),
+    ('facilities', 'Facilities', 6),
+    ('activities', 'Activities', 7),
+    ('beaches', 'Beaches', 8),
+    ('maps', 'Maps / Floor Plans', 9),
+    ('logos', 'Logos', 10),
+    ('uncategorized', 'Uncategorized', 99)
+) as c(key, label, sort_order)
+on conflict (resort_id, key) do nothing;
+
+-- 11. Backfill old media into the new category model
+update public.resort_media m
+set category_id = c.id
+from public.resort_media_categories c
+where c.resort_id = m.resort_id
+  and c.key = case
+    when m.category = 'banner' then 'main_hero'
+    when m.category = 'rooms' then 'room_types'
+    when m.category = 'dining' then 'restaurants'
+    when m.category = 'spa' then 'spa'
+    when m.category = 'activities' then 'activities'
+    when m.category = 'maps' then 'maps'
+    when m.category = 'logos' then 'logos'
+    else 'uncategorized'
+  end
+  and m.category_id is null;
+
+-- 12. Add indexes
+create index if not exists idx_resort_media_resort_id on public.resort_media(resort_id);
+create index if not exists idx_resort_media_category_id on public.resort_media(category_id);
+create index if not exists idx_resort_media_is_hero on public.resort_media(is_hero);
+create index if not exists idx_resort_media_sort_order on public.resort_media(sort_order);
+create index if not exists idx_resort_media_categories_resort_id on public.resort_media_categories(resort_id);
 
 -- RLS Policies
 create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (auth.uid() in (select id from public.profiles));
