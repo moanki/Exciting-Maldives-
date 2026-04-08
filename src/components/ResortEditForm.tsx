@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Upload, Image as ImageIcon, FileText, Globe, MapPin, Hotel, Coffee, Palmtree, AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
 import { supabase } from '../supabase';
 import JSZip from 'jszip';
+import { MediaLibraryModal } from './MediaLibraryModal';
 
 const TextInput = ({ label, value, onChange, icon, type = 'text' }: any) => (
   <div className="space-y-2">
@@ -117,6 +118,30 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
+  const [activeMediaField, setActiveMediaField] = useState<string | null>(null);
+
+  // New state for CMS fields
+  const [about, setAbout] = useState(formData.description || '');
+  const [transfer, setTransfer] = useState(formData.transfer_type || '');
+  const [mealPlans, setMealPlans] = useState(formData.meal_plans?.join(', ') || '');
+  const [rooms, setRooms] = useState(formData.rooms?.join(', ') || '');
+  const [roomTypes, setRoomTypes] = useState<any[]>(formData.room_types || []);
+  const [highlights, setHighlights] = useState(formData.highlights?.join(', ') || '');
+  const [category, setCategory] = useState(formData.category || '');
+
+  useEffect(() => {
+    setFormData({
+      ...formData,
+      description: about,
+      transfer_type: transfer,
+      meal_plans: mealPlans.split(',').map(s => s.trim()),
+      rooms: rooms.split(',').map(s => s.trim()),
+      room_types: roomTypes,
+      highlights: highlights.split(',').map(s => s.trim()),
+      category: category
+    });
+  }, [about, transfer, mealPlans, rooms, roomTypes, highlights, category]);
 
   useEffect(() => {
     if (editingResort) {
@@ -386,12 +411,43 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <TextInput label="Resort Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} placeholder="e.g. Soneva Jani" />
             <TextInput label="Atoll" value={formData.atoll} onChange={(v: string) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
+            <TextInput label="Category" value={category} onChange={setCategory} placeholder="e.g. Luxury" />
+            <TextInput label="Transfer Type" value={transfer} onChange={setTransfer} placeholder="e.g. Seaplane" />
           </div>
-          <TextAreaInput label="Description" value={formData.description} onChange={(v: string) => setFormData({...formData, description: v})} placeholder="Brief overview of the resort..." />
+          <TextAreaInput label="About" value={about} onChange={setAbout} placeholder="About the resort..." />
+          <TextAreaInput label="Meal Plans" value={mealPlans} onChange={setMealPlans} placeholder="e.g. Half Board, Full Board, All Inclusive" />
+          <TextAreaInput label="Rooms" value={rooms} onChange={setRooms} placeholder="e.g. Overwater Villa, Beach Villa" />
+          <TextAreaInput label="Highlights" value={highlights} onChange={setHighlights} placeholder="e.g. Overwater slide, Underwater restaurant" />
+          <div className="space-y-4">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Room Types</label>
+            {roomTypes.map((rt, index) => (
+              <div key={index} className="bg-brand-paper/30 border border-brand-navy/10 rounded-xl p-4 space-y-4">
+                <TextInput label="Name" value={rt.name} onChange={(v: string) => {
+                  const newTypes = [...roomTypes];
+                  newTypes[index].name = v;
+                  setRoomTypes(newTypes);
+                }} />
+                <TextAreaInput label="Description" value={rt.description} onChange={(v: string) => {
+                  const newTypes = [...roomTypes];
+                  newTypes[index].description = v;
+                  setRoomTypes(newTypes);
+                }} />
+                <div className="flex items-center gap-4">
+                  <img src={rt.image_url} alt={rt.name} className="w-20 h-20 object-cover rounded-lg" />
+                  <button type="button" onClick={() => {
+                    setActiveMediaField(`room_type_${index}`);
+                    setIsMediaLibraryOpen(true);
+                  }} className="text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:underline">Change Photo</button>
+                </div>
+                <button type="button" onClick={() => setRoomTypes(roomTypes.filter((_, i) => i !== index))} className="text-[10px] font-bold uppercase tracking-widest text-brand-coral hover:underline">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setRoomTypes([...roomTypes, { name: '', description: '', image_url: '' }])} className="w-full bg-brand-navy text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal transition-all">Add Room Type</button>
+          </div>
         </div>
       )}
       
-      {activeTab === 'Media' && (
+  {activeTab === 'Media' && (
         <div className="space-y-6">
           <h3 className="text-xl font-serif text-brand-navy">Media Management</h3>
           {categories.map(category => (
@@ -409,9 +465,42 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                     <button type="button" onClick={() => handleDeleteMedia(m.id, m.storage_path)} className="absolute top-2 right-2 p-1 bg-white/80 rounded-full opacity-0 group-hover:opacity-100"><Trash2 size={14} className="text-brand-coral" /></button>
                   </div>
                 ))}
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setActiveMediaField(category);
+                    setIsMediaLibraryOpen(true);
+                  }}
+                  className="w-full h-24 border-2 border-dashed border-brand-navy/10 rounded-lg flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
+                >
+                  <Plus size={24} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest mt-2">Add</span>
+                </button>
               </div>
             </div>
           ))}
+          
+          {isMediaLibraryOpen && (
+            <MediaLibraryModal 
+              onClose={() => setIsMediaLibraryOpen(false)}
+              onSelect={(selectedMedia) => {
+                if (activeMediaField?.startsWith('room_type_')) {
+                  const index = parseInt(activeMediaField.split('_')[2]);
+                  const newTypes = [...roomTypes];
+                  newTypes[index].image_url = selectedMedia.storage_path;
+                  setRoomTypes(newTypes);
+                } else {
+                  // Add selected media to the local media state
+                  setMedia([...media, {
+                    ...selectedMedia,
+                    category: activeMediaField // Assign to the category that triggered the modal
+                  }]);
+                }
+                setIsMediaLibraryOpen(false);
+              }}
+              resortId={editingResort?.id}
+            />
+          )}
         </div>
       )}
 

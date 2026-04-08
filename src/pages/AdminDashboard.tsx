@@ -1080,10 +1080,11 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
     banner_url: '',
     resort_url: '',
     crawl: false,
-    highlights: '',
-    meal_plans: '',
-    is_featured: false,
-    room_types: [] as any[]
+    highlights: [] as string[],
+    meal_plans: [] as string[],
+    rooms: [] as string[],
+    room_types: [] as any[],
+    is_featured: false
   });
 
   useEffect(() => {
@@ -1167,9 +1168,14 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
           .update({
             ...dataToSave,
             banner_url,
-            images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
-            highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
-            meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
+            images: typeof formData.images === 'string' ? formData.images.split(',').map(s => s.trim()).filter(Boolean) : formData.images,
+            highlights: formData.highlights,
+            meal_plans: formData.meal_plans,
+            description: formData.description,
+            transfer_type: formData.transfer_type,
+            rooms: formData.rooms,
+            room_types: formData.room_types,
+            category: formData.category
           })
           .eq('id', editingResort.id);
         if (error) throw error;
@@ -1180,9 +1186,14 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
           .insert({
             ...dataToSave,
             banner_url,
-            images: formData.images.split(',').map(s => s.trim()).filter(Boolean),
-            highlights: formData.highlights.split(',').map(s => s.trim()).filter(Boolean),
-            meal_plans: formData.meal_plans.split(',').map(s => s.trim()).filter(Boolean),
+            images: typeof formData.images === 'string' ? formData.images.split(',').map(s => s.trim()).filter(Boolean) : formData.images,
+            highlights: formData.highlights,
+            meal_plans: formData.meal_plans,
+            description: formData.description,
+            transfer_type: formData.transfer_type,
+            rooms: formData.rooms,
+            room_types: formData.room_types,
+            category: formData.category
           });
         if (error) throw error;
       }
@@ -1201,8 +1212,9 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
         images: '', 
         banner_url: '', 
         resort_url: '',
-        highlights: '', 
-        meal_plans: '', 
+        highlights: [], 
+        meal_plans: [], 
+        rooms: [],
         is_featured: false, 
         crawl: false,
         room_types: [] 
@@ -1360,8 +1372,9 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
       images: (resort.images || []).join(', '),
       banner_url: resort.banner_url || '',
       resort_url: resort.resort_url || '',
-      highlights: (resort.highlights || []).join(', '),
-      meal_plans: (resort.meal_plans || []).join(', '),
+      highlights: resort.highlights || [],
+      meal_plans: resort.meal_plans || [],
+      rooms: resort.rooms || [],
       is_featured: resort.is_featured || false,
       crawl: false,
       room_types: resort.room_types || []
@@ -1410,8 +1423,9 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
                 banner_url: '', 
                 resort_url: '',
                 crawl: false,
-                highlights: '', 
-                meal_plans: '', 
+                highlights: [], 
+                meal_plans: [], 
+                rooms: [],
                 is_featured: false, 
                 room_types: [] 
               });
