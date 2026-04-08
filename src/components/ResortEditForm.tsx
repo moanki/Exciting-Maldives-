@@ -71,6 +71,42 @@ const classifyLocalMedia = (path: string, fileName: string) => {
   return { category: detectedCategory, subcategory: detectedSubcategory };
 };
 
+// Helper to resize image
+const resizeImage = (file: File, maxWidth = 1920, maxHeight = 1080): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth || height > maxHeight) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        } else {
+          reject(new Error('Canvas to Blob failed'));
+        }
+      }, 'image/jpeg', 0.8);
+    };
+    img.onerror = reject;
+  });
+};
+
 export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification, setUploadProgress }) => {
   const [activeTab, setActiveTab] = useState('Overview');
   const tabs = ['Overview', 'Accommodation', 'Dining', 'Experiences', 'Media', 'Documents', 'Import Media'];
@@ -273,6 +309,10 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
               fileToUpload = new File([blob], item.original_filename || `imported_${i}.jpg`, { type: blob.type });
             }
 
+            if (fileToUpload && fileToUpload.size > 5 * 1024 * 1024) {
+              fileToUpload = await resizeImage(fileToUpload);
+            }
+
             if (fileToUpload) {
               const internalUrl = await uploadResortFile(
                 fileToUpload, 
@@ -301,12 +341,16 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           status: 'active',
           is_hero: item.is_hero,
           is_featured: item.is_hero || ['banner', 'aerial'].includes(item.category),
-          sort_order: i
+          sort_order: i,
+          import_batch_id: null // Or generate a new batch ID
         });
       }
       
       const { error } = await supabase.from('resort_media').insert(mediaToInsert);
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
 
       await fetchMedia();
       setImportedMedia([]);

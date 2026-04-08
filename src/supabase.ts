@@ -12,8 +12,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Retrieve environment variables from the Vite environment
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 /**
  * Validation: Ensure the application has the necessary credentials to connect to the database.

@@ -1,12 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
+import { supabase } from './src/supabase';
 
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+async function checkSchema() {
+  try {
+    const { data: resources, error: resError } = await supabase.from('resources').select('*').limit(1);
+    console.log('Resources table:', resError ? 'Error: ' + resError.message : 'OK');
+    
+    const { data: protectedResources, error: protError } = await supabase.from('protected_resources').select('*').limit(1);
+    console.log('Protected Resources table:', protError ? 'Error: ' + protError.message : 'OK');
 
-async function check() {
-  const { data, error } = await supabase.from('resorts').select('*').limit(1);
-  console.log('Data:', data);
-  console.log('Error:', error);
+    const { data: resortMedia, error: mediaError } = await supabase.from('resort_media').select('*').limit(1);
+    console.log('Resort Media table:', mediaError ? 'Error: ' + mediaError.message : 'OK');
+  } catch (e) {
+    console.error(e);
+  }
 }
-check();
+checkSchema();

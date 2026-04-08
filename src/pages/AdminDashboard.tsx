@@ -113,15 +113,15 @@ export default function AdminDashboard() {
   return (
     <div className="flex min-h-screen bg-brand-paper/10 relative">
       {notification && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-brand-teal text-white px-6 py-3 rounded-full shadow-lg font-bold text-xs uppercase tracking-widest">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-brand-teal text-white px-6 py-3 rounded-full shadow-lg font-bold text-xs uppercase tracking-widest">
           {notification}
         </div>
       )}
       {uploadProgress !== null && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[999] flex items-center justify-center">
           <div className="bg-white p-8 rounded-3xl flex flex-col items-center gap-4">
             <div className="w-16 h-16 border-4 border-brand-paper border-t-brand-teal rounded-full animate-spin" />
-            <p className="text-brand-navy font-bold uppercase tracking-widest">{uploadProgress}% Uploading...</p>
+            <p className="text-brand-navy font-bold uppercase tracking-widest">{Math.round(uploadProgress)}% Uploading...</p>
           </div>
         </div>
       )}
@@ -648,10 +648,12 @@ function ResourceModal({ onClose, onAdd, initialData, showNotification, setUploa
       if (error) throw error;
 
       onAdd();
+      showNotification(initialData ? 'Resource updated' : 'Resource added');
       onClose();
     } catch (err: any) {
       console.error('Resource save error:', err);
       showNotification('Error: ' + (err.message || 'Failed to save resource'));
+      onClose();
     } finally {
       setLoading(false);
     }
@@ -713,10 +715,12 @@ function ProtectedResourceModal({ onClose, onAdd, initialData, showNotification,
       if (error) throw error;
 
       onAdd();
+      showNotification(initialData ? 'Protected resource updated' : 'Protected resource added');
       onClose();
     } catch (err: any) {
       console.error('Protected resource save error:', err);
       showNotification('Error: ' + (err.message || 'Failed to save protected resource'));
+      onClose();
     } finally {
       setLoading(false);
     }
