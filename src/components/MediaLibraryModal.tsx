@@ -14,10 +14,34 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
+  const legacyMap: Record<string, string> = {
+    'banner': 'main_hero',
+    'rooms': 'room_types',
+    'dining': 'restaurants'
+  };
+
+  const [selectedCategory, setSelectedCategory] = useState(() => {
+    if (initialCategory && legacyMap[initialCategory]) {
+      return legacyMap[initialCategory];
+    }
+    return initialCategory || 'all';
+  });
   const [showThisResortOnly, setShowThisResortOnly] = useState(!!resortId);
 
-  const categories = ['all', 'banner', 'rooms', 'dining', 'spa', 'activities', 'maps', 'logos', 'uncategorized'];
+  const defaultCategories = [
+    { key: 'all', label: 'All Media' },
+    { key: 'main_hero', label: 'Main Hero' },
+    { key: 'overview', label: 'Overview' },
+    { key: 'room_types', label: 'Room Types' },
+    { key: 'spa', label: 'Spa' },
+    { key: 'restaurants', label: 'Restaurants' },
+    { key: 'facilities', label: 'Facilities' },
+    { key: 'activities', label: 'Activities' },
+    { key: 'beaches', label: 'Beaches' },
+    { key: 'maps', label: 'Maps / Floor Plans' },
+    { key: 'logos', label: 'Logos' },
+    { key: 'uncategorized', label: 'Uncategorized' }
+  ];
 
   useEffect(() => {
     if (resortId) {
@@ -41,7 +65,7 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
   const fetchMedia = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('resort_media').select('*, resorts(name), resort_media_categories(name, slug)');
+      let query = supabase.from('resort_media').select('*, resorts(name), resort_media_categories(key, label)');
       
       if (showThisResortOnly && resortId) {
         query = query.eq('resort_id', resortId);
@@ -51,7 +75,14 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
         if (selectedCategory.startsWith('category_')) {
           query = query.eq('category_id', selectedCategory.split('_')[1]);
         } else {
-          query = query.eq('category', selectedCategory);
+          // Handle both new keys and legacy categories
+          const legacyKey = Object.keys(legacyMap).find(key => legacyMap[key] === selectedCategory);
+          
+          if (legacyKey) {
+            query = query.or(`category.eq.${selectedCategory},category.eq.${legacyKey}`);
+          } else {
+            query = query.eq('category', selectedCategory);
+          }
         }
       }
       
@@ -93,11 +124,11 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="bg-brand-paper/30 border border-brand-navy/10 rounded-xl px-4 py-3 text-sm focus:border-brand-teal outline-none"
           >
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+            {defaultCategories.map(cat => (
+              <option key={cat.key} value={cat.key}>{cat.label}</option>
             ))}
             {dbCategories.map(cat => (
-              <option key={cat.id} value={`category_${cat.id}`}>{cat.name}</option>
+              <option key={cat.id} value={`category_${cat.id}`}>{cat.label}</option>
             ))}
           </select>
           {resortId && (
@@ -134,7 +165,7 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
                   <p className="text-[10px] font-bold text-brand-navy truncate">{m.original_filename}</p>
                   <div className="flex justify-between items-center mt-1">
                     <p className="text-[8px] text-brand-navy/40 uppercase font-bold tracking-widest">
-                      {m.resort_media_categories?.name || m.category}
+                      {m.resort_media_categories?.label || m.category}
                     </p>
                     {m.resorts?.name && (
                       <p className="text-[8px] text-brand-teal font-bold truncate max-w-[60px]">{m.resorts.name}</p>

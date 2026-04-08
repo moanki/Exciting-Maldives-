@@ -35,9 +35,9 @@ const classifyLocalMedia = (path: string, fileName: string) => {
   const combined = `${path.toLowerCase()} ${fileName.toLowerCase()}`;
   
   const keywords = {
-    banner: ['hero', 'banner', 'cover', 'main', 'landing', 'exterior', 'aerial'],
-    rooms: ['room', 'villa', 'suite', 'residence', 'bedroom', 'accommodation', 'stay', 'living'],
-    dining: ['dining', 'restaurant', 'bar', 'breakfast', 'lunch', 'dinner', 'culinary', 'food', 'drink', 'kitchen'],
+    main_hero: ['hero', 'banner', 'cover', 'main', 'landing', 'exterior', 'aerial'],
+    room_types: ['room', 'villa', 'suite', 'residence', 'bedroom', 'accommodation', 'stay', 'living'],
+    restaurants: ['dining', 'restaurant', 'bar', 'breakfast', 'lunch', 'dinner', 'culinary', 'food', 'drink', 'kitchen'],
     spa: ['spa', 'wellness', 'treatment', 'massage', 'therapy', 'gym', 'fitness', 'yoga', 'pool'],
     activities: ['activity', 'experience', 'diving', 'snorkel', 'excursion', 'marine', 'dolphin', 'cruise', 'sport', 'kids', 'club'],
     maps: ['map', 'floorplan', 'floor plan', 'site plan', 'layout', 'location'],
@@ -180,7 +180,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     if (!editingResort?.id) return;
     const { data } = await supabase
       .from('resort_media')
-      .select('*, resort_media_categories(name, slug)')
+      .select('*, resort_media_categories(key, label)')
       .eq('resort_id', editingResort.id)
       .order('sort_order', { ascending: true });
     if (data) setMedia(data);
@@ -313,7 +313,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       if (data.media && data.media.length > 0) {
         setImportedMedia(data.media.map((m: any) => ({
           ...m,
-          is_hero: m.category === 'banner'
+          is_hero: m.category === 'main_hero' || m.category === 'banner'
         })));
         setImportState('ready_for_review');
       } else {
@@ -327,7 +327,29 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     }
   };
 
-  const categories = ['banner', 'rooms', 'dining', 'spa', 'activities', 'maps', 'logos', 'uncategorized'];
+  const legacyToNewCategoryMap: Record<string, string> = {
+    'banner': 'main_hero',
+    'rooms': 'room_types',
+    'dining': 'restaurants',
+    'spa': 'spa',
+    'activities': 'activities',
+    'maps': 'maps',
+    'logos': 'logos'
+  };
+
+  const defaultCategories = [
+    { key: 'main_hero', label: 'Main Hero' },
+    { key: 'overview', label: 'Overview' },
+    { key: 'room_types', label: 'Room Types' },
+    { key: 'spa', label: 'Spa' },
+    { key: 'restaurants', label: 'Restaurants' },
+    { key: 'facilities', label: 'Facilities' },
+    { key: 'activities', label: 'Activities' },
+    { key: 'beaches', label: 'Beaches' },
+    { key: 'maps', label: 'Maps / Floor Plans' },
+    { key: 'logos', label: 'Logos' },
+    { key: 'uncategorized', label: 'Uncategorized' }
+  ];
   const roomSubcategories = ['water villa', 'beach villa', 'residence', 'suite', 'deluxe room', 'family room'];
 
   const handleFinalSave = async () => {
@@ -452,7 +474,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 {(() => {
                   const preview = bannerUrl || 
                                 media.find(m => m.is_hero)?.storage_path || 
-                                media.find(m => m.category === 'banner')?.storage_path || 
+                                media.find(m => m.resort_media_categories?.key === 'main_hero' || m.category === 'banner')?.storage_path || 
                                 media[0]?.storage_path;
                   
                   return preview ? (
@@ -489,8 +511,9 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-brand-paper/50 border border-brand-navy/10 relative">
                     {(() => {
                       const matchingMedia = media.find(m => 
-                        m.category === 'rooms' && 
-                        (m.subcategory?.toLowerCase() === rt.name?.toLowerCase() || 
+                        (m.resort_media_categories?.key === 'room_types' || m.category === 'rooms') && 
+                        (m.room_type_name?.toLowerCase() === rt.name?.toLowerCase() || 
+                         m.subcategory?.toLowerCase() === rt.name?.toLowerCase() || 
                          m.original_filename?.toLowerCase().includes(rt.name?.toLowerCase()))
                       );
                       const preview = rt.image_url || matchingMedia?.storage_path;
@@ -527,13 +550,13 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
               </p>
             )}
           </div>
-          {(dbCategories.length > 0 ? dbCategories : categories.map(c => ({ name: c, slug: c, id: null }))).map(category => (
-            <div key={category.id || category.slug} className="space-y-2">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">{category.name || category.slug}</h4>
+          {(dbCategories.length > 0 ? dbCategories : defaultCategories).map(category => (
+            <div key={category.id || category.key} className="space-y-2">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">{category.label || category.key}</h4>
               <div className="grid grid-cols-4 gap-4">
                 {media.filter(m => 
                   (category.id && m.category_id === category.id) || 
-                  (!category.id && m.category === category.slug)
+                  (!category.id && (m.category === category.key || legacyToNewCategoryMap[m.category] === category.key))
                 ).map(m => (
                   <div key={m.id} className="relative group">
                     <img src={m.storage_path} alt={m.original_filename} className="w-full h-24 object-cover rounded-lg" />
@@ -548,7 +571,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 <button 
                   type="button" 
                   onClick={() => {
-                    setActiveMediaField(category.id ? `category_${category.id}` : category.slug);
+                    setActiveMediaField(category.id ? `category_${category.id}` : category.key);
                     setIsMediaLibraryOpen(true);
                   }}
                   className="w-full h-24 border-2 border-dashed border-brand-navy/10 rounded-lg flex flex-col items-center justify-center text-brand-navy/40 hover:border-brand-teal hover:text-brand-teal transition-all"
@@ -585,16 +608,26 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                       status: 'active'
                     };
 
-                    if (activeMediaField?.startsWith('category_')) {
-                      insertData.category_id = activeMediaField.split('_')[1];
+                    let targetField = activeMediaField;
+                    if (targetField === 'banner') targetField = 'main_hero';
+                    if (targetField?.startsWith('room_type_')) targetField = 'room_types';
+
+                    if (targetField?.startsWith('category_')) {
+                      insertData.category_id = targetField.split('_')[1];
                     } else {
-                      insertData.category = activeMediaField;
+                      // Try to find a matching DB category first
+                      const matchingDbCat = dbCategories.find(c => c.key === targetField);
+                      if (matchingDbCat) {
+                        insertData.category_id = matchingDbCat.id;
+                      } else {
+                        insertData.category = targetField;
+                      }
                     }
 
                     const { data, error } = await supabase
                       .from('resort_media')
                       .insert(insertData)
-                      .select('*, resort_media_categories(name, slug)')
+                      .select('*, resort_media_categories(key, label)')
                       .single();
                     
                     if (data) {
@@ -610,7 +643,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 setIsMediaLibraryOpen(false);
               }}
               resortId={editingResort?.id}
-              initialCategory={activeMediaField?.startsWith('room_type_') ? 'rooms' : activeMediaField || 'all'}
+              initialCategory={activeMediaField?.startsWith('room_type_') ? 'room_types' : activeMediaField || 'all'}
             />
           )}
         </div>
@@ -740,18 +773,19 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
 
               {/* Grouped Results */}
               <div className="space-y-12">
-                {categories.map(category => {
-                  const items = importedMedia.filter(m => m.category === category);
+                {defaultCategories.map(cat => {
+                  const category = cat.key;
+                  const items = importedMedia.filter(m => m.category === category || (category === 'main_hero' && m.category === 'banner'));
                   if (items.length === 0) return null;
 
                   return (
                     <div key={category} className="space-y-4">
                       <div className="flex items-center justify-between border-b border-brand-navy/5 pb-2">
                         <div className="flex items-center gap-3">
-                          <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy">{category}</h4>
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy">{cat.label}</h4>
                           <span className="px-2 py-0.5 bg-brand-navy/5 rounded-full text-[10px] font-bold text-brand-navy/40">{items.length}</span>
                         </div>
-                        {category === 'banner' && (
+                        {category === 'main_hero' && (
                           <span className="text-[10px] font-bold text-brand-teal uppercase tracking-widest">Suggested Hero Images</span>
                         )}
                       </div>
@@ -810,10 +844,10 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                                       }} 
                                       className="w-full bg-brand-paper/50 border border-brand-navy/10 rounded-lg px-2 py-1.5 text-[10px] font-medium focus:border-brand-teal outline-none"
                                     >
-                                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                      {defaultCategories.map(cat => <option key={cat.key} value={cat.key}>{cat.label}</option>)}
                                     </select>
                                   </div>
-                                  {m.category === 'rooms' && (
+                                  {(m.category === 'room_types' || m.category === 'rooms') && (
                                     <div className="space-y-1">
                                       <label className="text-[8px] font-bold uppercase tracking-widest text-brand-navy/40">Subtype</label>
                                       <select 
