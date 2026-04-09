@@ -44,9 +44,9 @@ export default function ResortDetail() {
   const roomMedia = getMediaByKeys(['room_types', 'rooms'], 'rooms');
   const mapMedia = getMediaByKeys(['maps'], 'maps');
 
-  const heroImage = resort.banner_url ||
-                    resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
+  const heroImage = resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
                     resort.resort_media?.find((m: any) => m.resort_media_categories?.key === 'main_hero')?.storage_path ||
+                    resort.banner_url ||
                     resort.resort_media?.find((m: any) => m.category === 'banner')?.storage_path ||
                     resort.resort_media?.[0]?.storage_path || 
                     `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;

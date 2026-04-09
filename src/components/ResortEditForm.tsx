@@ -655,6 +655,12 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                     
                     // 2. Ensure this media is in our resort and set as hero
                     await ensureMediaInResort({ is_hero: true, is_featured: true });
+
+                    // 3. Sync with resorts table banner_url
+                    await supabase
+                      .from('resorts')
+                      .update({ banner_url: selectedMedia.storage_path })
+                      .eq('id', editingResort.id);
                     
                     fetchMedia();
                     showNotification('Banner photo updated');
