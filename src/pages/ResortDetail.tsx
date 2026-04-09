@@ -32,25 +32,22 @@ export default function ResortDetail() {
   if (!resort) return null;
 
   // Categorized Galleries using new keys and legacy fallback
-  const diningMedia = resort.resort_media?.filter((m: any) => 
-    m.resort_media_categories?.key === 'restaurants' || m.category === 'dining'
-  );
-  const spaMedia = resort.resort_media?.filter((m: any) => 
-    m.resort_media_categories?.key === 'spa' || m.category === 'spa'
-  );
-  const activityMedia = resort.resort_media?.filter((m: any) => 
-    m.resort_media_categories?.key === 'activities' || m.category === 'activities'
-  );
-  const roomMedia = resort.resort_media?.filter((m: any) => 
-    m.resort_media_categories?.key === 'room_types' || m.category === 'rooms'
-  );
-  const mapMedia = resort.resort_media?.filter((m: any) => 
-    m.resort_media_categories?.key === 'maps' || m.category === 'maps'
-  );
+  const getMediaByKeys = (keys: string[], legacyCategory: string) => {
+    return resort.resort_media?.filter((m: any) => 
+      keys.includes(m.resort_media_categories?.key) || (!m.resort_media_categories && m.category === legacyCategory)
+    );
+  };
+
+  const diningMedia = getMediaByKeys(['restaurants', 'dining'], 'dining');
+  const spaMedia = getMediaByKeys(['spa'], 'spa');
+  const activityMedia = getMediaByKeys(['activities', 'experiences'], 'activities');
+  const roomMedia = getMediaByKeys(['room_types', 'rooms'], 'rooms');
+  const mapMedia = getMediaByKeys(['maps'], 'maps');
 
   const heroImage = resort.banner_url ||
                     resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
-                    resort.resort_media?.find((m: any) => m.resort_media_categories?.key === 'main_hero' || m.category === 'banner')?.storage_path ||
+                    resort.resort_media?.find((m: any) => m.resort_media_categories?.key === 'main_hero')?.storage_path ||
+                    resort.resort_media?.find((m: any) => m.category === 'banner')?.storage_path ||
                     resort.resort_media?.[0]?.storage_path || 
                     `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
 

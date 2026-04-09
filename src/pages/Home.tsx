@@ -301,9 +301,23 @@ export default function Home({ settings }: { settings: any }) {
           
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
             {featuredResorts.slice(0, 5).map((resort: any, i: number) => {
+              // Priority: 
+              // 1. is_hero (new model flag)
+              // 2. main_hero category key (new model category)
+              // 3. is_featured (new model flag)
+              // 4. banner_url (legacy resort field)
+              // 5. banner category (legacy text category)
+              // 6. First available media
+              const heroMedia = resort.resort_media?.find((m: any) => m.is_hero || m.resort_media_categories?.key === 'main_hero');
               const featuredMedia = resort.resort_media?.find((m: any) => m.is_featured);
-              const heroMedia = resort.resort_media?.find((m: any) => m.is_hero || m.resort_media_categories?.key === 'main_hero' || m.category === 'banner');
-              const resortImage = resort.banner_url || featuredMedia?.storage_path || heroMedia?.storage_path || resort.resort_media?.[0]?.storage_path || resort.image_url || null;
+              const legacyBanner = resort.resort_media?.find((m: any) => m.category === 'banner');
+              
+              const resortImage = heroMedia?.storage_path || 
+                                 featuredMedia?.storage_path || 
+                                 resort.banner_url || 
+                                 legacyBanner?.storage_path || 
+                                 resort.resort_media?.[0]?.storage_path || 
+                                 resort.image_url || null;
               
               return (
                 <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">

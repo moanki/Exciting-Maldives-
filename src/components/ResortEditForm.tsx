@@ -665,7 +665,14 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                     newTypes[index].image_url = selectedMedia.storage_path;
                     setRoomTypes(newTypes);
 
-                    // Ensure this media is in our resort and associated with room type
+                    // 1. Unset room_type_name for other media of this resort with the same room name
+                    await supabase
+                      .from('resort_media')
+                      .update({ room_type_name: null })
+                      .eq('resort_id', editingResort.id)
+                      .eq('room_type_name', roomName);
+
+                    // 2. Ensure this media is in our resort and associated with room type
                     await ensureMediaInResort({ room_type_name: roomName });
                     
                     fetchMedia();
