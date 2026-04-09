@@ -589,60 +589,98 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           {isMediaLibraryOpen && (
             <MediaLibraryModal 
               onClose={() => setIsMediaLibraryOpen(false)}
-              onSelect={(selectedMedia) => {
+              onSelect={async (selectedMedia) => {
                 console.log('onSelect called with:', selectedMedia, 'activeMediaField:', activeMediaField);
-                if (activeMediaField === 'banner') {
-                  setBannerUrl(selectedMedia.storage_path);
-                } else if (activeMediaField?.startsWith('room_type_')) {
-                  const index = parseInt(activeMediaField.split('_')[2]);
-                  const newTypes = [...roomTypes];
-                  newTypes[index].image_url = selectedMedia.storage_path;
-                  setRoomTypes(newTypes);
-                } else {
-                  // Add selected media to the local media state and persist it
-                  const addMedia = async () => {
-                    if (!editingResort?.id) return;
-                    
+                if (!editingResort?.id) return;
+
+                const isSameResort = selectedMedia.resort_id === editingResort.id;
+
+                const ensureMediaInResort = async (extraUpdates: any = {}) => {
+                  // Resolve category if needed
+                  let targetField = activeMediaField;
+                  if (targetField === 'banner') targetField = 'main_hero';
+                  if (targetField?.startsWith('room_type_')) targetField = 'room_types';
+                  
+                  const categoryUpdates: any = {};
+                  if (targetField?.startsWith('category_')) {
+                    categoryUpdates.category_id = targetField.split('_')[1];
+                  } else if (targetField && targetField !== 'all') {
+                    const matchingDbCat = dbCategories.find(c => c.key === targetField);
+                    if (matchingDbCat) {
+                      categoryUpdates.category_id = matchingDbCat.id;
+                    } else {
+                      categoryUpdates.category = targetField;
+                    }
+                  }
+
+                  const allUpdates = { ...categoryUpdates, ...extraUpdates };
+
+                  if (isSameResort) {
+                    const { error } = await supabase
+                      .from('resort_media')
+                      .update(allUpdates)
+                      .eq('id', selectedMedia.id);
+                    if (error) throw error;
+                    return selectedMedia;
+                  } else {
+                    // Copy media to current resort
                     const insertData: any = {
                       resort_id: editingResort.id,
                       storage_path: selectedMedia.storage_path,
                       original_filename: selectedMedia.original_filename,
                       source_type: 'library_reuse',
-                      status: 'active'
+                      status: 'active',
+                      ...allUpdates
                     };
-
-                    let targetField = activeMediaField;
-                    if (targetField === 'banner') targetField = 'main_hero';
-                    if (targetField?.startsWith('room_type_')) targetField = 'room_types';
-
-                    if (targetField?.startsWith('category_')) {
-                      insertData.category_id = targetField.split('_')[1];
-                    } else {
-                      // Try to find a matching DB category first
-                      const matchingDbCat = dbCategories.find(c => c.key === targetField);
-                      if (matchingDbCat) {
-                        insertData.category_id = matchingDbCat.id;
-                      } else {
-                        insertData.category = targetField;
-                      }
-                    }
-
+                    
                     const { data, error } = await supabase
                       .from('resort_media')
                       .insert(insertData)
-                      .select('*, resort_media_categories(key, label)')
+                      .select()
                       .single();
+                    if (error) throw error;
+                    return data;
+                  }
+                };
+
+                try {
+                  if (activeMediaField === 'banner') {
+                    setBannerUrl(selectedMedia.storage_path);
                     
-                    if (data) {
-                      setMedia(prev => [...prev, data]);
-                      showNotification('Media added to gallery');
-                    } else if (error) {
-                      console.error('Error adding media:', error);
-                      showNotification('Failed to add media to gallery');
-                    }
-                  };
-                  addMedia();
+                    // 1. Unset all heroes for this resort
+                    await supabase
+                      .from('resort_media')
+                      .update({ is_hero: false })
+                      .eq('resort_id', editingResort.id);
+                    
+                    // 2. Ensure this media is in our resort and set as hero
+                    await ensureMediaInResort({ is_hero: true, is_featured: true });
+                    
+                    fetchMedia();
+                    showNotification('Banner photo updated');
+                  } else if (activeMediaField?.startsWith('room_type_')) {
+                    const index = parseInt(activeMediaField.split('_')[2]);
+                    const roomName = roomTypes[index].name;
+                    const newTypes = [...roomTypes];
+                    newTypes[index].image_url = selectedMedia.storage_path;
+                    setRoomTypes(newTypes);
+
+                    // Ensure this media is in our resort and associated with room type
+                    await ensureMediaInResort({ room_type_name: roomName });
+                    
+                    fetchMedia();
+                    showNotification('Room type photo updated');
+                  } else {
+                    // Standard gallery add
+                    await ensureMediaInResort();
+                    fetchMedia();
+                    showNotification('Media added to gallery');
+                  }
+                } catch (error) {
+                  console.error('Error in media selection:', error);
+                  showNotification('Failed to update media');
                 }
+
                 setIsMediaLibraryOpen(false);
               }}
               resortId={editingResort?.id}

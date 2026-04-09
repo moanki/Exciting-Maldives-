@@ -197,7 +197,7 @@ export default function Home({ settings }: { settings: any }) {
     const fetchResorts = async () => {
       const resortsResult = await supabase
         .from('resorts')
-        .select('*, resort_media(*)')
+        .select('*, resort_media(*, resort_media_categories(key))')
         .eq('is_featured', true)
         .limit(6);
 
@@ -302,7 +302,8 @@ export default function Home({ settings }: { settings: any }) {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
             {featuredResorts.slice(0, 5).map((resort: any, i: number) => {
               const featuredMedia = resort.resort_media?.find((m: any) => m.is_featured);
-              const resortImage = featuredMedia?.storage_path || resort.resort_media?.[0]?.storage_path || resort.image_url || null;
+              const heroMedia = resort.resort_media?.find((m: any) => m.is_hero || m.resort_media_categories?.key === 'main_hero' || m.category === 'banner');
+              const resortImage = resort.banner_url || featuredMedia?.storage_path || heroMedia?.storage_path || resort.resort_media?.[0]?.storage_path || resort.image_url || null;
               
               return (
                 <Link to={`/resorts/${resort.id}`} key={resort.id || i} className="group block relative overflow-hidden rounded-2xl aspect-[3/4] luxury-shadow">

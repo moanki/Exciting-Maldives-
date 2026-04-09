@@ -16,7 +16,7 @@ export default function ResortDetail() {
       if (!id) return;
       const { data, error } = await supabase
         .from('resorts')
-        .select('*, resort_media(*)')
+        .select('*, resort_media(*, resort_media_categories(*))')
         .eq('id', id)
         .single();
       
@@ -31,16 +31,26 @@ export default function ResortDetail() {
   if (!resort && !loading) return <div className="h-screen flex items-center justify-center font-serif text-xl text-brand-navy">Resort not found</div>;
   if (!resort) return null;
 
-  // Categorized Galleries
-  const diningMedia = resort.resort_media?.filter((m: any) => m.category === 'dining');
-  const spaMedia = resort.resort_media?.filter((m: any) => m.category === 'spa');
-  const activityMedia = resort.resort_media?.filter((m: any) => m.category === 'activities');
-  const roomMedia = resort.resort_media?.filter((m: any) => m.category === 'rooms');
-  const mapMedia = resort.resort_media?.filter((m: any) => m.category === 'maps');
+  // Categorized Galleries using new keys and legacy fallback
+  const diningMedia = resort.resort_media?.filter((m: any) => 
+    m.resort_media_categories?.key === 'restaurants' || m.category === 'dining'
+  );
+  const spaMedia = resort.resort_media?.filter((m: any) => 
+    m.resort_media_categories?.key === 'spa' || m.category === 'spa'
+  );
+  const activityMedia = resort.resort_media?.filter((m: any) => 
+    m.resort_media_categories?.key === 'activities' || m.category === 'activities'
+  );
+  const roomMedia = resort.resort_media?.filter((m: any) => 
+    m.resort_media_categories?.key === 'room_types' || m.category === 'rooms'
+  );
+  const mapMedia = resort.resort_media?.filter((m: any) => 
+    m.resort_media_categories?.key === 'maps' || m.category === 'maps'
+  );
 
   const heroImage = resort.banner_url ||
                     resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
-                    resort.resort_media?.find((m: any) => m.category === 'banner')?.storage_path ||
+                    resort.resort_media?.find((m: any) => m.resort_media_categories?.key === 'main_hero' || m.category === 'banner')?.storage_path ||
                     resort.resort_media?.[0]?.storage_path || 
                     `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
 
@@ -152,6 +162,7 @@ export default function ResortDetail() {
               {resort.room_types?.map((room: any, i: number) => {
                 // Try to find a matching image from roomMedia based on room name
                 const matchingMedia = roomMedia?.find((m: any) => 
+                  m.room_type_name?.toLowerCase() === room.name?.toLowerCase() ||
                   m.subcategory?.toLowerCase() === room.name?.toLowerCase() || 
                   m.original_filename?.toLowerCase().includes(room.name?.toLowerCase())
                 );
