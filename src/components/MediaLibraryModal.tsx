@@ -60,7 +60,7 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
 
   useEffect(() => {
     fetchMedia();
-  }, [selectedCategory, showThisResortOnly]);
+  }, [selectedCategory, showThisResortOnly, dbCategories]);
 
   const fetchMedia = async () => {
     setLoading(true);
@@ -76,13 +76,21 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
           query = query.eq('category_id', selectedCategory.split('_')[1]);
         } else {
           // Handle both new keys and legacy categories
-          const legacyKey = Object.keys(legacyMap).find(key => legacyMap[key] === selectedCategory);
+          const conditions = [`category.eq.${selectedCategory}`];
           
+          // Add legacy key if it exists
+          const legacyKey = Object.keys(legacyMap).find(key => legacyMap[key] === selectedCategory);
           if (legacyKey) {
-            query = query.or(`category.eq.${selectedCategory},category.eq.${legacyKey}`);
-          } else {
-            query = query.eq('category', selectedCategory);
+            conditions.push(`category.eq.${legacyKey}`);
           }
+
+          // Add category_id if we have a matching DB category for this key
+          const matchingDbCat = dbCategories.find(c => c.key === selectedCategory);
+          if (matchingDbCat) {
+            conditions.push(`category_id.eq.${matchingDbCat.id}`);
+          }
+          
+          query = query.or(conditions.join(','));
         }
       }
       

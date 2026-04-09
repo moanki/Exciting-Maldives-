@@ -238,7 +238,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                 original_filename: fileName,
                 source_folder: folderName,
                 source_type: 'zip_upload',
-                is_hero: category === 'banner'
+                is_hero: category === 'main_hero'
               });
             }
           }
@@ -268,7 +268,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           original_filename: fileName,
           source_folder: folderName,
           source_type: relativePath ? 'local_folder' : 'local_upload',
-          is_hero: category === 'banner'
+          is_hero: category === 'main_hero'
         });
       }
     }
@@ -404,17 +404,20 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           }
         }
 
+        const matchingDbCat = dbCategories.find(c => c.key === item.category);
+        
         mediaToInsert.push({ 
           resort_id: editingResort.id,
           storage_path: storagePath,
           category: item.category,
+          category_id: matchingDbCat?.id || null,
           subcategory: item.subcategory,
           original_filename: item.original_filename,
           source_type: item.source_type,
           source_url: item.source_url,
           status: 'active',
           is_hero: item.is_hero,
-          is_featured: item.is_hero || ['banner', 'aerial'].includes(item.category),
+          is_featured: item.is_hero || ['main_hero', 'banner', 'aerial'].includes(item.category),
           sort_order: i,
           import_batch_id: null // Or generate a new batch ID
         });
