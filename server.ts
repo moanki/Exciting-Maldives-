@@ -21,6 +21,17 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_ANON_KEY!
 );
 
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
 // Helper for Google Drive Auth
 async function getDriveAuth() {
   const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
@@ -497,17 +508,19 @@ async function startServer() {
   // Bulk Import Endpoints
   app.post("/api/import/create-batch", async (req, res) => {
     const { batch_type, source_type, source_ref } = req.body;
-    // In a real app, we'd get the user ID from the auth header
-    // For now, we'll assume it's an admin
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('import_batches')
         .insert({
           batch_type,
           source_type,
           source_ref,
-          status: 'ingested'
+          status: 'ingested',
+          summary_json: {
+            resorts: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 },
+            media: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 }
+          }
         })
         .select()
         .single();
@@ -593,22 +606,39 @@ async function startServer() {
 
       const extracted = JSON.parse(result.text || '{}');
       
-      // Duplicate detection
-      const { data: existingResorts } = await supabase
-        .from('resorts')
-        .select('id, name')
-        .ilike('name', `%${extracted.name}%`);
+      // Improved Duplicate detection
+      // 1. Exact name match
+      // 2. Slug-based match (simplified)
+      const normalizedName = extracted.name?.toLowerCase().trim();
       
-      const duplicateCandidate = existingResorts && existingResorts.length > 0 ? existingResorts[0].id : null;
+      const { data: existingResorts } = await supabaseAdmin
+        .from('resorts')
+        .select('id, name, atoll')
+        .or(`name.ilike.${normalizedName},name.ilike.%${normalizedName}%`);
+      
+      let duplicateCandidate = null;
+      let confidence = 0.9;
+
+      if (existingResorts && existingResorts.length > 0) {
+        // Find best match
+        const exactMatch = existingResorts.find(r => r.name.toLowerCase() === normalizedName);
+        if (exactMatch) {
+          duplicateCandidate = exactMatch.id;
+          confidence = 0.95;
+        } else {
+          duplicateCandidate = existingResorts[0].id;
+          confidence = 0.7; // Fuzzy match
+        }
+      }
 
       // Save to staging
-      const { data: staging, error: stagingError } = await supabase
+      const { data: staging, error: stagingError } = await supabaseAdmin
         .from('resort_staging')
         .insert({
           import_batch_id: batchId,
           extracted_json: extracted,
           normalized_json: extracted,
-          confidence_score: 0.9, // Mock confidence
+          confidence_score: confidence,
           duplicate_candidate_resort_id: duplicateCandidate,
           review_status: 'pending'
         })
@@ -616,6 +646,15 @@ async function startServer() {
         .single();
 
       if (stagingError) throw stagingError;
+
+      // Update batch summary
+      const { data: batch } = await supabaseAdmin.from('import_batches').select('summary_json').eq('id', batchId).single();
+      const summary = batch?.summary_json || {};
+      summary.resorts = summary.resorts || { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 };
+      summary.resorts.total += 1;
+      summary.resorts.pending += 1;
+      
+      await supabaseAdmin.from('import_batches').update({ summary_json: summary }).eq('id', batchId);
 
       res.json(staging);
     } catch (error: any) {
@@ -641,12 +680,22 @@ async function startServer() {
         review_status: 'pending'
       }));
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('media_staging')
         .insert(stagingItems)
         .select();
 
       if (error) throw error;
+
+      // Update batch summary
+      const { data: batch } = await supabaseAdmin.from('import_batches').select('summary_json').eq('id', batchId).single();
+      const summary = batch?.summary_json || {};
+      summary.media = summary.media || { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 };
+      summary.media.total += stagingItems.length;
+      summary.media.pending += stagingItems.length;
+      
+      await supabaseAdmin.from('import_batches').update({ summary_json: summary }).eq('id', batchId);
+
       res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -657,82 +706,160 @@ async function startServer() {
     const { batchId } = req.body;
     
     try {
-      // 1. Get approved resorts
-      const { data: approvedResorts, error: resError } = await supabase
+      // 1. Get approved resorts that haven't been published
+      const { data: approvedResorts, error: resError } = await supabaseAdmin
         .from('resort_staging')
         .select('*')
         .eq('import_batch_id', batchId)
-        .eq('review_status', 'approved');
+        .eq('review_status', 'approved')
+        .is('published_at', null);
 
       if (resError) throw resError;
 
       const publishResults = [];
+      const errorLog = [];
 
       for (const staged of approvedResorts) {
-        let resortId = staged.duplicate_candidate_resort_id;
-        
-        if (resortId) {
-          // Update existing
-          await supabase.from('resorts').update(staged.normalized_json).eq('id', resortId);
-        } else {
-          // Create new
-          const { data: newResort } = await supabase.from('resorts').insert(staged.normalized_json).select().single();
-          resortId = newResort.id;
-        }
+        try {
+          let resortId = staged.duplicate_candidate_resort_id;
+          
+          if (resortId) {
+            // Update existing
+            const { error: updateError } = await supabaseAdmin.from('resorts').update(staged.normalized_json).eq('id', resortId);
+            if (updateError) throw updateError;
+          } else {
+            // Create new
+            const { data: newResort, error: insertError } = await supabaseAdmin.from('resorts').insert(staged.normalized_json).select().single();
+            if (insertError) throw insertError;
+            resortId = newResort.id;
+          }
 
-        // Update staging status
-        await supabase.from('resort_staging').update({ review_status: 'approved' }).eq('id', staged.id);
-        publishResults.push({ type: 'resort', id: resortId, stagingId: staged.id });
+          // Update staging status and published_at
+          await supabaseAdmin.from('resort_staging').update({ 
+            review_status: 'approved',
+            published_at: new Date().toISOString()
+          }).eq('id', staged.id);
+          
+          publishResults.push({ type: 'resort', id: resortId, stagingId: staged.id });
+        } catch (err: any) {
+          errorLog.push({ type: 'resort', id: staged.id, error: err.message });
+        }
       }
 
-      // 2. Get approved media
-      const { data: approvedMedia, error: mediaError } = await supabase
+      // 2. Get approved media that haven't been published
+      const { data: approvedMedia, error: mediaError } = await supabaseAdmin
         .from('media_staging')
         .select('*')
         .eq('import_batch_id', batchId)
-        .eq('review_status', 'approved');
+        .eq('review_status', 'approved')
+        .is('published_at', null);
 
       if (mediaError) throw mediaError;
 
       for (const staged of approvedMedia) {
-        // Find target resort ID
-        let targetResortId = staged.target_resort_id;
-        if (!targetResortId && staged.resort_staging_id) {
-          // If it was part of a resort import, find the published resort ID
-          const resMatch = publishResults.find(r => r.stagingId === staged.resort_staging_id);
-          if (resMatch) targetResortId = resMatch.id;
-        }
+        try {
+          // Find target resort ID
+          let targetResortId = staged.target_resort_id;
+          if (!targetResortId && staged.resort_staging_id) {
+            // If it was part of a resort import, find the published resort ID
+            const resMatch = publishResults.find(r => r.stagingId === staged.resort_staging_id);
+            if (resMatch) targetResortId = resMatch.id;
+            else {
+              // Check if it was already published in a previous run
+              const { data: prevResort } = await supabaseAdmin.from('resort_staging').select('duplicate_candidate_resort_id, published_at').eq('id', staged.resort_staging_id).single();
+              if (prevResort?.published_at) {
+                // If we don't have the ID from the new insert, we might need to find it
+                // This is a bit complex, but for now we'll assume targetResortId should be set if approved
+              }
+            }
+          }
 
-        if (targetResortId) {
-          const categoryKey = staged.reviewer_override_category_key || staged.inferred_category_key || 'uncategorized';
-          
-          // Get category ID
-          const { data: cat } = await supabase
-            .from('resort_media_categories')
-            .select('id')
-            .eq('resort_id', targetResortId)
-            .eq('key', categoryKey)
-            .single();
+          if (targetResortId) {
+            const categoryKey = staged.reviewer_override_category_key || staged.inferred_category_key || 'uncategorized';
+            
+            // Ensure category exists
+            const { data: cat } = await supabaseAdmin
+              .from('resort_media_categories')
+              .select('id')
+              .eq('resort_id', targetResortId)
+              .eq('key', categoryKey)
+              .maybeSingle();
 
-          await supabase.from('resort_media').insert({
-            resort_id: targetResortId,
-            category: categoryKey,
-            category_id: cat?.id,
-            subcategory: staged.reviewer_override_subcategory || staged.inferred_subcategory,
-            room_type_name: staged.reviewer_override_room_type_name || staged.inferred_room_type_name,
-            storage_path: staged.staged_storage_path,
-            original_filename: staged.original_filename,
-            source_url: staged.original_url,
-            import_batch_id: batchId,
-            status: 'active'
-          });
+            let categoryId = cat?.id;
+            if (!categoryId) {
+              const { data: newCat } = await supabaseAdmin.from('resort_media_categories').insert({
+                resort_id: targetResortId,
+                key: categoryKey,
+                label: categoryKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+              }).select().single();
+              categoryId = newCat?.id;
+            }
+
+            const { error: mediaInsertError } = await supabaseAdmin.from('resort_media').insert({
+              resort_id: targetResortId,
+              category: categoryKey,
+              category_id: categoryId,
+              subcategory: staged.reviewer_override_subcategory || staged.inferred_subcategory,
+              room_type_name: staged.reviewer_override_room_type_name || staged.inferred_room_type_name,
+              storage_path: staged.staged_storage_path,
+              original_filename: staged.original_filename,
+              source_url: staged.original_url,
+              import_batch_id: batchId,
+              status: 'active'
+            });
+
+            if (mediaInsertError) throw mediaInsertError;
+
+            // Update staging status and published_at
+            await supabaseAdmin.from('media_staging').update({ 
+              review_status: 'approved',
+              published_at: new Date().toISOString()
+            }).eq('id', staged.id);
+          } else {
+            throw new Error("Target resort ID missing for media item");
+          }
+        } catch (err: any) {
+          errorLog.push({ type: 'media', id: staged.id, error: err.message });
         }
       }
 
-      // 3. Update batch status
-      await supabase.from('import_batches').update({ status: 'published' }).eq('id', batchId);
+      // 3. Update batch summary and status
+      const { data: allResorts } = await supabaseAdmin.from('resort_staging').select('review_status, published_at').eq('import_batch_id', batchId);
+      const { data: allMedia } = await supabaseAdmin.from('media_staging').select('review_status, published_at').eq('import_batch_id', batchId);
 
-      res.json({ success: true, publishedCount: publishResults.length + approvedMedia.length });
+      const summary = {
+        resorts: {
+          total: allResorts?.length || 0,
+          pending: allResorts?.filter(r => r.review_status === 'pending').length || 0,
+          approved: allResorts?.filter(r => r.review_status === 'approved' && !r.published_at).length || 0,
+          rejected: allResorts?.filter(r => r.review_status === 'rejected').length || 0,
+          published: allResorts?.filter(r => r.published_at).length || 0
+        },
+        media: {
+          total: allMedia?.length || 0,
+          pending: allMedia?.filter(m => m.review_status === 'pending').length || 0,
+          approved: allMedia?.filter(m => m.review_status === 'approved' && !m.published_at).length || 0,
+          rejected: allMedia?.filter(m => m.review_status === 'rejected').length || 0,
+          published: allMedia?.filter(m => m.published_at).length || 0
+        }
+      };
+
+      let finalStatus = 'published';
+      if (summary.resorts.pending > 0 || summary.media.pending > 0) finalStatus = 'reviewing';
+      else if (summary.resorts.approved > 0 || summary.media.approved > 0) finalStatus = 'partially_approved';
+      if (errorLog.length > 0 && summary.resorts.published === 0 && summary.media.published === 0) finalStatus = 'failed';
+
+      await supabaseAdmin.from('import_batches').update({ 
+        status: finalStatus,
+        summary_json: summary,
+        error_log_json: errorLog
+      }).eq('id', batchId);
+
+      res.json({ 
+        success: errorLog.length === 0, 
+        publishedCount: publishResults.length + (approvedMedia?.length || 0) - errorLog.filter(e => e.type === 'media').length,
+        errors: errorLog
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

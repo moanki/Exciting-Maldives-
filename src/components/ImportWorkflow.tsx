@@ -48,6 +48,9 @@ export function AdminImportBatches() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
 
   useEffect(() => {
     fetchBatches();
@@ -72,14 +75,19 @@ export function AdminImportBatches() {
         const media = b.media_staging || [];
         const allItems = [...resorts, ...media];
         
+        // Use summary_json if available, otherwise calculate
+        const summary = b.summary_json || {};
+        const resCounts = summary.resorts || { total: resorts.length, pending: resorts.filter((i: any) => i.review_status === 'pending').length, approved: resorts.filter((i: any) => i.review_status === 'approved').length, rejected: resorts.filter((i: any) => i.review_status === 'rejected').length, published: 0 };
+        const medCounts = summary.media || { total: media.length, pending: media.filter((i: any) => i.review_status === 'pending').length, approved: media.filter((i: any) => i.review_status === 'approved').length, rejected: media.filter((i: any) => i.review_status === 'rejected').length, published: 0 };
+
         return {
           ...b,
           counts: {
-            total: allItems.length,
-            pending: allItems.filter(i => i.review_status === 'pending').length,
-            approved: allItems.filter(i => i.review_status === 'approved').length,
-            rejected: allItems.filter(i => i.review_status === 'rejected').length,
-            published: b.status === 'published' ? allItems.length : 0 // Simplified
+            total: resCounts.total + medCounts.total,
+            pending: resCounts.pending + medCounts.pending,
+            approved: resCounts.approved + medCounts.approved,
+            rejected: resCounts.rejected + medCounts.rejected,
+            published: resCounts.published + medCounts.published
           }
         };
       });
@@ -91,6 +99,16 @@ export function AdminImportBatches() {
       setLoading(false);
     }
   };
+
+  const filteredBatches = batches.filter(b => {
+    const matchesStatus = filter === 'all' || b.status === filter;
+    const matchesType = typeFilter === 'all' || b.batch_type === typeFilter;
+    const matchesSource = sourceFilter === 'all' || b.source_type === sourceFilter;
+    const matchesSearch = b.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         b.batch_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (b.source_ref && b.source_ref.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesStatus && matchesType && matchesSource && matchesSearch;
+  });
 
   if (selectedBatch) {
     return <BatchReviewConsole batchId={selectedBatch} onBack={() => { setSelectedBatch(null); fetchBatches(); }} />;
@@ -112,27 +130,53 @@ export function AdminImportBatches() {
       </div>
 
       <div className="bg-white rounded-[32px] border border-brand-navy/5 shadow-xl shadow-brand-navy/5 overflow-hidden">
-        <div className="p-6 border-b border-brand-navy/5 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex gap-2">
-            {['all', 'ingested', 'reviewing', 'published', 'failed'].map(s => (
-              <button
-                key={s}
-                onClick={() => setFilter(s)}
-                className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                  filter === s ? 'bg-brand-navy text-white' : 'bg-brand-paper text-brand-navy/40 hover:bg-brand-navy/5'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+        <div className="p-6 border-b border-brand-navy/5 space-y-4">
+          <div className="flex flex-wrap gap-4 items-center justify-between">
+            <div className="flex gap-2">
+              {['all', 'ingested', 'reviewing', 'partially_approved', 'published', 'failed'].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setFilter(s)}
+                  className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    filter === s ? 'bg-brand-navy text-white' : 'bg-brand-paper text-brand-navy/40 hover:bg-brand-navy/5'
+                  }`}
+                >
+                  {s.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-navy/20" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search batches..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-brand-paper rounded-full text-sm outline-none focus:ring-2 focus:ring-brand-teal/20 w-64"
+              />
+            </div>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-navy/20" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search batches..." 
-              className="pl-10 pr-4 py-2 bg-brand-paper rounded-full text-sm outline-none focus:ring-2 focus:ring-brand-teal/20 w-64"
-            />
+          
+          <div className="flex gap-4">
+            <select 
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-brand-paper text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full outline-none border-none text-brand-navy/60"
+            >
+              <option value="all">All Types</option>
+              <option value="resort_pdf_import">Resort PDF</option>
+              <option value="media_import">Media Import</option>
+            </select>
+            <select 
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="bg-brand-paper text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full outline-none border-none text-brand-navy/60"
+            >
+              <option value="all">All Sources</option>
+              <option value="local_upload">Local Upload</option>
+              <option value="google_drive">Google Drive</option>
+              <option value="dropbox">Dropbox</option>
+            </select>
           </div>
         </div>
 
@@ -148,7 +192,7 @@ export function AdminImportBatches() {
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-paper">
-              {batches.filter(b => filter === 'all' || b.status === filter).map(batch => (
+              {filteredBatches.map(batch => (
                 <tr key={batch.id} className="hover:bg-brand-paper/30 transition-colors group">
                   <td className="px-6 py-6">
                     <div className="flex items-center gap-4">
@@ -239,6 +283,8 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'resorts' | 'media'>('resorts');
   const [publishing, setPublishing] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   useEffect(() => {
     fetchBatchData();
@@ -265,12 +311,43 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
     }
   };
 
+  const handleBulkAction = async (action: string, value?: any) => {
+    if (selectedMedia.length === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const updates: any = { 
+        reviewer_id: user?.id,
+        reviewed_at: new Date().toISOString()
+      };
+
+      if (action === 'approve') updates.review_status = 'approved';
+      if (action === 'reject') updates.review_status = 'rejected';
+      if (action === 'category') updates.reviewer_override_category_key = value;
+      if (action === 'resort') updates.target_resort_id = value;
+      if (action === 'room_type') updates.reviewer_override_room_type_name = value;
+
+      const { error } = await supabase
+        .from('media_staging')
+        .update(updates)
+        .in('id', selectedMedia);
+
+      if (error) throw error;
+      setSelectedMedia([]);
+      fetchBatchData();
+    } catch (err: any) {
+      alert('Bulk action failed: ' + err.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   const handlePublish = async () => {
-    const approvedCount = resorts.filter(r => r.review_status === 'approved').length + 
-                         media.filter(m => m.review_status === 'approved').length;
+    const approvedCount = resorts.filter(r => r.review_status === 'approved' && !r.published_at).length + 
+                         media.filter(m => m.review_status === 'approved' && !m.published_at).length;
     
     if (approvedCount === 0) {
-      alert('No approved items to publish.');
+      alert('No new approved items to publish.');
       return;
     }
 
@@ -284,9 +361,14 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
         body: JSON.stringify({ batchId })
       });
       
-      if (!response.ok) throw new Error('Publish failed');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Publish failed');
       
-      alert('Batch published successfully!');
+      if (result.errors && result.errors.length > 0) {
+        alert(`Published with ${result.errors.length} errors. Check error log.`);
+      } else {
+        alert('Batch published successfully!');
+      }
       fetchBatchData();
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -296,6 +378,10 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><RefreshCw className="animate-spin text-brand-teal" /></div>;
+
+  const pendingCount = resorts.filter(r => r.review_status === 'pending').length + media.filter(m => m.review_status === 'pending').length;
+  const lowConfidenceCount = resorts.filter(r => r.confidence_score < 0.8).length + media.filter(m => m.confidence_score < 0.7).length;
+  const duplicateCount = resorts.filter(r => r.duplicate_candidate_resort_id).length;
 
   return (
     <div className="space-y-8 pb-24">
@@ -317,37 +403,99 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
         <div className="flex gap-4">
           <button 
             onClick={handlePublish}
-            disabled={publishing || batch?.status === 'published'}
+            disabled={publishing || (batch?.status === 'published' && pendingCount === 0)}
             className="bg-brand-teal text-white px-8 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-brand-navy transition-all shadow-xl shadow-brand-teal/20 flex items-center gap-3 disabled:opacity-50"
           >
             {publishing ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
-            Publish Approved Items
+            {batch?.status === 'published' ? 'Publish Remaining' : 'Publish Approved Items'}
           </button>
         </div>
       </div>
 
+      {/* Warnings */}
+      {(pendingCount > 0 || lowConfidenceCount > 0 || duplicateCount > 0) && (
+        <div className="flex gap-4 flex-wrap">
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-brand-navy/5 text-brand-navy rounded-full text-[10px] font-bold uppercase tracking-widest">
+              <Clock size={14} className="text-brand-navy/40" />
+              {pendingCount} Items Pending Review
+            </div>
+          )}
+          {lowConfidenceCount > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-brand-coral/5 text-brand-coral rounded-full text-[10px] font-bold uppercase tracking-widest">
+              <AlertTriangle size={14} />
+              {lowConfidenceCount} Low Confidence Items
+            </div>
+          )}
+          {duplicateCount > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-brand-coral/5 text-brand-coral rounded-full text-[10px] font-bold uppercase tracking-widest">
+              <Database size={14} />
+              {duplicateCount} Duplicate Candidates
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-8">
         <div className="flex-1 space-y-8">
           {/* Tabs */}
-          <div className="flex gap-4 border-b border-brand-navy/5">
-            <button 
-              onClick={() => setActiveTab('resorts')}
-              className={`px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all relative ${
-                activeTab === 'resorts' ? 'text-brand-teal' : 'text-brand-navy/40 hover:text-brand-navy'
-              }`}
-            >
-              Resorts ({resorts.length})
-              {activeTab === 'resorts' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand-teal" />}
-            </button>
-            <button 
-              onClick={() => setActiveTab('media')}
-              className={`px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all relative ${
-                activeTab === 'media' ? 'text-brand-teal' : 'text-brand-navy/40 hover:text-brand-navy'
-              }`}
-            >
-              Media ({media.length})
-              {activeTab === 'media' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand-teal" />}
-            </button>
+          <div className="flex justify-between items-center border-b border-brand-navy/5">
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setActiveTab('resorts')}
+                className={`px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all relative ${
+                  activeTab === 'resorts' ? 'text-brand-teal' : 'text-brand-navy/40 hover:text-brand-navy'
+                }`}
+              >
+                Resorts ({resorts.length})
+                {activeTab === 'resorts' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand-teal" />}
+              </button>
+              <button 
+                onClick={() => setActiveTab('media')}
+                className={`px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all relative ${
+                  activeTab === 'media' ? 'text-brand-teal' : 'text-brand-navy/40 hover:text-brand-navy'
+                }`}
+              >
+                Media ({media.length})
+                {activeTab === 'media' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand-teal" />}
+              </button>
+            </div>
+
+            {activeTab === 'media' && selectedMedia.length > 0 && (
+              <div className="flex items-center gap-4 animate-in fade-in slide-in-from-right-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">{selectedMedia.length} selected</span>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleBulkAction('approve')}
+                    disabled={bulkActionLoading}
+                    className="p-2 bg-brand-teal/10 text-brand-teal rounded-lg hover:bg-brand-teal hover:text-white transition-all"
+                    title="Bulk Approve"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleBulkAction('reject')}
+                    disabled={bulkActionLoading}
+                    className="p-2 bg-brand-coral/10 text-brand-coral rounded-lg hover:bg-brand-coral hover:text-white transition-all"
+                    title="Bulk Reject"
+                  >
+                    <X size={16} />
+                  </button>
+                  <div className="w-px h-6 bg-brand-navy/5 mx-2" />
+                  <select 
+                    onChange={(e) => handleBulkAction('category', e.target.value)}
+                    disabled={bulkActionLoading}
+                    className="text-[10px] font-bold uppercase tracking-widest bg-brand-paper rounded-lg px-3 py-2 outline-none"
+                  >
+                    <option value="">Bulk Category</option>
+                    <option value="main_hero">Main Hero</option>
+                    <option value="room_types">Room Types</option>
+                    <option value="restaurants">Restaurants</option>
+                    <option value="facilities">Facilities</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {activeTab === 'resorts' ? (
@@ -372,7 +520,20 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
                 </div>
               ) : (
                 media.map(item => (
-                  <MediaStagingCard key={item.id} item={item} onUpdate={fetchBatchData} />
+                  <div key={item.id} className="relative">
+                    <div className="absolute top-4 left-4 z-10">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedMedia.includes(item.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedMedia([...selectedMedia, item.id]);
+                          else setSelectedMedia(selectedMedia.filter(id => id !== item.id));
+                        }}
+                        className="w-5 h-5 rounded-lg border-brand-navy/20 text-brand-teal focus:ring-brand-teal"
+                      />
+                    </div>
+                    <MediaStagingCard item={item} onUpdate={fetchBatchData} />
+                  </div>
                 ))
               )}
             </div>
@@ -385,8 +546,9 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
             <h3 className="text-lg font-serif text-brand-navy mb-6">Batch Summary</h3>
             <div className="space-y-4">
               <SummaryRow label="Total Items" value={resorts.length + media.length} />
-              <SummaryRow label="Pending" value={resorts.filter(r => r.review_status === 'pending').length + media.filter(m => m.review_status === 'pending').length} color="text-brand-navy/40" />
-              <SummaryRow label="Approved" value={resorts.filter(r => r.review_status === 'approved').length + media.filter(m => m.review_status === 'approved').length} color="text-brand-teal" />
+              <SummaryRow label="Pending" value={pendingCount} color="text-brand-navy/40" />
+              <SummaryRow label="Approved" value={resorts.filter(r => r.review_status === 'approved' && !r.published_at).length + media.filter(m => m.review_status === 'approved' && !m.published_at).length} color="text-brand-teal" />
+              <SummaryRow label="Published" value={resorts.filter(r => r.published_at).length + media.filter(m => m.published_at).length} color="text-brand-teal" />
               <SummaryRow label="Rejected" value={resorts.filter(r => r.review_status === 'rejected').length + media.filter(m => m.review_status === 'rejected').length} color="text-brand-coral" />
             </div>
 
@@ -396,8 +558,9 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
                 <button 
                   onClick={async () => {
                     if (!window.confirm('Approve all pending items?')) return;
-                    await supabase.from('resort_staging').update({ review_status: 'approved' }).eq('import_batch_id', batchId).eq('review_status', 'pending');
-                    await supabase.from('media_staging').update({ review_status: 'approved' }).eq('import_batch_id', batchId).eq('review_status', 'pending');
+                    const { data: { user } } = await supabase.auth.getUser();
+                    await supabase.from('resort_staging').update({ review_status: 'approved', reviewer_id: user?.id, reviewed_at: new Date().toISOString() }).eq('import_batch_id', batchId).eq('review_status', 'pending');
+                    await supabase.from('media_staging').update({ review_status: 'approved', reviewer_id: user?.id, reviewed_at: new Date().toISOString() }).eq('import_batch_id', batchId).eq('review_status', 'pending');
                     fetchBatchData();
                   }}
                   className="w-full py-3 bg-brand-teal/5 text-brand-teal rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all"
@@ -407,8 +570,9 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
                 <button 
                   onClick={async () => {
                     if (!window.confirm('Reject all pending items?')) return;
-                    await supabase.from('resort_staging').update({ review_status: 'rejected' }).eq('import_batch_id', batchId).eq('review_status', 'pending');
-                    await supabase.from('media_staging').update({ review_status: 'rejected' }).eq('import_batch_id', batchId).eq('review_status', 'pending');
+                    const { data: { user } } = await supabase.auth.getUser();
+                    await supabase.from('resort_staging').update({ review_status: 'rejected', reviewer_id: user?.id, reviewed_at: new Date().toISOString() }).eq('import_batch_id', batchId).eq('review_status', 'pending');
+                    await supabase.from('media_staging').update({ review_status: 'rejected', reviewer_id: user?.id, reviewed_at: new Date().toISOString() }).eq('import_batch_id', batchId).eq('review_status', 'pending');
                     fetchBatchData();
                   }}
                   className="w-full py-3 bg-brand-coral/5 text-brand-coral rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-coral hover:text-white transition-all"
@@ -437,6 +601,7 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState(resort.normalized_json);
   const [candidateResort, setCandidateResort] = useState<any>(null);
+  const [duplicateAction, setDuplicateAction] = useState<'create' | 'update' | 'manual'>(resort.duplicate_candidate_resort_id ? 'update' : 'create');
 
   useEffect(() => {
     if (resort.duplicate_candidate_resort_id) {
@@ -450,11 +615,14 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
   };
 
   const handleStatus = async (status: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('resort_staging')
       .update({ 
         review_status: status,
         normalized_json: editedData,
+        duplicate_candidate_resort_id: duplicateAction === 'update' ? resort.duplicate_candidate_resort_id : null,
+        reviewer_id: user?.id,
         reviewed_at: new Date().toISOString()
       })
       .eq('id', resort.id);
@@ -464,6 +632,7 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
 
   return (
     <div className={`bg-white rounded-[40px] border transition-all overflow-hidden ${
+      resort.published_at ? 'border-green-200 bg-green-50/10' :
       resort.review_status === 'approved' ? 'border-brand-teal/30 shadow-brand-teal/5' :
       resort.review_status === 'rejected' ? 'border-brand-coral/30 opacity-60' :
       'border-brand-navy/5 shadow-xl shadow-brand-navy/5'
@@ -484,6 +653,11 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {resort.published_at && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                <CheckCircle2 size={12} /> Published
+              </div>
+            )}
             <div className="text-right mr-4">
               <p className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/30">Confidence</p>
               <p className={`text-sm font-bold ${resort.confidence_score > 0.8 ? 'text-brand-teal' : 'text-brand-coral'}`}>
@@ -495,15 +669,46 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
         </div>
 
         {candidateResort && (
-          <div className="mb-8 p-4 bg-brand-coral/5 rounded-2xl border border-brand-coral/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="text-brand-coral" size={18} />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-brand-coral">Duplicate Candidate Detected</p>
-                <p className="text-xs font-medium text-brand-navy/60">Matches existing resort: <span className="font-bold">{candidateResort.name}</span></p>
+          <div className="mb-8 p-6 bg-brand-coral/5 rounded-3xl border border-brand-coral/10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="text-brand-coral" size={20} />
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-brand-coral">Duplicate Candidate Detected</p>
+                  <p className="text-xs font-medium text-brand-navy/60">Matches existing resort: <span className="font-bold">{candidateResort.name}</span></p>
+                </div>
               </div>
+              <a href={`/resort/${candidateResort.id}`} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:underline flex items-center gap-1">
+                View Live <ExternalLink size={12} />
+              </a>
             </div>
-            <button className="text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:underline">View Live Resort</button>
+            
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setDuplicateAction('update')}
+                className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                  duplicateAction === 'update' ? 'bg-brand-coral text-white border-brand-coral' : 'bg-white text-brand-coral border-brand-coral/20'
+                }`}
+              >
+                Update Existing
+              </button>
+              <button 
+                onClick={() => setDuplicateAction('create')}
+                className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                  duplicateAction === 'create' ? 'bg-brand-navy text-white border-brand-navy' : 'bg-white text-brand-navy/40 border-brand-navy/10'
+                }`}
+              >
+                Create New
+              </button>
+              <button 
+                onClick={() => setDuplicateAction('manual')}
+                className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                  duplicateAction === 'manual' ? 'bg-brand-paper text-brand-navy border-brand-navy/20' : 'bg-white text-brand-navy/20 border-brand-navy/5'
+                }`}
+              >
+                Manual Follow-up
+              </button>
+            </div>
           </div>
         )}
 
@@ -579,11 +784,13 @@ function MediaStagingCard({ item, onUpdate }: { item: any, onUpdate: () => void 
   };
 
   const handleStatus = async (status: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('media_staging')
       .update({ 
         review_status: status,
         reviewer_override_category_key: category,
+        reviewer_id: user?.id,
         reviewed_at: new Date().toISOString()
       })
       .eq('id', item.id);
@@ -592,9 +799,14 @@ function MediaStagingCard({ item, onUpdate }: { item: any, onUpdate: () => void 
   };
 
   const handleTargetResort = async (resortId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase
       .from('media_staging')
-      .update({ target_resort_id: resortId })
+      .update({ 
+        target_resort_id: resortId,
+        reviewer_id: user?.id,
+        reviewed_at: new Date().toISOString()
+      })
       .eq('id', item.id);
     
     if (!error) onUpdate();
@@ -602,6 +814,7 @@ function MediaStagingCard({ item, onUpdate }: { item: any, onUpdate: () => void 
 
   return (
     <div className={`bg-white rounded-[32px] border transition-all overflow-hidden flex flex-col ${
+      item.published_at ? 'border-green-200 bg-green-50/10' :
       item.review_status === 'approved' ? 'border-brand-teal/30' :
       item.review_status === 'rejected' ? 'border-brand-coral/30 opacity-60' :
       'border-brand-navy/5 shadow-xl shadow-brand-navy/5'
@@ -619,10 +832,17 @@ function MediaStagingCard({ item, onUpdate }: { item: any, onUpdate: () => void 
         </div>
         <div className="absolute top-4 left-4">
           <span className="px-3 py-1 bg-black/50 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-widest rounded-full">
-            {item.inferred_category_key}
+            {item.reviewer_override_category_key || item.inferred_category_key}
           </span>
         </div>
-        {item.confidence_score < 0.7 && (
+        {item.published_at && (
+          <div className="absolute top-4 right-4">
+            <div className="p-2 bg-green-500 rounded-full text-white shadow-lg">
+              <CheckCircle2 size={14} />
+            </div>
+          </div>
+        )}
+        {!item.published_at && item.confidence_score < 0.7 && (
           <div className="absolute top-4 right-4">
             <div className="p-2 bg-brand-coral rounded-full text-white shadow-lg" title="Low Confidence">
               <AlertTriangle size={14} />

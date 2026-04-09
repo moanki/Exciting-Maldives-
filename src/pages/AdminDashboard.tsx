@@ -106,6 +106,17 @@ export default function AdminDashboard() {
   const [notification, setNotification] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [aiConfigured, setAiConfigured] = useState<boolean>(false);
+  const [settings, setSettings] = useState<any>({});
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const s = await getSiteSettings();
+      setSettings(s);
+    };
+    fetchSettings();
+  }, []);
+
+  const bulkImportEnabled = settings.bulk_import_enabled === 'true';
 
   useEffect(() => {
     const fetchAiStatus = async () => {
@@ -161,7 +172,9 @@ export default function AdminDashboard() {
         <nav className="flex-1 space-y-2 overflow-y-auto">
           <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/imports" icon={<Layers size={18} />} label="Import Batches" active={location.pathname.startsWith('/admin/imports')} onClick={() => setIsMobileMenuOpen(false)} />
+          {bulkImportEnabled && (
+            <SidebarLink to="/admin/imports" icon={<Layers size={18} />} label="Import Batches" active={location.pathname.startsWith('/admin/imports')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
           <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
           
@@ -294,8 +307,8 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30 relative">
           <Routes>
             <Route path="/" element={<AdminOverview />} />
-            <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
-            <Route path="/imports" element={<AdminImportBatches />} />
+            <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} bulkImportEnabled={bulkImportEnabled} />} />
+            {bulkImportEnabled && <Route path="/imports" element={<AdminImportBatches />} />}
             <Route path="/partners" element={<AdminPartners />} />
             <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
@@ -1071,7 +1084,7 @@ function StatCard({ icon, label, value, color }: any) {
   );
 }
 
-function AdminResorts({ showNotification, setUploadProgress }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void }) {
+function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void, bulkImportEnabled: boolean }) {
   const navigate = useNavigate();
   const [resorts, setResorts] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -1428,28 +1441,32 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <h1 className="text-3xl font-serif text-brand-navy">Resort Management</h1>
         <div className="flex flex-wrap gap-4 items-center">
-          <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
-            <input 
-              type="text" 
-              placeholder="Google Drive Folder URL or ID" 
-              className="text-sm outline-none border-none bg-transparent w-48"
-              value={driveUrl}
-              onChange={(e) => setDriveUrl(e.target.value)}
-              disabled={isFetchingDrive || aiProcessing}
-            />
-            <button 
-              onClick={handleDriveUpload}
-              disabled={!driveUrl || isFetchingDrive || aiProcessing}
-              className="text-brand-teal hover:text-brand-navy disabled:opacity-50 transition-colors"
-              title="Fetch PDFs from Drive"
-            >
-              <Database size={16} />
-            </button>
-          </div>
-          <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
-            <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
-            <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
-          </label>
+          {bulkImportEnabled && (
+            <>
+              <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
+                <input 
+                  type="text" 
+                  placeholder="Google Drive Folder URL or ID" 
+                  className="text-sm outline-none border-none bg-transparent w-48"
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  disabled={isFetchingDrive || aiProcessing}
+                />
+                <button 
+                  onClick={handleDriveUpload}
+                  disabled={!driveUrl || isFetchingDrive || aiProcessing}
+                  className="text-brand-teal hover:text-brand-navy disabled:opacity-50 transition-colors"
+                  title="Fetch PDFs from Drive"
+                >
+                  <Database size={16} />
+                </button>
+              </div>
+              <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
+                <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
+                <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
+              </label>
+            </>
+          )}
           <button 
             onClick={() => {
               setEditingResort(null);
