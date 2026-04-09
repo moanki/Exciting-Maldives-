@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Link, useLocation, useParams } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { Routes, Route, Link, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers } from 'lucide-react';
 import { supabase } from '../supabase';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
+import { AdminImportBatches } from '../components/ImportWorkflow';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
 import maplibregl from 'maplibre-gl';
@@ -160,6 +161,7 @@ export default function AdminDashboard() {
         <nav className="flex-1 space-y-2 overflow-y-auto">
           <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
+          <SidebarLink to="/admin/imports" icon={<Layers size={18} />} label="Import Batches" active={location.pathname.startsWith('/admin/imports')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
           <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
           
@@ -293,6 +295,7 @@ export default function AdminDashboard() {
           <Routes>
             <Route path="/" element={<AdminOverview />} />
             <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            <Route path="/imports" element={<AdminImportBatches />} />
             <Route path="/partners" element={<AdminPartners />} />
             <Route path="/chats" element={<AdminChats />} />
             <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
@@ -1069,6 +1072,7 @@ function StatCard({ icon, label, value, color }: any) {
 }
 
 function AdminResorts({ showNotification, setUploadProgress }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void }) {
+  const navigate = useNavigate();
   const [resorts, setResorts] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingResort, setEditingResort] = useState<any>(null);
@@ -1122,52 +1126,73 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
     if (!files || files.length === 0) return;
 
     setAiProcessing(true);
-    setSmartUploadProgress({
-      total: files.length,
-      current: 0,
-      completed: 0,
-      failed: 0,
-      status: 'Initializing...'
-    });
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      setSmartUploadProgress(prev => prev ? { 
-        ...prev, 
-        current: i + 1, 
-        status: `Processing ${file.name}...` 
-      } : null);
-      
-      await new Promise<void>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          try {
-            const extracted = await extractResortDataFromPDF(base64);
-            const { error } = await supabase
-              .from('resorts')
-              .insert({
-                ...extracted,
-                is_featured: false
-              });
-            
-            if (error) throw error;
-            setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
-            fetchResorts(); // Update list immediately
-          } catch (err) {
-            console.error('AI Extraction failed for file:', file.name, err);
-            setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
-          } finally {
-            resolve();
-          }
-        };
-        reader.readAsDataURL(file);
+    try {
+      // 1. Create Batch
+      const batchRes = await fetch('/api/import/create-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batch_type: 'resort_pdf_import',
+          source_type: 'local_upload'
+        })
       });
-    }
+      const batch = await batchRes.json();
+      const batchId = batch.id;
 
-    showNotification('Uploaded Successfully');
-    setAiProcessing(false);
-    setTimeout(() => setSmartUploadProgress(null), 5000);
+      setSmartUploadProgress({
+        total: files.length,
+        current: 0,
+        completed: 0,
+        failed: 0,
+        status: 'Initializing batch...'
+      });
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setSmartUploadProgress(prev => prev ? { 
+          ...prev, 
+          current: i + 1, 
+          status: `Uploading ${file.name} to staging...` 
+        } : null);
+        
+        await new Promise<void>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            try {
+              const res = await fetch('/api/import/resort-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  batchId,
+                  base64Data: base64,
+                  filename: file.name
+                })
+              });
+              
+              if (!res.ok) throw new Error('Upload failed');
+
+              setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+            } catch (err) {
+              console.error('Staging failed for file:', file.name, err);
+              setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
+            } finally {
+              resolve();
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      showNotification('Batch Ingested to Staging. Please review in Import Batches.');
+      navigate('/admin/imports');
+    } catch (err: any) {
+      showNotification('Batch creation failed: ' + err.message);
+    } finally {
+      setAiProcessing(false);
+      setTimeout(() => setSmartUploadProgress(null), 5000);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -1263,15 +1288,29 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
 
     setIsFetchingDrive(true);
     setAiProcessing(true);
-    setSmartUploadProgress({
-      total: 1,
-      current: 0,
-      completed: 0,
-      failed: 0,
-      status: 'Listing files from Google Drive...'
-    });
-
+    
     try {
+      // 1. Create Batch
+      const batchRes = await fetch('/api/import/create-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batch_type: 'resort_pdf_import',
+          source_type: 'google_drive',
+          source_ref: driveUrl
+        })
+      });
+      const batch = await batchRes.json();
+      const batchId = batch.id;
+
+      setSmartUploadProgress({
+        total: 1,
+        current: 0,
+        completed: 0,
+        failed: 0,
+        status: 'Listing files from Google Drive...'
+      });
+
       const listResponse = await fetch('/api/list-drive-pdfs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1303,7 +1342,7 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
         current: 0,
         completed: 0,
         failed: 0,
-        status: 'Processing PDFs...'
+        status: 'Processing PDFs to staging...'
       });
 
       for (let i = 0; i < files.length; i++) {
@@ -1311,7 +1350,7 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
         setSmartUploadProgress(prev => prev ? { 
           ...prev, 
           current: i + 1, 
-          status: `Processing ${file.name} (${i + 1} of ${files.length})...` 
+          status: `Processing ${file.name} to staging (${i + 1} of ${files.length})...` 
         } : null);
 
         try {
@@ -1331,38 +1370,27 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
 
           if (!base64) throw new Error(`Empty PDF data for ${file.name}`);
 
-          const extracted = await extractResortDataFromPDF(base64);
+          const res = await fetch('/api/import/resort-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              batchId,
+              base64Data: base64,
+              filename: file.name
+            })
+          });
           
-          // Check if resort already exists
-          const { data: existingResort } = await supabase
-            .from('resorts')
-            .select('id')
-            .ilike('name', extracted.name)
-            .maybeSingle();
+          if (!res.ok) throw new Error('Staging failed');
 
-          if (existingResort) {
-            console.log(`Resort "${extracted.name}" already exists. Skipping.`);
-            setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
-            continue;
-          }
-
-          const { error } = await supabase
-            .from('resorts')
-            .insert({
-              ...extracted,
-              is_featured: false
-            });
-          
-          if (error) throw error;
           setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
-          fetchResorts();
         } catch (err) {
           console.error(`Failed processing ${file.name}:`, err);
           setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
         }
       }
       
-      showNotification('Google Drive processing complete');
+      showNotification('Google Drive batch ingested to staging');
+      navigate('/admin/imports');
     } catch (error: any) {
       console.error('Drive fetch error:', error);
       showNotification(`Error: ${error.message}`);
@@ -1403,7 +1431,7 @@ function AdminResorts({ showNotification, setUploadProgress }: { showNotificatio
           <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
             <input 
               type="text" 
-              placeholder="Google Drive Folder URL" 
+              placeholder="Google Drive Folder URL or ID" 
               className="text-sm outline-none border-none bg-transparent w-48"
               value={driveUrl}
               onChange={(e) => setDriveUrl(e.target.value)}

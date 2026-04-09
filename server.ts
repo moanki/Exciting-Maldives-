@@ -6,16 +6,95 @@ import path from "path";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { google } from "googleapis";
+import { JWT } from "google-auth-library";
 import fs from "fs";
 import dotenv from "dotenv";
 import { Dropbox } from "dropbox";
 import sizeOf from "image-size";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.VITE_SUPABASE_ANON_KEY!
+);
+
+// Helper for Google Drive Auth
+async function getDriveAuth() {
+  const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
+  let credentials: any = null;
+  let source = '';
+
+  const fileExists = fs.existsSync(serviceAccountPath);
+  const envExists = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+
+  if (fileExists && envExists) {
+    console.log("Note: Both service_account.json and GOOGLE_SERVICE_ACCOUNT_JSON exist. Preferring service_account.json.");
+  }
+
+  if (fileExists) {
+    try {
+      credentials = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+      source = 'service_account.json';
+    } catch (e) {
+      console.error("Failed to parse service_account.json:", e);
+      throw new Error("Malformed service_account.json: Invalid JSON format.");
+    }
+  } else if (envExists) {
+    try {
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
+      source = 'GOOGLE_SERVICE_ACCOUNT_JSON environment variable';
+    } catch (e) {
+      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:", e);
+      throw new Error("Malformed GOOGLE_SERVICE_ACCOUNT_JSON: Invalid JSON format.");
+    }
+  } else if (process.env.GOOGLE_DRIVE_API_KEY) {
+    console.log("Using GOOGLE_DRIVE_API_KEY for Drive authentication (fallback).");
+    return process.env.GOOGLE_DRIVE_API_KEY;
+  } else {
+    throw new Error("No valid Google Drive service account credentials found (service_account.json or GOOGLE_SERVICE_ACCOUNT_JSON).");
+  }
+
+  // Validate Service Account structure
+  if (credentials.type !== 'service_account') {
+    throw new Error(`Invalid credential type in ${source}: Expected "service_account", got "${credentials.type}".`);
+  }
+  if (!credentials.client_email) {
+    throw new Error(`Missing "client_email" in ${source}.`);
+  }
+  if (!credentials.private_key) {
+    throw new Error(`Missing "private_key" in ${source}.`);
+  }
+
+  // Harden Private Key
+  let privateKey = credentials.private_key.trim();
+  
+  // Remove accidental wrapping quotes if present (common when pasting into env vars)
+  if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+    privateKey = privateKey.substring(1, privateKey.length - 1);
+  }
+
+  // Replace literal \n with actual newlines
+  privateKey = privateKey.replace(/\\n/g, '\n');
+
+  // Verify PEM markers
+  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') || !privateKey.includes('-----END PRIVATE KEY-----')) {
+    throw new Error(`Invalid PEM format in ${source}: Missing BEGIN/END PRIVATE KEY markers.`);
+  }
+
+  console.log(`Google Drive Auth initialized successfully.`);
+  console.log(`- Source: ${source}`);
+  console.log(`- Project ID: ${credentials.project_id || 'N/A'}`);
+  console.log(`- Client Email: ${credentials.client_email}`);
+
+  return new JWT({
+    email: credentials.client_email,
+    key: privateKey,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+}
 
 // Helper for classification
 const classifyMedia = (folderName: string, fileName: string) => {
@@ -155,55 +234,27 @@ async function startServer() {
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     try {
-      const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
-      const folderId = match ? match[1] : null;
+      let folderId = null;
+      const folderMatch = url.match(/folders\/([a-zA-Z0-9-_]+)/);
+      if (folderMatch) {
+        folderId = folderMatch[1];
+      } else if (url.match(/^[a-zA-Z0-9-_]+$/)) {
+        folderId = url;
+      }
 
       if (!folderId) {
-        return res.status(400).json({ error: "Invalid Google Drive folder URL" });
+        return res.status(400).json({ error: "Invalid Google Drive folder URL or ID" });
       }
 
-      let auth: any;
-      const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
-      if (fs.existsSync(serviceAccountPath)) {
-        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
-        auth = new google.auth.GoogleAuth({
-          credentials: serviceAccount,
-          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        });
-      } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        try {
-          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-          if (credentials.private_key) {
-            credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-          }
-          auth = new google.auth.GoogleAuth({
-            credentials,
-            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-          });
-        } catch (e) {
-          console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (list):", e);
-          return res.status(500).json({ error: "Invalid GOOGLE_SERVICE_ACCOUNT_JSON format." });
-        }
-      } else if (process.env.GOOGLE_DRIVE_API_KEY) {
-        auth = process.env.GOOGLE_DRIVE_API_KEY;
-      } else {
-        console.error("Google Drive credentials missing (list). Checked: service_account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
-        return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
-      }
-
-      const drive = google.drive({ version: 'v3', auth });
+      const authClient = await getDriveAuth();
+      const drive = google.drive({ version: 'v3', auth: authClient });
       const requestParams: any = {
         q: `'${folderId}' in parents and mimeType='application/pdf'`,
         fields: 'files(id, name)',
       };
 
       const listResponse = await drive.files.list(requestParams);
-
-      const files = listResponse.data.files || [];
-      res.json({ files });
+      res.json({ files: listResponse.data.files || [] });
     } catch (error: any) {
       console.error("Drive API list error:", error);
       res.status(500).json({ error: `Failed to list files from Google Drive: ${error.message}` });
@@ -215,56 +266,18 @@ async function startServer() {
     if (!fileId) return res.status(400).json({ error: "File ID is required" });
 
     try {
-      let auth: any;
-      const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
-      if (fs.existsSync(serviceAccountPath)) {
-        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
-        auth = new google.auth.GoogleAuth({
-          credentials: serviceAccount,
-          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        });
-      } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-        try {
-          const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-          if (credentials.private_key) {
-            credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-          }
-          auth = new google.auth.GoogleAuth({
-            credentials,
-            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-          });
-        } catch (e) {
-          console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (fetch):", e);
-          return res.status(500).json({ error: "Invalid GOOGLE_SERVICE_ACCOUNT_JSON format." });
-        }
-      } else if (process.env.GOOGLE_DRIVE_API_KEY) {
-        auth = process.env.GOOGLE_DRIVE_API_KEY;
-      } else {
-        console.error("Google Drive credentials missing (fetch). Checked: service_account.json, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_API_KEY");
-        return res.status(500).json({ error: "Google Drive credentials not found. Please configure them in the Settings menu." });
-      }
-
-      const drive = google.drive({ version: 'v3', auth });
-      const requestParams: any = { fileId: fileId, alt: 'media' };
-
-      const response = await drive.files.get(
-        requestParams,
-        { responseType: 'stream' }
-      );
+      const authClient = await getDriveAuth();
+      const drive = google.drive({ version: 'v3', auth: authClient });
+      const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
       
       const chunks: Buffer[] = [];
       for await (const chunk of response.data) {
         chunks.push(Buffer.from(chunk));
       }
-      const base64 = Buffer.concat(chunks).toString('base64');
-      
-      res.json({ base64 });
+      res.json({ base64: Buffer.concat(chunks).toString('base64') });
     } catch (error: any) {
       console.error("Drive API fetch error:", error);
-      res.status(500).json({ error: "Failed to download PDF from Google Drive." });
+      res.status(500).json({ error: `Failed to download PDF from Google Drive: ${error.message}` });
     }
   });
 
@@ -347,53 +360,23 @@ async function startServer() {
       }
 
       // Google Drive Check
+      let folderId = null;
       const folderMatch = url.match(/folders\/([a-zA-Z0-9-_]+)/);
+      if (folderMatch) {
+        folderId = folderMatch[1];
+      } else if (url.match(/^[a-zA-Z0-9-_]+$/)) {
+        folderId = url;
+      }
+
       const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
       const idMatch = url.match(/[?&]id=([a-zA-Z0-9-_]+)/);
       
-      const folderId = folderMatch ? folderMatch[1] : null;
       const fileId = fileMatch ? fileMatch[1] : (idMatch ? idMatch[1] : null);
 
       if (folderId || fileId) {
-        let auth: any;
-        const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
-        if (fs.existsSync(serviceAccountPath)) {
-          const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-          if (serviceAccount.private_key) {
-            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-          }
-          auth = new google.auth.GoogleAuth({
-            credentials: serviceAccount,
-            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-          });
-        } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-          try {
-            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-            if (credentials.private_key) {
-              credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-            }
-            auth = new google.auth.GoogleAuth({
-              credentials,
-              scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-            });
-          } catch (e) {
-            console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON (import):", e);
-          }
-        } else if (process.env.GOOGLE_DRIVE_API_KEY) {
-          auth = process.env.GOOGLE_DRIVE_API_KEY;
-        }
-
-        if (auth) {
-          let clientAuth = auth;
-          if (typeof auth !== 'string') {
-            try {
-              clientAuth = await auth.getClient();
-            } catch (e) {
-              console.error("Failed to get Google Auth client:", e);
-              return res.status(500).json({ error: "Failed to authenticate with Google Drive: " + e.message });
-            }
-          }
-          const drive = google.drive({ version: 'v3', auth: clientAuth });
+        try {
+          const authClient = await getDriveAuth();
+          const drive = google.drive({ version: 'v3', auth: authClient });
           
           if (folderId) {
             const media: any[] = [];
@@ -450,6 +433,10 @@ async function startServer() {
             
             return res.json({ success: true, media, source_type: 'google_drive' });
           }
+        } catch (authError: any) {
+          console.error("Drive Auth error in import-media:", authError.message);
+          // Don't return yet, might fallback to scraping if it wasn't a drive link 
+          // but here folderId/fileId matched so it likely was.
         }
       }
       
@@ -507,11 +494,259 @@ async function startServer() {
     }
   });
 
-  // AI Endpoints
+  // Bulk Import Endpoints
+  app.post("/api/import/create-batch", async (req, res) => {
+    const { batch_type, source_type, source_ref } = req.body;
+    // In a real app, we'd get the user ID from the auth header
+    // For now, we'll assume it's an admin
+    
+    try {
+      const { data, error } = await supabase
+        .from('import_batches')
+        .insert({
+          batch_type,
+          source_type,
+          source_ref,
+          status: 'ingested'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/import/resort-pdf", async (req, res) => {
+    const { batchId, base64Data, filename } = req.body;
+    if (!base64Data || !batchId) return res.status(400).json({ error: "Batch ID and Base64 data are required" });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+      return res.status(500).json({ error: "Gemini API key is missing or invalid." });
+    }
+
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = "gemini-1.5-pro";
+    const prompt = `
+      Extract resort information from this PDF document. 
+      Return a JSON object with the following fields:
+      - name: string
+      - location: string
+      - atoll: string
+      - description: string
+      - category: string
+      - transfer_type: string
+      - meal_plans: string[]
+      - room_types: object[] (name, description, max_guests, size)
+      - highlights: string[]
+    `;
+
+    try {
+      const result = await genAI.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: base64Data,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              location: { type: Type.STRING },
+              atoll: { type: Type.STRING },
+              description: { type: Type.STRING },
+              category: { type: Type.STRING },
+              transfer_type: { type: Type.STRING },
+              meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
+              room_types: { 
+                type: Type.ARRAY, 
+                items: { 
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    max_guests: { type: Type.STRING },
+                    size: { type: Type.STRING }
+                  }
+                } 
+              },
+              highlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+          }
+        }
+      });
+
+      const extracted = JSON.parse(result.text || '{}');
+      
+      // Duplicate detection
+      const { data: existingResorts } = await supabase
+        .from('resorts')
+        .select('id, name')
+        .ilike('name', `%${extracted.name}%`);
+      
+      const duplicateCandidate = existingResorts && existingResorts.length > 0 ? existingResorts[0].id : null;
+
+      // Save to staging
+      const { data: staging, error: stagingError } = await supabase
+        .from('resort_staging')
+        .insert({
+          import_batch_id: batchId,
+          extracted_json: extracted,
+          normalized_json: extracted,
+          confidence_score: 0.9, // Mock confidence
+          duplicate_candidate_resort_id: duplicateCandidate,
+          review_status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (stagingError) throw stagingError;
+
+      res.json(staging);
+    } catch (error: any) {
+      console.error('PDF extraction error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/import/media-to-staging", async (req, res) => {
+    const { batchId, mediaItems, resortStagingId, targetResortId } = req.body;
+    
+    try {
+      const stagingItems = mediaItems.map((item: any) => ({
+        import_batch_id: batchId,
+        resort_staging_id: resortStagingId,
+        target_resort_id: targetResortId,
+        original_filename: item.original_filename,
+        original_url: item.source_url,
+        staged_storage_path: item.storage_path,
+        inferred_category_key: item.category,
+        inferred_subcategory: item.subcategory,
+        confidence_score: 0.85,
+        review_status: 'pending'
+      }));
+
+      const { data, error } = await supabase
+        .from('media_staging')
+        .insert(stagingItems)
+        .select();
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/import/publish-batch", async (req, res) => {
+    const { batchId } = req.body;
+    
+    try {
+      // 1. Get approved resorts
+      const { data: approvedResorts, error: resError } = await supabase
+        .from('resort_staging')
+        .select('*')
+        .eq('import_batch_id', batchId)
+        .eq('review_status', 'approved');
+
+      if (resError) throw resError;
+
+      const publishResults = [];
+
+      for (const staged of approvedResorts) {
+        let resortId = staged.duplicate_candidate_resort_id;
+        
+        if (resortId) {
+          // Update existing
+          await supabase.from('resorts').update(staged.normalized_json).eq('id', resortId);
+        } else {
+          // Create new
+          const { data: newResort } = await supabase.from('resorts').insert(staged.normalized_json).select().single();
+          resortId = newResort.id;
+        }
+
+        // Update staging status
+        await supabase.from('resort_staging').update({ review_status: 'approved' }).eq('id', staged.id);
+        publishResults.push({ type: 'resort', id: resortId, stagingId: staged.id });
+      }
+
+      // 2. Get approved media
+      const { data: approvedMedia, error: mediaError } = await supabase
+        .from('media_staging')
+        .select('*')
+        .eq('import_batch_id', batchId)
+        .eq('review_status', 'approved');
+
+      if (mediaError) throw mediaError;
+
+      for (const staged of approvedMedia) {
+        // Find target resort ID
+        let targetResortId = staged.target_resort_id;
+        if (!targetResortId && staged.resort_staging_id) {
+          // If it was part of a resort import, find the published resort ID
+          const resMatch = publishResults.find(r => r.stagingId === staged.resort_staging_id);
+          if (resMatch) targetResortId = resMatch.id;
+        }
+
+        if (targetResortId) {
+          const categoryKey = staged.reviewer_override_category_key || staged.inferred_category_key || 'uncategorized';
+          
+          // Get category ID
+          const { data: cat } = await supabase
+            .from('resort_media_categories')
+            .select('id')
+            .eq('resort_id', targetResortId)
+            .eq('key', categoryKey)
+            .single();
+
+          await supabase.from('resort_media').insert({
+            resort_id: targetResortId,
+            category: categoryKey,
+            category_id: cat?.id,
+            subcategory: staged.reviewer_override_subcategory || staged.inferred_subcategory,
+            room_type_name: staged.reviewer_override_room_type_name || staged.inferred_room_type_name,
+            storage_path: staged.staged_storage_path,
+            original_filename: staged.original_filename,
+            source_url: staged.original_url,
+            import_batch_id: batchId,
+            status: 'active'
+          });
+        }
+      }
+
+      // 3. Update batch status
+      await supabase.from('import_batches').update({ status: 'published' }).eq('id', batchId);
+
+      res.json({ success: true, publishedCount: publishResults.length + approvedMedia.length });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
   app.post("/api/ai/extract-resort-pdf", async (req, res) => {
     const { base64Data } = req.body;
     if (!base64Data) return res.status(400).json({ error: "Base64 data is required" });
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
+    }
+
+    const genAI = new GoogleGenAI({ apiKey });
     const model = "gemini-1.5-pro";
     const prompt = `
       Extract resort information from this PDF document. 
@@ -585,6 +820,12 @@ async function startServer() {
     const { resortData } = req.body;
     if (!resortData) return res.status(400).json({ error: "Resort data is required" });
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
+    }
+
+    const genAI = new GoogleGenAI({ apiKey });
     const model = "gemini-1.5-pro";
     const prompt = `
       You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
@@ -631,6 +872,12 @@ async function startServer() {
     const { base64Image } = req.body;
     if (!base64Image) return res.status(400).json({ error: "Base64 image is required" });
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
+    }
+
+    const genAI = new GoogleGenAI({ apiKey });
     const model = "gemini-1.5-flash";
     const prompt = `
       Analyze this image of a Maldives resort and classify it into one of these categories:

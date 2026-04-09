@@ -433,7 +433,20 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setUploadProgress(0);
     
     try {
-      const mediaToInsert = [];
+      // 1. Create Batch
+      const batchRes = await fetch('/api/import/create-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batch_type: 'media_import',
+          source_type: 'mixed_upload',
+          source_ref: editingResort.name
+        })
+      });
+      const batch = await batchRes.json();
+      const batchId = batch.id;
+
+      const stagingItems = [];
       
       for (let i = 0; i < importedMedia.length; i++) {
         const item = importedMedia[i];
@@ -470,41 +483,31 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
             }
           } catch (uploadErr) {
             console.error(`Failed to upload image ${i}:`, uploadErr);
-            // Continue with others but mark this as failed? 
-            // For now, let's stop if critical
           }
         }
 
-        const matchingDbCat = dbCategories.find(c => c.key === item.category);
-        
-        mediaToInsert.push({ 
-          resort_id: editingResort.id,
-          storage_path: storagePath,
-          category: item.category,
-          category_id: matchingDbCat?.id || null,
-          subcategory: item.subcategory,
+        stagingItems.push({ 
+          import_batch_id: batchId,
+          target_resort_id: editingResort.id,
+          staged_storage_path: storagePath,
+          inferred_category_key: item.category,
+          inferred_subcategory: item.subcategory,
           original_filename: item.original_filename,
-          source_type: item.source_type,
-          source_url: item.source_url,
-          status: 'active',
-          is_hero: item.is_hero,
-          is_featured: item.is_hero || ['main_hero', 'banner', 'aerial'].includes(item.category),
-          sort_order: i,
-          import_batch_id: null // Or generate a new batch ID
+          original_url: item.source_url,
+          review_status: 'pending'
         });
       }
       
-      const { error } = await supabase.from('resort_media').insert(mediaToInsert);
-      if (error) {
-        console.error('Supabase insert error:', error);
-        throw error;
-      }
-
-      await fetchMedia();
+      const { error } = await supabase.from('media_staging').insert(stagingItems);
+      if (error) throw error;
+      
       setImportedMedia([]);
       setImportState('saved');
-      showNotification('Media imported and saved successfully');
-      setTimeout(() => setImportState('idle'), 3000);
+      showNotification('Media sent to staging for review. Please check Import Batches.');
+      setTimeout(() => {
+        setImportState('idle');
+        window.location.href = '/admin/imports';
+      }, 2000);
     } catch (err: any) {
       console.error('Save error:', err);
       setImportError(err.message || 'Failed to save media');
