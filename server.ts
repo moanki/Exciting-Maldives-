@@ -10,8 +10,12 @@ import fs from "fs";
 import dotenv from "dotenv";
 import { Dropbox } from "dropbox";
 import sizeOf from "image-size";
+import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
+
+// Initialize Gemini AI
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // Helper for classification
 const classifyMedia = (folderName: string, fileName: string) => {
@@ -500,6 +504,180 @@ async function startServer() {
     } catch (error: any) {
       console.error("Proxy error:", error.message);
       res.status(500).send("Failed to proxy image");
+    }
+  });
+
+  // AI Endpoints
+  app.post("/api/ai/extract-resort-pdf", async (req, res) => {
+    const { base64Data } = req.body;
+    if (!base64Data) return res.status(400).json({ error: "Base64 data is required" });
+
+    const model = "gemini-1.5-pro";
+    const prompt = `
+      Extract resort information from this PDF document. 
+      Return a JSON object with the following fields. IMPORTANT: Keep all descriptions concise to prevent output truncation.
+      - name: string
+      - location: string
+      - atoll: string
+      - description: string (luxury tone, maximum 3 sentences)
+      - category: string (e.g., Ultra-Luxury, Luxury, Premium)
+      - transfer_type: string (e.g., Seaplane, Speedboat)
+      - meal_plans: string[] (maximum 5 items)
+      - room_types: object[] (name, description (maximum 1 sentence), max_guests, size. Maximum 10 room types total)
+      - highlights: string[] (key selling points, maximum 8 items)
+    `;
+
+    try {
+      const result = await genAI.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: base64Data,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              location: { type: Type.STRING },
+              atoll: { type: Type.STRING },
+              description: { type: Type.STRING },
+              category: { type: Type.STRING },
+              transfer_type: { type: Type.STRING },
+              meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
+              room_types: { 
+                type: Type.ARRAY, 
+                items: { 
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    max_guests: { type: Type.STRING },
+                    size: { type: Type.STRING }
+                  }
+                } 
+              },
+              highlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+          }
+        }
+      });
+
+      res.json(JSON.parse(result.text || '{}'));
+    } catch (error: any) {
+      console.error('PDF extraction error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/generate-resort-marketing", async (req, res) => {
+    const { resortData } = req.body;
+    if (!resortData) return res.status(400).json({ error: "Resort data is required" });
+
+    const model = "gemini-1.5-pro";
+    const prompt = `
+      You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
+      Create high-end marketing copy for the following resort:
+      Name: ${resortData.name}
+      Location: ${resortData.location} (${resortData.atoll})
+      Category: ${resortData.category}
+      Features: ${resortData.highlights?.join(', ')}
+      Meal Plans: ${resortData.meal_plans?.join(', ')}
+
+      Return a JSON object with:
+      - marketing_hook: A one-sentence punchy headline for travel agents.
+      - unique_selling_points: 3-5 bullet points focusing on B2B value.
+      - luxury_description: A 2-paragraph evocative description for a brochure.
+      - ideal_for: Who is the target client? (e.g., Honeymooners, Multi-gen families, Divers).
+    `;
+
+    try {
+      const result = await genAI.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              marketing_hook: { type: Type.STRING },
+              unique_selling_points: { type: Type.ARRAY, items: { type: Type.STRING } },
+              luxury_description: { type: Type.STRING },
+              ideal_for: { type: Type.STRING }
+            }
+          }
+        }
+      });
+
+      res.json(JSON.parse(result.text || '{}'));
+    } catch (error: any) {
+      console.error('Marketing copy generation error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/classify-image", async (req, res) => {
+    const { base64Image } = req.body;
+    if (!base64Image) return res.status(400).json({ error: "Base64 image is required" });
+
+    const model = "gemini-1.5-flash";
+    const prompt = `
+      Analyze this image of a Maldives resort and classify it into one of these categories:
+      - main_hero (exterior shots, aerials, main pool, landing)
+      - room_types (bedrooms, bathrooms, villa interiors)
+      - restaurants (dining areas, food, bars)
+      - spa (wellness areas, gym, massage rooms)
+      - activities (diving, excursions, kids club)
+      - maps (site plans, floor plans)
+      - logos (brand logos)
+      - beaches (beach shots, ocean views)
+
+      Return a JSON object with:
+      - category: The chosen category key.
+      - subcategory: A more specific label if applicable (e.g., "Water Villa", "Italian Restaurant").
+      - description: A brief alt-text description.
+    `;
+
+    try {
+      const result = await genAI.models.generateContent({
+        model,
+        contents: [
+          { 
+            role: 'user', 
+            parts: [
+              { text: prompt }, 
+              { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+            ] 
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING },
+              subcategory: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        }
+      });
+
+      res.json(JSON.parse(result.text || '{}'));
+    } catch (error: any) {
+      console.error('Image classification error:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
