@@ -104,6 +104,20 @@ export default function AdminDashboard() {
   const [isSiteContentOpen, setIsSiteContentOpen] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [aiConfigured, setAiConfigured] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchAiStatus = async () => {
+      try {
+        const response = await fetch('/api/ai/status');
+        const data = await response.json();
+        setAiConfigured(data.configured);
+      } catch (err) {
+        console.error('Failed to fetch AI status:', err);
+      }
+    };
+    fetchAiStatus();
+  }, []);
 
   const showNotification = (message: string) => {
     setNotification(message);
@@ -228,7 +242,7 @@ export default function AdminDashboard() {
             <div className="px-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] uppercase tracking-widest text-white/40">Gemini (Pro)</span>
-                <div className={`w-2 h-2 rounded-full ${process.env.GEMINI_API_KEY ? 'bg-brand-teal shadow-[0_0_8px_rgba(0,128,128,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
+                <div className={`w-2 h-2 rounded-full ${aiConfigured ? 'bg-brand-teal shadow-[0_0_8px_rgba(0,128,128,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
               </div>
             </div>
           </div>

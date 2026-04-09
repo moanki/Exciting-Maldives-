@@ -681,6 +681,13 @@ async function startServer() {
     }
   });
 
+  app.get("/api/ai/status", (req, res) => {
+    res.json({ 
+      configured: !!process.env.GEMINI_API_KEY,
+      model: "gemini-1.5-pro/flash"
+    });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
