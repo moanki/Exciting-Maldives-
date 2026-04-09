@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Upload, Image as ImageIcon, FileText, Globe, MapPin, Hotel, Coffee, Palmtree, AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Upload, Image as ImageIcon, FileText, Globe, MapPin, Hotel, Coffee, Palmtree, AlertCircle, CheckCircle2, Loader2, X, Sparkles } from 'lucide-react';
 import { supabase } from '../supabase';
 import JSZip from 'jszip';
 import { MediaLibraryModal } from './MediaLibraryModal';
+import { generateResortMarketingCopy, classifyImageWithAI } from '../services/content';
 
 const TextInput = ({ label, value, onChange, icon, type = 'text' }: any) => (
   <div className="space-y-2">
@@ -122,6 +123,76 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
   const [activeMediaField, setActiveMediaField] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+
+  const handleGenerateAICopy = async () => {
+    if (!formData.name) {
+      showNotification('Please enter a resort name first');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      const copy = await generateResortMarketingCopy({
+        name: formData.name,
+        location: formData.location,
+        atoll: formData.atoll,
+        category: category,
+        highlights: highlights.split(',').map(s => s.trim()).filter(Boolean),
+        meal_plans: mealPlans.split(',').map(s => s.trim()).filter(Boolean)
+      });
+
+      if (copy) {
+        setAbout(copy.luxury_description);
+        setHighlights(copy.unique_selling_points.join(', '));
+        showNotification('AI Marketing Copy generated successfully!');
+      }
+    } catch (err) {
+      console.error('AI Generation failed:', err);
+      showNotification('Failed to generate AI copy');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const [isClassifyingAI, setIsClassifyingAI] = useState(false);
+
+  const handleAIAutoTag = async () => {
+    setIsClassifyingAI(true);
+    try {
+      const newMedia = [...importedMedia];
+      for (let i = 0; i < newMedia.length; i++) {
+        const item = newMedia[i];
+        if (item.ignore) continue;
+
+        // Only classify if we have a file and it's not already well-categorized (optional logic)
+        if (item.file) {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.readAsDataURL(item.file);
+          });
+
+          const aiResult = await classifyImageWithAI(base64);
+          if (aiResult) {
+            newMedia[i] = { 
+              ...newMedia[i], 
+              category: aiResult.category, 
+              subcategory: aiResult.subcategory,
+              ai_description: aiResult.description
+            };
+          }
+        }
+      }
+      setImportedMedia(newMedia);
+      showNotification('AI Auto-Tagging complete!');
+    } catch (err) {
+      console.error('AI Classification failed:', err);
+      showNotification('Failed to auto-tag images');
+    } finally {
+      setIsClassifyingAI(false);
+    }
+  };
 
   // New state for CMS fields
   const [about, setAbout] = useState(formData.description || '');
@@ -460,6 +531,18 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
 
       {activeTab === 'Overview' && (
         <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-brand-navy/60">Resort Details</h3>
+            <button
+              type="button"
+              onClick={handleGenerateAICopy}
+              disabled={isGeneratingAI}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-teal/10 text-brand-teal rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
+            >
+              {isGeneratingAI ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {isGeneratingAI ? 'Generating...' : 'Magic AI Assistant'}
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <TextInput label="Resort Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} placeholder="e.g. Soneva Jani" />
             <TextInput label="Atoll" value={formData.atoll} onChange={(v: string) => setFormData({...formData, atoll: v})} placeholder="e.g. Noonu Atoll" />
@@ -807,6 +890,15 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
                   </div>
                 </div>
                 <div className="flex gap-3">
+                   <button 
+                    type="button" 
+                    onClick={handleAIAutoTag}
+                    disabled={isClassifyingAI || importedMedia.length === 0}
+                    className="flex items-center gap-2 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-brand-teal bg-brand-teal/10 hover:bg-brand-teal hover:text-white transition-all disabled:opacity-50"
+                  >
+                    {isClassifyingAI ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {isClassifyingAI ? 'Analyzing...' : 'AI Auto-Tag'}
+                  </button>
                    <button 
                     type="button" 
                     onClick={() => setImportState('idle')}

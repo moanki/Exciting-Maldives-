@@ -121,25 +121,104 @@ export const extractResortDataFromPDF = async (base64Data: string) => {
 };
 
 /**
- * Generates a luxury description for a resort based on its features.
+ * Generates comprehensive luxury marketing copy for a resort.
  * 
- * @param resortName - The name of the resort.
- * @param features - A list of features to include in the description.
- * @returns A string containing the generated description.
+ * @param resortData - The current resort data.
+ * @returns A structured object with marketing hooks, USPs, and descriptions.
  */
-export const generateResortDescription = async (resortName: string, features: string[]) => {
+export const generateResortMarketingCopy = async (resortData: any) => {
   const model = "gemini-3.1-pro-preview";
-  const prompt = `Write a luxury, evocative description for a Maldives resort named "${resortName}" with these features: ${features.join(', ')}. Focus on the sensory experience, privacy, and the beauty of the Indian Ocean.`;
   
+  const prompt = `
+    You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
+    Create high-end marketing copy for the following resort:
+    Name: ${resortData.name}
+    Location: ${resortData.location} (${resortData.atoll})
+    Category: ${resortData.category}
+    Features: ${resortData.highlights?.join(', ')}
+    Meal Plans: ${resortData.meal_plans?.join(', ')}
+
+    Return a JSON object with:
+    - marketing_hook: A one-sentence punchy headline for travel agents.
+    - unique_selling_points: 3-5 bullet points focusing on B2B value.
+    - luxury_description: A 2-paragraph evocative description for a brochure.
+    - ideal_for: Who is the target client? (e.g., Honeymooners, Multi-gen families, Divers).
+  `;
+
   try {
     const response = await engine.models.generateContent({
       model,
       contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            marketing_hook: { type: Type.STRING },
+            unique_selling_points: { type: Type.ARRAY, items: { type: Type.STRING } },
+            luxury_description: { type: Type.STRING },
+            ideal_for: { type: Type.STRING }
+          }
+        }
+      }
+    });
+    if (!response.text) throw new Error('AI failed to generate marketing copy');
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error('Marketing copy generation error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Classifies an image using AI (Gemini Vision).
+ * 
+ * @param base64Image - The base64 encoded image data.
+ * @returns A suggested category and subcategory.
+ */
+export const classifyImageWithAI = async (base64Image: string) => {
+  const model = "gemini-1.5-flash"; // Use flash for faster/cheaper vision tasks
+  
+  const prompt = `
+    Analyze this image of a Maldives resort and classify it into one of these categories:
+    - main_hero (exterior shots, aerials, main pool, landing)
+    - room_types (bedrooms, bathrooms, villa interiors)
+    - restaurants (dining areas, food, bars)
+    - spa (wellness areas, gym, massage rooms)
+    - activities (diving, excursions, kids club)
+    - maps (site plans, floor plans)
+    - logos (brand logos)
+    - beaches (beach shots, ocean views)
+
+    Return a JSON object with:
+    - category: The chosen category key.
+    - subcategory: A more specific label if applicable (e.g., "Water Villa", "Italian Restaurant").
+    - description: A brief alt-text description.
+  `;
+
+  try {
+    const response = await engine.models.generateContent({
+      model,
+      contents: [
+        { role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64Image } }] }
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            category: { type: Type.STRING },
+            subcategory: { type: Type.STRING },
+            description: { type: Type.STRING }
+          }
+        }
+      }
     });
 
-    return response.text;
+    if (!response.text) throw new Error('AI failed to classify image');
+    return JSON.parse(response.text);
   } catch (error) {
-    console.error('Description generation error:', error);
-    throw error;
+    console.error('Image classification error:', error);
+    return null; // Fallback to manual classification
   }
 };

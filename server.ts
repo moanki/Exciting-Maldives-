@@ -161,13 +161,20 @@ async function startServer() {
       let auth: any;
       const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
       if (fs.existsSync(serviceAccountPath)) {
+        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
         auth = new google.auth.GoogleAuth({
-          keyFile: serviceAccountPath,
+          credentials: serviceAccount,
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
       } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         try {
           const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+          if (credentials.private_key) {
+            credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+          }
           auth = new google.auth.GoogleAuth({
             credentials,
             scopes: ['https://www.googleapis.com/auth/drive.readonly'],
@@ -207,13 +214,20 @@ async function startServer() {
       let auth: any;
       const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
       if (fs.existsSync(serviceAccountPath)) {
+        const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
         auth = new google.auth.GoogleAuth({
-          keyFile: serviceAccountPath,
+          credentials: serviceAccount,
           scopes: ['https://www.googleapis.com/auth/drive.readonly'],
         });
       } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         try {
           const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+          if (credentials.private_key) {
+            credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+          }
           auth = new google.auth.GoogleAuth({
             credentials,
             scopes: ['https://www.googleapis.com/auth/drive.readonly'],
@@ -340,13 +354,20 @@ async function startServer() {
         let auth: any;
         const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
         if (fs.existsSync(serviceAccountPath)) {
+          const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+          if (serviceAccount.private_key) {
+            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+          }
           auth = new google.auth.GoogleAuth({
-            keyFile: serviceAccountPath,
+            credentials: serviceAccount,
             scopes: ['https://www.googleapis.com/auth/drive.readonly'],
           });
         } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
           try {
             const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            if (credentials.private_key) {
+              credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+            }
             auth = new google.auth.GoogleAuth({
               credentials,
               scopes: ['https://www.googleapis.com/auth/drive.readonly'],
