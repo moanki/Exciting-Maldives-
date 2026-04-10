@@ -68,6 +68,12 @@ begin
   if not exists (select 1 from information_schema.columns where table_name='media_staging' and column_name='published_at') then
     alter table public.media_staging add column published_at timestamptz;
   end if;
+  if not exists (select 1 from information_schema.columns where table_name='resort_media' and column_name='import_batch_id') then
+    alter table public.resort_media add column import_batch_id uuid;
+  end if;
+  if not exists (select 1 from information_schema.table_constraints where constraint_name = 'fk_import_batch' and table_name = 'resort_media') then
+    alter table public.resort_media add constraint fk_import_batch foreign key (import_batch_id) references public.import_batches(id);
+  end if;
 end $$;
 
 -- Enable RLS
@@ -105,8 +111,8 @@ create index if not exists idx_media_staging_status on public.media_staging(revi
 do $$
 begin
   if exists (select 1 from information_schema.tables where table_name = 'site_settings') then
-    insert into public.site_settings (key, value, description)
-    values ('bulk_import_enabled', 'true', 'Enable the bulk resort and media import workflow')
+    insert into public.site_settings (key, value)
+    values ('bulk_import_enabled', 'true')
     on conflict (key) do nothing;
   end if;
 end $$;

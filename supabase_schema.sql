@@ -144,7 +144,12 @@ create table if not exists public.media_staging (
 );
 
 -- Add foreign key to resort_media
-alter table public.resort_media add constraint fk_import_batch foreign key (import_batch_id) references public.import_batches(id);
+do $$
+begin
+  if not exists (select 1 from information_schema.table_constraints where constraint_name = 'fk_import_batch' and table_name = 'resort_media') then
+    alter table public.resort_media add constraint fk_import_batch foreign key (import_batch_id) references public.import_batches(id);
+  end if;
+end $$;
 
 -- 3.2 Resort Documents
 create table if not exists public.resort_documents (
@@ -300,72 +305,103 @@ create index if not exists idx_resort_media_sort_order on public.resort_media(so
 create index if not exists idx_resort_media_categories_resort_id on public.resort_media_categories(resort_id);
 
 -- RLS Policies
+drop policy if exists "Admins can read all newsletter submissions" on public.newsletter_submissions;
 create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Public can insert newsletter submissions" on public.newsletter_submissions;
 create policy "Public can insert newsletter submissions" on public.newsletter_submissions for insert with check (true);
 
 -- Import Batches: Admins can manage
+drop policy if exists "Admins can manage import batches" on public.import_batches;
 create policy "Admins can manage import batches" on public.import_batches 
   for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
 
 -- Resort Staging: Admins can manage
+drop policy if exists "Admins can manage resort staging" on public.resort_staging;
 create policy "Admins can manage resort staging" on public.resort_staging 
   for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
 
 -- Media Staging: Admins can manage
+drop policy if exists "Admins can manage media staging" on public.media_staging;
 create policy "Admins can manage media staging" on public.media_staging 
   for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
 
 -- RLS Policies
 
 -- Profiles: Admins can read all, users can read own
+drop policy if exists "Admins can read all profiles" on public.profiles;
 create policy "Admins can read all profiles" on public.profiles for select using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile" on public.profiles for select using (auth.uid() = id);
 
 -- Agents: Admins can read all, users can read own
+drop policy if exists "Admins can read all agents" on public.agents;
 create policy "Admins can read all agents" on public.agents for select using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Users can read own agent profile" on public.agents;
 create policy "Users can read own agent profile" on public.agents for select using (auth.uid() = id);
+drop policy if exists "Public can insert agent profile" on public.agents;
 create policy "Public can insert agent profile" on public.agents for insert with check (true);
 
 -- Resorts: Public can read, Admins can manage
+drop policy if exists "Public can read resorts" on public.resorts;
 create policy "Public can read resorts" on public.resorts for select using (status = 'published');
+drop policy if exists "Admins can manage resorts" on public.resorts;
 create policy "Admins can manage resorts" on public.resorts for all using (auth.uid() in (select id from public.profiles));
 
 -- Resort Media: Public can read, Admins can manage
+drop policy if exists "Public can read resort media" on public.resort_media;
 create policy "Public can read resort media" on public.resort_media for select using (true);
+drop policy if exists "Admins can manage resort media" on public.resort_media;
 create policy "Admins can manage resort media" on public.resort_media for all using (auth.uid() in (select id from public.profiles));
 
 -- Resort Documents: Public can read, Admins can manage
+drop policy if exists "Public can read resort documents" on public.resort_documents;
 create policy "Public can read resort documents" on public.resort_documents for select using (true);
+drop policy if exists "Admins can manage resort documents" on public.resort_documents;
 create policy "Admins can manage resort documents" on public.resort_documents for all using (auth.uid() in (select id from public.profiles));
 
 -- Booking Requests: Admins can read all, Agents can read/insert own
+drop policy if exists "Admins can read all bookings" on public.booking_requests;
 create policy "Admins can read all bookings" on public.booking_requests for select using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Agents can manage own bookings" on public.booking_requests;
 create policy "Agents can manage own bookings" on public.booking_requests for all using (auth.uid() = agent_id);
 
 -- Site Settings: Public can read, Admins can manage
+drop policy if exists "Public can read site settings" on public.site_settings;
 create policy "Public can read site settings" on public.site_settings for select using (true);
+drop policy if exists "Admins can manage site settings" on public.site_settings;
 create policy "Admins can manage site settings" on public.site_settings for all using (auth.uid() in (select id from public.profiles));
 
 -- Resources: Public can read, Admins can manage
+drop policy if exists "Public can read resources" on public.resources;
 create policy "Public can read resources" on public.resources for select using (not is_protected);
+drop policy if exists "Agents can read granted resources" on public.resources;
 create policy "Agents can read granted resources" on public.resources for select using (
   id in (select resource_id from public.resource_access_requests where agent_id = auth.uid() and status = 'granted')
 );
+drop policy if exists "Admins can manage resources" on public.resources;
 create policy "Admins can manage resources" on public.resources for all using (auth.uid() in (select id from public.profiles));
 
 -- Protected Resources: Admins can manage, Public can view metadata (if they have the link)
+drop policy if exists "Public can view protected resources metadata" on public.protected_resources;
 create policy "Public can view protected resources metadata" on public.protected_resources for select using (true);
+drop policy if exists "Admins can manage protected resources" on public.protected_resources;
 create policy "Admins can manage protected resources" on public.protected_resources for all using (auth.uid() in (select id from public.profiles where role in ('superadmin', 'admin', 'content_manager')));
 
 -- Resource Access Requests (Old Protected Resources)
+drop policy if exists "Admins can manage resource requests" on public.resource_access_requests;
 create policy "Admins can manage resource requests" on public.resource_access_requests for all using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Agents can view own resource requests" on public.resource_access_requests;
 create policy "Agents can view own resource requests" on public.resource_access_requests for select using (agent_id = auth.uid());
+drop policy if exists "Agents can request resources" on public.resource_access_requests;
 create policy "Agents can request resources" on public.resource_access_requests for insert with check (agent_id = auth.uid());
 
 -- Messages: Users can manage own, Admins can read all, Guests can manage by chat_id
+drop policy if exists "Users can manage own messages" on public.messages;
 create policy "Users can manage own messages" on public.messages for all using (
   (auth.uid() is not null and (chat_id = auth.uid()::text or sender_id = auth.uid())) or
   (auth.uid() is null and chat_id like 'guest_%')
 );
+drop policy if exists "Admins can manage all messages" on public.messages;
 create policy "Admins can manage all messages" on public.messages for all using (auth.uid() in (select id from public.profiles));
+drop policy if exists "Public can insert messages" on public.messages;
 create policy "Public can insert messages" on public.messages for insert with check (true);
