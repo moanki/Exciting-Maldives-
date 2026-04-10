@@ -86,13 +86,61 @@ create table if not exists public.resort_media (
 -- 3.1.1 Import Batches
 create table if not exists public.import_batches (
   id uuid default gen_random_uuid() primary key,
-  resort_id uuid references public.resorts on delete cascade,
-  source_type text not null, -- 'google_drive', 'dropbox', 'zip', 'local'
-  processed_count integer default 0,
-  duplicate_count integer default 0,
-  skipped_count integer default 0,
-  imported_count integer default 0,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  batch_type text not null, -- 'resort_pdf_import', 'media_import', 'mixed_import'
+  source_type text not null, -- 'local_upload', 'zip', 'folder', 'google_drive', 'dropbox', 'scrape'
+  source_ref text, -- e.g., folder ID, URL
+  status text not null check (status in ('ingested', 'reviewing', 'partially_approved', 'approved', 'published', 'failed', 'rolled_back')) default 'ingested',
+  created_by uuid references auth.users(id) on delete set null,
+  summary_json jsonb default '{}'::jsonb,
+  error_log_json jsonb default '[]'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3.1.2 Resort Staging
+create table if not exists public.resort_staging (
+  id uuid default gen_random_uuid() primary key,
+  import_batch_id uuid not null references public.import_batches(id) on delete cascade,
+  extracted_json jsonb, -- Raw data from AI
+  normalized_json jsonb, -- Mapped data for resorts table
+  confidence_score numeric,
+  duplicate_candidate_resort_id uuid references public.resorts(id) on delete set null,
+  review_status text not null check (review_status in ('pending', 'approved', 'rejected', 'edited')) default 'pending',
+  reviewer_id uuid references auth.users(id) on delete set null,
+  reviewed_at timestamp with time zone,
+  published_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3.1.3 Media Staging
+create table if not exists public.media_staging (
+  id uuid default gen_random_uuid() primary key,
+  import_batch_id uuid not null references public.import_batches(id) on delete cascade,
+  resort_staging_id uuid references public.resort_staging(id) on delete cascade,
+  target_resort_id uuid references public.resorts(id) on delete set null,
+  original_filename text,
+  original_url text,
+  staged_storage_path text,
+  inferred_category_key text,
+  inferred_subcategory text,
+  inferred_room_type_name text,
+  reviewer_override_category_key text,
+  reviewer_override_subcategory text,
+  reviewer_override_room_type_name text,
+  confidence_score numeric,
+  duplicate_candidate_media_id uuid references public.resort_media(id) on delete set null,
+  sha256 text,
+  phash text,
+  width integer,
+  height integer,
+  bytes bigint,
+  review_status text not null check (review_status in ('pending', 'approved', 'rejected', 'edited')) default 'pending',
+  reviewer_id uuid references auth.users(id) on delete set null,
+  reviewed_at timestamp with time zone,
+  published_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Add foreign key to resort_media
@@ -198,6 +246,9 @@ alter table public.protected_resources enable row level security;
 alter table public.messages enable row level security;
 alter table public.newsletter_submissions enable row level security;
 alter table public.import_batches enable row level security;
+alter table public.resort_staging enable row level security;
+alter table public.media_staging enable row level security;
+alter table public.resource_access_requests enable row level security;
 
 -- 10. Seed default categories for all resorts
 insert into public.resort_media_categories (resort_id, key, label, sort_order, is_system)
@@ -253,7 +304,16 @@ create policy "Admins can read all newsletter submissions" on public.newsletter_
 create policy "Public can insert newsletter submissions" on public.newsletter_submissions for insert with check (true);
 
 -- Import Batches: Admins can manage
-create policy "Admins can manage import batches" on public.import_batches for all using (auth.uid() in (select id from public.profiles));
+create policy "Admins can manage import batches" on public.import_batches 
+  for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
+
+-- Resort Staging: Admins can manage
+create policy "Admins can manage resort staging" on public.resort_staging 
+  for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
+
+-- Media Staging: Admins can manage
+create policy "Admins can manage media staging" on public.media_staging 
+  for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
 
 -- RLS Policies
 
@@ -298,7 +358,6 @@ create policy "Public can view protected resources metadata" on public.protected
 create policy "Admins can manage protected resources" on public.protected_resources for all using (auth.uid() in (select id from public.profiles where role in ('superadmin', 'admin', 'content_manager')));
 
 -- Resource Access Requests (Old Protected Resources)
-alter table public.resource_access_requests enable row level security;
 create policy "Admins can manage resource requests" on public.resource_access_requests for all using (auth.uid() in (select id from public.profiles));
 create policy "Agents can view own resource requests" on public.resource_access_requests for select using (agent_id = auth.uid());
 create policy "Agents can request resources" on public.resource_access_requests for insert with check (agent_id = auth.uid());
