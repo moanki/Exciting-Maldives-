@@ -36,7 +36,6 @@ interface ResortEditFormProps {
   setUploadProgress: (p: number | null) => void;
 }
 
-import { uploadResortFile } from '../pages/AdminDashboard';
 
 // Classification Helper (Frontend version for local files)
 const classifyLocalMedia = (path: string, fileName: string) => {
@@ -119,6 +118,25 @@ const resizeImage = (file: File, maxWidth = 1920, maxHeight = 1080): Promise<Fil
 export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification, setUploadProgress }) => {
   const [activeTab, setActiveTab] = useState('Overview');
   const tabs = ['Overview', 'Room Types', 'Media Library', 'Import Center'];
+  const [media, setMedia] = useState<any[]>([]);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
+  const [importUrl, setImportUrl] = useState('');
+  const [importState, setImportState] = useState<'idle' | 'processing' | 'ready_for_review' | 'saving' | 'saved' | 'failed'>('idle');
+  const [importedMedia, setImportedMedia] = useState<any[]>([]); 
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
+  const [activeMediaField, setActiveMediaField] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isClassifyingAI, setIsClassifyingAI] = useState(false);
+  const [about, setAbout] = useState(formData.description || '');
+  const [transfer, setTransfer] = useState(formData.transfer_type || '');
+  const [mealPlans, setMealPlans] = useState(formData.meal_plans?.join(', ') || '');
+  const [rooms, setRooms] = useState(formData.rooms?.join(', ') || '');
+  const [roomTypes, setRoomTypes] = useState<any[]>(formData.room_types || []);
+  const [highlights, setHighlights] = useState(formData.highlights?.join(', ') || '');
+  const [category, setCategory] = useState(formData.category || '');
+  const [bannerUrl, setBannerUrl] = useState(formData.banner_url || '');
+
   const handleGenerateAICopy = async () => {
     if (!formData.name) {
       showNotification('Please enter a resort name first');
@@ -149,8 +167,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     }
   };
 
-  const [isClassifyingAI, setIsClassifyingAI] = useState(false);
-
   const handleAIAutoTag = async () => {
     setIsClassifyingAI(true);
     try {
@@ -159,7 +175,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
         const item = newMedia[i];
         if (item.ignore) continue;
 
-        // Only classify if we have a file and it's not already well-categorized (optional logic)
         if (item.file) {
           const reader = new FileReader();
           const base64 = await new Promise<string>((resolve) => {
@@ -188,16 +203,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     }
   };
 
-  // New state for CMS fields
-  const [about, setAbout] = useState(formData.description || '');
-  const [transfer, setTransfer] = useState(formData.transfer_type || '');
-  const [mealPlans, setMealPlans] = useState(formData.meal_plans?.join(', ') || '');
-  const [rooms, setRooms] = useState(formData.rooms?.join(', ') || '');
-  const [roomTypes, setRoomTypes] = useState<any[]>(formData.room_types || []);
-  const [highlights, setHighlights] = useState(formData.highlights?.join(', ') || '');
-  const [category, setCategory] = useState(formData.category || '');
-  const [bannerUrl, setBannerUrl] = useState(formData.banner_url || '');
-
   useEffect(() => {
     if (editingResort) {
       setAbout(editingResort.description || '');
@@ -212,10 +217,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       fetchCategories();
     }
   }, [editingResort]);
-
-  useEffect(() => {
-    console.log('formData updated:', formData);
-  }, [formData]);
 
   useEffect(() => {
     setFormData((prev: any) => ({
@@ -255,11 +256,9 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     if (!confirm('Are you sure you want to delete this media?')) return;
     
     try {
-      // Delete from storage if it's an internal path
       if (!path.startsWith('http')) {
         await supabase.storage.from('resorts').remove([path]);
       }
-      // Delete from database
       await supabase.from('resort_media').delete().eq('id', id);
       
       setMedia(media.filter(m => m.id !== id));
@@ -278,7 +277,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
-      // Handle ZIP
       if (file.name.endsWith('.zip')) {
         try {
           const zip = await JSZip.loadAsync(file);
@@ -288,7 +286,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
               const blob = await zipFile.async('blob');
               const extractedFile = new File([blob], zipFile.name, { type: 'image/jpeg' });
               
-              // Simple path logic for frontend
               const parts = zipFile.name.split('/');
               const fileName = parts.pop() || "";
               const folderName = parts.join('/');
@@ -316,7 +313,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
         continue;
       }
 
-      // Handle Images
       if (file.type.startsWith('image/')) {
         const relativePath = (file as any).webkitRelativePath || "";
         const parts = relativePath.split('/');
@@ -342,7 +338,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       setImportError('No supported image files found');
       setImportState('failed');
     } else {
-      // Duplicate detection
       const detectedDuplicates = newMedia.map((item, idx) => {
         const isDuplicate = newMedia.some((other, otherIdx) => 
           idx !== otherIdx && 
@@ -427,7 +422,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setUploadProgress(0);
     
     try {
-      // 1. Create Batch
       const batchRes = await fetch('/api/import/create-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -448,7 +442,6 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
 
         let storagePath = item.storage_path;
         
-        // If it's a local file or external URL that needs proxying/uploading
         if (item.file || (storagePath && storagePath.startsWith('http'))) {
           try {
             let fileToUpload = item.file;
@@ -510,12 +503,18 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       setUploadProgress(null);
     }
   };
-
-export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFormData, editingResort, handleSave, setIsAdding, showNotification, setUploadProgress }) => {
-  const [activeTab, setActiveTab] = useState('Overview');
-  const tabs = ['Overview', 'Room Types', 'Media Library', 'Import Center'];
-  // ... (rest of the component)
-
+  
+  return (
+    <form onSubmit={handleSave} className="space-y-8">
+      <ResortEditHeader 
+        name={formData.name} 
+        isAdding={true} 
+        onCancel={() => setIsAdding(false)} 
+        onSave={handleSave} 
+        isEditing={!!editingResort} 
+      />
+      <ResortSectionNav activeTab={activeTab} setActiveTab={setActiveTab} tabs={tabs} />
+      
       {activeTab === 'Overview' && (
         <div className="space-y-12">
           <ResortOverviewPanel
@@ -573,7 +572,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           handleAIAutoTag={handleAIAutoTag}
           isClassifyingAI={isClassifyingAI}
           handleFinalSave={handleFinalSave}
-          setImportState={setImportState}
+          setImportState={setImportState as (state: string) => void}
           defaultCategories={defaultCategories}
           roomSubcategories={roomSubcategories}
         />
@@ -588,3 +587,4 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     </form>
   );
 };
+

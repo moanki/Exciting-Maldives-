@@ -13,7 +13,7 @@ interface ResortImportPanelProps {
   handleAIAutoTag: () => void;
   isClassifyingAI: boolean;
   handleFinalSave: () => void;
-  setImportState: (state: string) => void;
+  setImportState: (state: 'idle' | 'processing' | 'ready_for_review' | 'saving' | 'saved' | 'failed') => void;
   defaultCategories: any[];
   roomSubcategories: string[];
 }
