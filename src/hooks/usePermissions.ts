@@ -11,6 +11,17 @@ export function usePermissions() {
     async function fetchPermissions() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // Safety bootstrap for super admin email
+        if (user.email === 'monk.eemoan@gmail.com') {
+          const { data: roles } = await supabase.from('roles').select('id').eq('key', 'super_admin').single();
+          if (roles) {
+            await supabase.from('user_roles').upsert({
+              user_id: user.id,
+              role_id: roles.id
+            }, { onConflict: 'user_id,role_id' });
+          }
+        }
+
         const perms = await getUserPermissions(user.id);
         const canAccess = await canAccessAdmin(user.id);
         setPermissions(perms);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { motion } from 'motion/react';
 import { LogIn, Mail, Lock, Chrome } from 'lucide-react';
+import { canAccessAdmin } from '../lib/rbac';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -38,14 +39,38 @@ export default function Login() {
       
       const user = data.user;
       if (user) {
-        // Check if admin
-        const { data: adminData } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+        // Bootstrap super admin if email matches
+        if (user.email === 'monk.eemoan@gmail.com') {
+          // Ensure profile exists
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (!existingProfile) {
+            await supabase.from('profiles').insert({
+              id: user.id,
+              email: user.email,
+              role: 'superadmin',
+              full_name: 'Super Admin'
+            });
+          }
 
-        if (adminData) {
+          // Ensure super_admin role is assigned
+          const { data: roles } = await supabase.from('roles').select('id').eq('key', 'super_admin').single();
+          if (roles) {
+            await supabase.from('user_roles').upsert({
+              user_id: user.id,
+              role_id: roles.id
+            }, { onConflict: 'user_id,role_id' });
+          }
+        }
+
+        // Check if admin using RBAC
+        const hasAdminAccess = await canAccessAdmin(user.id);
+
+        if (hasAdminAccess) {
           navigate('/admin');
         } else {
           setError('Access denied. Admin only.');

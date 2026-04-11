@@ -462,6 +462,49 @@ begin
   end loop;
 end $$;
 
+-- Bootstrap Super Admin Trigger
+create or replace function public.handle_super_admin_assignment()
+returns trigger as $$
+declare
+  super_admin_role_id uuid;
+begin
+  if new.email = 'monk.eemoan@gmail.com' then
+    select id into super_admin_role_id from public.roles where key = 'super_admin';
+    if super_admin_role_id is not null then
+      insert into public.user_roles (user_id, role_id)
+      values (new.id, super_admin_role_id)
+      on conflict (user_id, role_id) do nothing;
+    end if;
+    -- Also ensure legacy role field is set
+    new.role := 'superadmin';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_profile_created_bootstrap on public.profiles;
+create trigger on_profile_created_bootstrap
+  before insert on public.profiles
+  for each row execute function public.handle_super_admin_assignment();
+
+-- Also handle existing user if they already have a profile but no role
+do $$
+declare
+  target_user_id uuid;
+  super_admin_role_id uuid;
+begin
+  select id into target_user_id from public.profiles where email = 'monk.eemoan@gmail.com';
+  select id into super_admin_role_id from public.roles where key = 'super_admin';
+  
+  if target_user_id is not null and super_admin_role_id is not null then
+    insert into public.user_roles (user_id, role_id)
+    values (target_user_id, super_admin_role_id)
+    on conflict (user_id, role_id) do nothing;
+    
+    update public.profiles set role = 'superadmin' where id = target_user_id;
+  end if;
+end $$;
+
 -- RLS Policies
 drop policy if exists "Admins can read all newsletter submissions" on public.newsletter_submissions;
 create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (public.has_permission('newsletter.read'));
