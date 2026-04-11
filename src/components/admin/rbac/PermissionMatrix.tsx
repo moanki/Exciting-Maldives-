@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../supabase';
+import { usePermissions } from '../../../hooks/usePermissions';
 
 export const PermissionMatrix: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
+  const { hasPermission, loading } = usePermissions();
 
   useEffect(() => {
     async function fetchData() {
@@ -14,6 +16,9 @@ export const PermissionMatrix: React.FC = () => {
     }
     fetchData();
   }, []);
+
+  if (loading) return <div>Loading...</div>;
+  if (!hasPermission('permissions.read')) return <div>Access Denied</div>;
 
   return (
     <div className="p-6">

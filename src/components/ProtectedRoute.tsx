@@ -1,18 +1,19 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
 import { usePermissions } from '../hooks/usePermissions';
 import { AccessDenied } from './admin/rbac/AccessDenied';
 
 interface ProtectedRouteProps {
-  permission: string;
+  permission?: string;
+  admin?: boolean;
   children: React.ReactNode;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, children }) => {
-  const { hasPermission, loading } = usePermissions();
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, admin, children }) => {
+  const { hasPermission, canAccessAdmin, loading } = usePermissions();
 
   if (loading) return null;
-  if (!hasPermission(permission)) return <AccessDenied />;
+  if (admin && !canAccessAdmin) return <AccessDenied />;
+  if (permission && !hasPermission(permission)) return <AccessDenied />;
 
   return <>{children}</>;
 };

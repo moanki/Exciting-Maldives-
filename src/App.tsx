@@ -65,7 +65,7 @@ function AppContent({ user, settings, loadingSettings }: { user: User | null, se
             <Route 
               path="/admin/*" 
               element={
-                <ProtectedRoute permission="resorts.read">
+                <ProtectedRoute admin={true}>
                   <AdminDashboard />
                 </ProtectedRoute>
               } 
@@ -96,19 +96,6 @@ export default function App() {
       setLoadingSettings(false);
     };
     fetchSettings();
-
-    // Check for Demo Mode
-    const demoMode = localStorage.getItem('demo_mode');
-    if (demoMode) {
-      const mockUser = {
-        id: 'demo-id',
-        email: 'demo@example.com',
-        user_metadata: { full_name: 'Demo Admin' }
-      } as any;
-      setUser(mockUser);
-      setLoading(false);
-      return;
-    }
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {

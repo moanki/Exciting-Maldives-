@@ -926,7 +926,9 @@ function AdminOverview() {
         }
       ];
 
+      const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('site_settings').upsert(initialSettings, { onConflict: 'key' });
+      if (user) await logAuditAction(user.id, 'settings.update', 'site_settings', null, null, { settings: initialSettings });
 
       setSeedStatus('Seeding booking requests...');
       const sampleRequests = [

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../supabase';
 import { logAuditAction } from '../../../lib/rbac';
+import { usePermissions } from '../../../hooks/usePermissions';
 
 export const UserAccessManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
+  const { hasPermission, loading } = usePermissions();
 
   useEffect(() => {
     async function fetchData() {
@@ -18,7 +20,11 @@ export const UserAccessManagement: React.FC = () => {
     fetchData();
   }, []);
 
+  if (loading) return <div>Loading...</div>;
+  if (!hasPermission('users.read')) return <div>Access Denied</div>;
+
   const assignRole = async (userId: string, roleId: string) => {
+    if (!hasPermission('users.manage')) return alert('Access Denied');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -28,6 +34,7 @@ export const UserAccessManagement: React.FC = () => {
   };
 
   const removeRole = async (userId: string, roleId: string) => {
+    if (!hasPermission('users.manage')) return alert('Access Denied');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
