@@ -9,7 +9,7 @@ import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagem
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
 import { PermissionMatrix } from '../components/admin/rbac/PermissionMatrix';
 import { usePermissions } from '../hooks/usePermissions';
-import { logAuditAction } from '../lib/rbac';
+import { logAuditAction, getUserRoleLabels } from '../lib/rbac';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
 import maplibregl from 'maplibre-gl';
@@ -90,6 +90,7 @@ export default function AdminDashboard() {
   const location = useLocation();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [roleLabels, setRoleLabels] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -102,6 +103,9 @@ export default function AdminDashboard() {
           .eq('id', user.id)
           .single();
         setProfile(profileData);
+        
+        const labels = await getUserRoleLabels(user.id);
+        setRoleLabels(labels);
       }
     };
     fetchUser();
@@ -326,7 +330,9 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-4 md:gap-6">
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-xs font-bold text-brand-navy">{profile?.full_name || 'Administrator'}</span>
-                <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">{profile?.role || 'Admin'}</span>
+                <span className="text-[10px] text-brand-teal font-bold uppercase tracking-widest">
+                  {roleLabels.length > 0 ? roleLabels.join(', ') : 'Admin'}
+                </span>
               </div>
             <button 
               onClick={() => {

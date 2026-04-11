@@ -16,6 +16,16 @@ export async function getUserRoles(userId: string): Promise<string[]> {
   return data.map(ur => ur.role_id);
 }
 
+export async function getUserRoleLabels(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('roles(label)')
+    .eq('user_id', userId);
+
+  if (error || !data) return [];
+  return data.map((ur: any) => ur.roles.label);
+}
+
 export async function getUserPermissions(userId: string): Promise<Permission[]> {
   const roleIds = await getUserRoles(userId);
   if (roleIds.length === 0) return [];
