@@ -12,8 +12,29 @@ export async function getUserRoles(userId: string): Promise<string[]> {
     .select('role_id')
     .eq('user_id', userId);
 
-  if (error || !data) return [];
+  if (error) {
+    console.error('Error fetching user roles:', error);
+    return [];
+  }
+  if (!data) return [];
   return data.map(ur => ur.role_id);
+}
+
+export async function getUserRoleKeys(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('roles(key)')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching role keys:', error);
+    return [];
+  }
+  if (!data) return [];
+
+  return data
+    .map((ur: any) => ur.roles?.key)
+    .filter(Boolean);
 }
 
 export async function getUserRoleLabels(userId: string): Promise<string[]> {
@@ -22,44 +43,78 @@ export async function getUserRoleLabels(userId: string): Promise<string[]> {
     .select('roles(label)')
     .eq('user_id', userId);
 
-  if (error || !data) return [];
-  return data.map((ur: any) => ur.roles.label);
+  if (error) {
+    console.error('Error fetching role labels:', error);
+    return [];
+  }
+  if (!data) return [];
+
+  return data
+    .map((ur: any) => ur.roles?.label)
+    .filter(Boolean);
 }
 
 export async function getUserPermissions(userId: string): Promise<Permission[]> {
   const roleIds = await getUserRoles(userId);
-  if (roleIds.length === 0) return [];
+  if (roleIds.length === 0) {
+    console.warn(`No roles found for user ${userId}`);
+    return [];
+  }
 
   const { data, error } = await supabase
     .from('role_permissions')
     .select('permissions(key, module, action)')
     .in('role_id', roleIds);
 
-  if (error || !data) {
+  if (error) {
     console.error('Error fetching permissions:', error);
     return [];
   }
+  if (!data) return [];
 
   // Flatten and unique
-  const permissions = data.map((rp: any) => rp.permissions);
+  const permissions = data.map((rp: any) => rp.permissions).filter(Boolean);
   const uniquePermissions = Array.from(new Map(permissions.map((p: Permission) => [p.key, p])).values());
+  
+  if (uniquePermissions.length === 0) {
+    console.warn(`No permissions found for roles: ${roleIds.join(', ')}`);
+  }
+
   return uniquePermissions;
 }
 
 export async function hasPermission(userId: string, permissionKey: string): Promise<boolean> {
-  const permissions = await getUserPermissions(userId);
-  const roles = await getUserRoleLabels(userId);
-  if (roles.includes('Super Admin')) return true;
+  const roleKeys = await getUserRoleKeys(userId);
+  if (roleKeys.includes('super_admin')) return true;
   
+  const permissions = await getUserPermissions(userId);
   return permissions.some(p => p.key === permissionKey);
 }
 
 export async function canAccessAdmin(userId: string): Promise<boolean> {
-  const roles = await getUserRoleLabels(userId);
-  if (roles.includes('Super Admin')) return true;
+  const roleKeys = await getUserRoleKeys(userId);
+  if (roleKeys.includes('super_admin')) return true;
 
   const permissions = await getUserPermissions(userId);
-  return permissions.some(p => ['resorts.read', 'site_content.read', 'imports.read', 'analytics.read', 'audit_logs.read', 'users.read', 'roles.read', 'security.read'].includes(p.key));
+  const adminPermissions = [
+    'resorts.read', 
+    'site_content.read', 
+    'imports.read', 
+    'analytics.read', 
+    'audit_logs.read', 
+    'users.read', 
+    'roles.read', 
+    'security.read',
+    'settings.read'
+  ];
+  
+  const hasAccess = permissions.some(p => adminPermissions.includes(p.key));
+  
+  if (!hasAccess) {
+    console.log(`User ${userId} denied admin access. Roles: ${roleKeys.join(', ')}. Permissions: ${permissions.map(p => p.key).join(', ')}`);
+  }
+  
+  return hasAccess;
 }
 
 export async function logAuditAction(

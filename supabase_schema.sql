@@ -477,7 +477,9 @@ begin
   -- Create profile
   insert into public.profiles (id, email, full_name)
   values (new.id, new.email, new.raw_user_meta_data->>'full_name')
-  on conflict (id) do update set email = excluded.email;
+  on conflict (id) do update set 
+    email = excluded.email,
+    full_name = coalesce(excluded.full_name, profiles.full_name);
 
   -- Assign Super Admin role if email matches
   if new.email = 'monk.eemoan@gmail.com' then
@@ -502,26 +504,37 @@ create trigger on_auth_user_created
   for each row execute function public.handle_auth_user_created();
 
 -- Also handle existing user if they already have a profile but no role
+-- This is the idempotent bootstrap for the specific super admin user
 do $$
 declare
   target_user_id uuid;
   super_admin_role_id uuid;
 begin
+  -- 1. Find the user in auth.users
   select id into target_user_id from auth.users where email = 'monk.eemoan@gmail.com';
+  
+  -- 2. Find the super_admin role
   select id into super_admin_role_id from public.roles where key = 'super_admin';
   
   if target_user_id is not null and super_admin_role_id is not null then
-    -- Ensure profile exists
+    -- 3. Ensure profile exists
     insert into public.profiles (id, email)
     values (target_user_id, 'monk.eemoan@gmail.com')
-    on conflict (id) do nothing;
+    on conflict (id) do update set email = excluded.email;
 
-    -- Assign role
+    -- 4. Assign role in user_roles
     insert into public.user_roles (user_id, role_id)
     values (target_user_id, super_admin_role_id)
     on conflict (user_id, role_id) do nothing;
     
+    -- 5. Update legacy role field for compatibility
     update public.profiles set role = 'superadmin' where id = target_user_id;
+    
+    raise notice 'Successfully bootstrapped monk.eemoan@gmail.com as super_admin';
+  elsif target_user_id is null then
+    raise notice 'Auth user monk.eemoan@gmail.com not found. Please ensure the user has signed up.';
+  elsif super_admin_role_id is null then
+    raise notice 'super_admin role not found in public.roles. Please ensure roles are seeded.';
   end if;
 end $$;
 
