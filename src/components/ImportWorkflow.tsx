@@ -718,6 +718,12 @@ function ResortStagingCard({ resort, onUpdate }: { resort: any, onUpdate: () => 
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">Description</h4>
               <p className="text-sm text-brand-navy/70 leading-relaxed line-clamp-3">{editedData.description}</p>
             </div>
+            {editedData.seo_summary && (
+              <div>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-2">SEO Summary</h4>
+                <p className="text-xs text-brand-navy/60 leading-relaxed italic">"{editedData.seo_summary}"</p>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {editedData.highlights?.slice(0, 4).map((h: string, i: number) => (
                 <span key={i} className="px-3 py-1 bg-brand-paper rounded-full text-[10px] font-bold text-brand-navy/60 uppercase tracking-widest">{h}</span>

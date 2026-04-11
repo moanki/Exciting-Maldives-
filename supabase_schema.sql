@@ -39,6 +39,7 @@ create table if not exists public.resorts (
   banner_url text,
   resort_url text,
   is_featured boolean default false,
+  seo_summary text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -262,19 +263,17 @@ returns boolean
 language sql
 security definer
 as $$
-  select 
-    (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
-    or exists (
-      select 1 from public.user_roles ur
-      join public.roles r on ur.role_id = r.id
-      where ur.user_id = auth.uid() and r.key = 'super_admin'
-    ) or exists (
-      select 1 from public.role_permissions rp
-      join public.permissions p on rp.permission_id = p.id
-      join public.user_roles ur on rp.role_id = ur.role_id
-      where ur.user_id = auth.uid()
-      and p.key = permission_key
-    );
+  select exists (
+    select 1 from public.user_roles ur
+    join public.roles r on ur.role_id = r.id
+    where ur.user_id = auth.uid() and r.key = 'super_admin'
+  ) or exists (
+    select 1 from public.role_permissions rp
+    join public.permissions p on rp.permission_id = p.id
+    join public.user_roles ur on rp.role_id = ur.role_id
+    where ur.user_id = auth.uid()
+    and p.key = permission_key
+  );
 $$;
 
 create table if not exists public.roles (
@@ -532,18 +531,36 @@ create policy "Public can insert newsletter submissions" on public.newsletter_su
 
 -- Import Batches: Admins can manage
 drop policy if exists "Admins can manage import batches" on public.import_batches;
-create policy "Admins can manage import batches" on public.import_batches 
-  for all using (public.has_permission('imports.read') or public.has_permission('imports.create') or public.has_permission('imports.review') or public.has_permission('imports.publish'));
+create policy "Admins can read import batches" on public.import_batches 
+  for select using (public.has_permission('imports.read'));
+create policy "Admins can insert import batches" on public.import_batches 
+  for insert with check (public.has_permission('imports.create'));
+create policy "Admins can update import batches" on public.import_batches 
+  for update using (public.has_permission('imports.review')) with check (public.has_permission('imports.review'));
+create policy "Admins can delete import batches" on public.import_batches 
+  for delete using (public.has_permission('imports.delete'));
 
 -- Resort Staging: Admins can manage
 drop policy if exists "Admins can manage resort staging" on public.resort_staging;
-create policy "Admins can manage resort staging" on public.resort_staging 
-  for all using (public.has_permission('resorts.update') or public.has_permission('imports.review'));
+create policy "Admins can read resort staging" on public.resort_staging 
+  for select using (public.has_permission('imports.read'));
+create policy "Admins can insert resort staging" on public.resort_staging 
+  for insert with check (public.has_permission('imports.create'));
+create policy "Admins can update resort staging" on public.resort_staging 
+  for update using (public.has_permission('imports.review')) with check (public.has_permission('imports.review'));
+create policy "Admins can delete resort staging" on public.resort_staging 
+  for delete using (public.has_permission('imports.delete'));
 
 -- Media Staging: Admins can manage
 drop policy if exists "Admins can manage media staging" on public.media_staging;
-create policy "Admins can manage media staging" on public.media_staging 
-  for all using (public.has_permission('resorts.media.manage') or public.has_permission('imports.review'));
+create policy "Admins can read media staging" on public.media_staging 
+  for select using (public.has_permission('imports.read'));
+create policy "Admins can insert media staging" on public.media_staging 
+  for insert with check (public.has_permission('imports.create') or public.has_permission('resorts.media.manage'));
+create policy "Admins can update media staging" on public.media_staging 
+  for update using (public.has_permission('imports.review')) with check (public.has_permission('imports.review'));
+create policy "Admins can delete media staging" on public.media_staging 
+  for delete using (public.has_permission('imports.delete'));
 
 -- RLS Policies
 

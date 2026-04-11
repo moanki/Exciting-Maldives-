@@ -555,6 +555,7 @@ async function startServer() {
       - meal_plans: string[]
       - room_types: object[] (name, description, max_guests, size)
       - highlights: string[]
+      - seo_summary: string (short, luxury tone, human sounding, concise, suitable for listing/introduction)
     `;
 
     try {
@@ -598,7 +599,8 @@ async function startServer() {
                   }
                 } 
               },
-              highlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+              highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+              seo_summary: { type: Type.STRING }
             }
           }
         }
@@ -930,7 +932,8 @@ async function startServer() {
                   }
                 } 
               },
-              highlights: { type: Type.ARRAY, items: { type: Type.STRING } }
+              highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+              seo_summary: { type: Type.STRING }
             }
           }
         }

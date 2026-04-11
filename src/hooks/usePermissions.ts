@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { getUserPermissions, Permission, canAccessAdmin } from '../lib/rbac';
+import { getUserPermissions, Permission, canAccessAdmin, getUserRoleLabels } from '../lib/rbac';
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -12,13 +12,14 @@ export function usePermissions() {
     async function fetchPermissions() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const superAdmin = user.email === 'monk.eemoan@gmail.com';
+        const roles = await getUserRoleLabels(user.id);
+        const superAdmin = roles.includes('Super Admin');
         setIsSuperAdmin(superAdmin);
 
         const perms = await getUserPermissions(user.id);
         const canAccess = await canAccessAdmin(user.id);
         setPermissions(perms);
-        setCanAccessAdminState(canAccess || superAdmin);
+        setCanAccessAdminState(canAccess);
       }
       setLoading(false);
     }

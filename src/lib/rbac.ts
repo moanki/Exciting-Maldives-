@@ -47,25 +47,16 @@ export async function getUserPermissions(userId: string): Promise<Permission[]> 
 }
 
 export async function hasPermission(userId: string, permissionKey: string): Promise<boolean> {
-  // Hardcoded fallback for super admin
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user?.email === 'monk.eemoan@gmail.com') return true;
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user?.email === 'monk.eemoan@gmail.com') return true;
-
   const permissions = await getUserPermissions(userId);
+  const roles = await getUserRoleLabels(userId);
+  if (roles.includes('Super Admin')) return true;
+  
   return permissions.some(p => p.key === permissionKey);
 }
 
 export async function canAccessAdmin(userId: string): Promise<boolean> {
-  // Hardcoded fallback for super admin
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user?.email === 'monk.eemoan@gmail.com') return true;
-
-  // Double check with getUser just in case session is stale
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user?.email === 'monk.eemoan@gmail.com') return true;
+  const roles = await getUserRoleLabels(userId);
+  if (roles.includes('Super Admin')) return true;
 
   const permissions = await getUserPermissions(userId);
   return permissions.some(p => ['resorts.read', 'site_content.read', 'imports.read', 'analytics.read', 'audit_logs.read', 'users.read', 'roles.read', 'security.read'].includes(p.key));

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '../supabase';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
@@ -1520,24 +1520,29 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         <div className="flex flex-wrap gap-4 items-center">
           {bulkImportEnabled && (
             <>
-              <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2 shadow-sm border border-gray-100">
-                <input 
-                  type="text" 
-                  placeholder="Google Drive Folder URL or ID" 
-                  className="text-sm outline-none border-none bg-transparent w-48"
-                  value={driveUrl}
-                  onChange={(e) => setDriveUrl(e.target.value)}
-                  disabled={isFetchingDrive || aiProcessing}
-                />
+              {/* Google Drive Import Section */}
+              <div className="flex items-center gap-2 bg-white rounded-full pl-6 pr-2 py-1 shadow-lg border border-brand-navy/5">
+                <div className="flex items-center gap-2 text-brand-navy/40">
+                  <Database size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Drive Folder URL/ID" 
+                    className="text-[10px] font-bold uppercase tracking-widest outline-none border-none bg-transparent w-40"
+                    value={driveUrl}
+                    onChange={(e) => setDriveUrl(e.target.value)}
+                    disabled={isFetchingDrive || aiProcessing}
+                  />
+                </div>
                 <button 
                   onClick={handleDriveUpload}
                   disabled={!driveUrl || isFetchingDrive || aiProcessing}
-                  className="text-brand-teal hover:text-brand-navy disabled:opacity-50 transition-colors"
-                  title="Fetch PDFs from Drive"
+                  className="bg-brand-navy text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal disabled:opacity-50 transition-all flex items-center gap-2"
                 >
-                  <Database size={16} />
+                  {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                  Import from Drive
                 </button>
               </div>
+
               <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
                 <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
                 <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
