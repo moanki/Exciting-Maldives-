@@ -6,27 +6,44 @@ export interface Permission {
   action: string;
 }
 
+export async function getUserRoles(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role_id')
+    .eq('user_id', userId);
+
+  if (error || !data) return [];
+  return data.map(ur => ur.role_id);
+}
+
 export async function getUserPermissions(userId: string): Promise<Permission[]> {
+  const roleIds = await getUserRoles(userId);
+  if (roleIds.length === 0) return [];
+
   const { data, error } = await supabase
     .from('role_permissions')
     .select('permissions(key, module, action)')
-    .in('role_id', supabase
-      .from('user_roles')
-      .select('role_id')
-      .eq('user_id', userId)
-    );
+    .in('role_id', roleIds);
 
   if (error || !data) {
     console.error('Error fetching permissions:', error);
     return [];
   }
 
-  return data.map((rp: any) => rp.permissions);
+  // Flatten and unique
+  const permissions = data.map((rp: any) => rp.permissions);
+  const uniquePermissions = Array.from(new Map(permissions.map((p: Permission) => [p.key, p])).values());
+  return uniquePermissions;
 }
 
 export async function hasPermission(userId: string, permissionKey: string): Promise<boolean> {
   const permissions = await getUserPermissions(userId);
   return permissions.some(p => p.key === permissionKey);
+}
+
+export async function canAccessAdmin(userId: string): Promise<boolean> {
+  const permissions = await getUserPermissions(userId);
+  return permissions.some(p => ['resorts.read', 'site_content.read', 'imports.read', 'analytics.read', 'audit_logs.read', 'users.read', 'roles.read', 'security.read'].includes(p.key));
 }
 
 export async function logAuditAction(

@@ -257,6 +257,20 @@ alter table public.resource_access_requests enable row level security;
 
 
 -- 11. RBAC System
+create or replace function public.has_permission(permission_key text)
+returns boolean
+language sql
+security definer
+as $$
+  select exists (
+    select 1 from public.role_permissions rp
+    join public.permissions p on rp.permission_id = p.id
+    join public.user_roles ur on rp.role_id = ur.role_id
+    where ur.user_id = auth.uid()
+    and p.key = permission_key
+  );
+$$;
+
 create table if not exists public.roles (
   id uuid default gen_random_uuid() primary key,
   key text unique not null,
@@ -433,24 +447,17 @@ create policy "Public can insert newsletter submissions" on public.newsletter_su
 -- Import Batches: Admins can manage
 drop policy if exists "Admins can manage import batches" on public.import_batches;
 create policy "Admins can manage import batches" on public.import_batches 
-  for all using (
-    exists (
-      select 1 from public.user_roles ur 
-      join public.roles r on ur.role_id = r.id 
-      where ur.user_id = auth.uid() 
-      and r.key in ('admin', 'super_admin', 'content_manager')
-    )
-  );
+  for all using (public.has_permission('imports.read') or public.has_permission('imports.create') or public.has_permission('imports.review') or public.has_permission('imports.publish'));
 
 -- Resort Staging: Admins can manage
 drop policy if exists "Admins can manage resort staging" on public.resort_staging;
 create policy "Admins can manage resort staging" on public.resort_staging 
-  for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
+  for all using (public.has_permission('resorts.update') or public.has_permission('imports.review'));
 
 -- Media Staging: Admins can manage
 drop policy if exists "Admins can manage media staging" on public.media_staging;
 create policy "Admins can manage media staging" on public.media_staging 
-  for all using (auth.uid() in (select id from public.profiles where role in ('admin', 'superadmin', 'content_manager')));
+  for all using (public.has_permission('resorts.media.manage') or public.has_permission('imports.review'));
 
 -- RLS Policies
 
@@ -472,19 +479,19 @@ create policy "Public can insert agent profile" on public.agents for insert with
 drop policy if exists "Public can read resorts" on public.resorts;
 create policy "Public can read resorts" on public.resorts for select using (status = 'published');
 drop policy if exists "Admins can manage resorts" on public.resorts;
-create policy "Admins can manage resorts" on public.resorts for all using (auth.uid() in (select id from public.profiles));
+create policy "Admins can manage resorts" on public.resorts for all using (public.has_permission('resorts.read') or public.has_permission('resorts.create') or public.has_permission('resorts.update') or public.has_permission('resorts.delete'));
 
 -- Resort Media: Public can read, Admins can manage
 drop policy if exists "Public can read resort media" on public.resort_media;
 create policy "Public can read resort media" on public.resort_media for select using (true);
 drop policy if exists "Admins can manage resort media" on public.resort_media;
-create policy "Admins can manage resort media" on public.resort_media for all using (auth.uid() in (select id from public.profiles));
+create policy "Admins can manage resort media" on public.resort_media for all using (public.has_permission('resorts.media.manage'));
 
 -- Resort Documents: Public can read, Admins can manage
 drop policy if exists "Public can read resort documents" on public.resort_documents;
 create policy "Public can read resort documents" on public.resort_documents for select using (true);
 drop policy if exists "Admins can manage resort documents" on public.resort_documents;
-create policy "Admins can manage resort documents" on public.resort_documents for all using (auth.uid() in (select id from public.profiles));
+create policy "Admins can manage resort documents" on public.resort_documents for all using (public.has_permission('resorts.read'));
 
 -- Booking Requests: Admins can read all, Agents can read/insert own
 drop policy if exists "Admins can read all bookings" on public.booking_requests;

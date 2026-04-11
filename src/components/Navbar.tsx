@@ -19,6 +19,7 @@ const Navbar = memo(function Navbar({ user, settings }: NavbarProps) {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const { hasPermission, loading } = usePermissions();
+  const [canAccess, setCanAccess] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -27,6 +28,17 @@ const Navbar = memo(function Navbar({ user, settings }: NavbarProps) {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    async function checkAccess() {
+      if (user) {
+        const { canAccessAdmin } = await import('../lib/rbac');
+        const access = await canAccessAdmin(user.id);
+        setCanAccess(access);
+      }
+    }
+    checkAccess();
+  }, [user]);
 
   const handleLogout = async () => {
     localStorage.removeItem('demo_mode');
@@ -59,13 +71,7 @@ const Navbar = memo(function Navbar({ user, settings }: NavbarProps) {
   const isTransparent = isHome && !scrolled;
   const activeLogo = isTransparent ? whiteLogo : logo;
 
-  const canAccessAdmin = !loading && (
-    hasPermission('resorts.read') || 
-    hasPermission('site_content.read') || 
-    hasPermission('imports.read') || 
-    hasPermission('analytics.read') || 
-    hasPermission('audit_logs.read')
-  );
+  const canAccessAdmin = !loading && canAccess;
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${!isTransparent ? 'bg-white/80 backdrop-blur-xl border-b border-brand-navy/5 py-0' : 'bg-transparent py-4'}`}>
