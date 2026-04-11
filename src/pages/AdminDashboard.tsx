@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Link, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers } from 'lucide-react';
 import { supabase } from '../supabase';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
 import { AdminImportBatches } from '../components/ImportWorkflow';
+import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagement';
+import { RoleManagement } from '../components/admin/rbac/RoleManagement';
+import { PermissionMatrix } from '../components/admin/rbac/PermissionMatrix';
+import { usePermissions } from '../hooks/usePermissions';
+import { logAuditAction } from '../lib/rbac';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
 import maplibregl from 'maplibre-gl';
@@ -81,6 +86,7 @@ export async function uploadResortFile(file: File, resortName: string, category:
  * - Implements secure data processing for document uploads.
  */
 export default function AdminDashboard() {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   const location = useLocation();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -171,87 +177,119 @@ export default function AdminDashboard() {
         
         <nav className="flex-1 space-y-2 overflow-y-auto">
           <SidebarLink to="/admin" icon={<LayoutDashboard size={18} />} label="Overview" active={location.pathname === '/admin'} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
-          {bulkImportEnabled && (
+          {hasPermission('resorts.read') && (
+            <SidebarLink to="/admin/resorts" icon={<Hotel size={18} />} label="Resorts" active={location.pathname.startsWith('/admin/resorts')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
+          {bulkImportEnabled && hasPermission('imports.read') && (
             <SidebarLink to="/admin/imports" icon={<Layers size={18} />} label="Import Batches" active={location.pathname.startsWith('/admin/imports')} onClick={() => setIsMobileMenuOpen(false)} />
           )}
-          <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
+          {hasPermission('users.read') && (
+            <SidebarLink to="/admin/partners" icon={<Users size={18} />} label="Partners" active={location.pathname.startsWith('/admin/partners')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
+          {hasPermission('chat.read') && (
+            <SidebarLink to="/admin/chats" icon={<MessageSquare size={18} />} label="Live Chat" active={location.pathname.startsWith('/admin/chats')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
           
           <div className="pt-4 pb-2">
             <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/50">Content & Settings</p>
           </div>
           
           {/* Site Content Accordion */}
-          <div>
-            <button 
-              onClick={() => setIsSiteContentOpen(!isSiteContentOpen)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-sans ${
-                location.pathname.includes('/page-manager') ? 'bg-brand-teal/10 text-brand-teal' : 'text-white/40 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Globe size={18} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Site Content</span>
+          {hasPermission('site_content.read') && (
+            <div>
+              <button 
+                onClick={() => setIsSiteContentOpen(!isSiteContentOpen)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-sans ${
+                  location.pathname.includes('/page-manager') ? 'bg-brand-teal/10 text-brand-teal' : 'text-white/40 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Globe size={18} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Site Content</span>
+                </div>
+                {isSiteContentOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              
+              <AnimatePresence>
+                {isSiteContentOpen && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pl-11 pr-4 py-2 space-y-4">
+                      {/* Global Settings */}
+                      <div>
+                        <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Global Settings</p>
+                        <div className="space-y-1">
+                          <SubSidebarLink to="/admin/page-manager/nav" label="Nav & Logo" active={location.pathname === '/admin/page-manager/nav'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/footer" label="Footer" active={location.pathname === '/admin/page-manager/footer'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/whatsapp" label="WhatsApp" active={location.pathname === '/admin/page-manager/whatsapp'} onClick={() => setIsMobileMenuOpen(false)} />
+                        </div>
+                      </div>
+                      
+                      {/* Home Page Sections */}
+                      <div>
+                        <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Home Page Sections</p>
+                        <div className="space-y-1">
+                          <SubSidebarLink to="/admin/page-manager/hero" label="Hero & Intro" active={location.pathname === '/admin/page-manager/hero'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/stats" label="Expertise Stats" active={location.pathname === '/admin/page-manager/stats'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/ceo" label="CEO Message" active={location.pathname === '/admin/page-manager/ceo'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/story" label="Our Story" active={location.pathname === '/admin/page-manager/story'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/markets" label="Global Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/newsletter_markets" label="Newsletter Markets" active={location.pathname === '/admin/page-manager/newsletter_markets'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/services" label="Services" active={location.pathname === '/admin/page-manager/services'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us & Excellence" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/ctas" label="CTAs" active={location.pathname === '/admin/page-manager/ctas'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/system" label="System & DB" active={location.pathname === '/admin/page-manager/system'} onClick={() => setIsMobileMenuOpen(false)} />
+                        </div>
+                      </div>
+
+                      {/* Pages & Content */}
+                      <div>
+                        <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Pages & Content</p>
+                        <div className="space-y-1">
+                          <SubSidebarLink to="/admin/page-manager/pages" label="Custom Pages" active={location.pathname === '/admin/page-manager/pages'} onClick={() => setIsMobileMenuOpen(false)} />
+                          <SubSidebarLink to="/admin/page-manager/guide" label="Travel Guide" active={location.pathname === '/admin/page-manager/guide'} onClick={() => setIsMobileMenuOpen(false)} />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {hasPermission('newsletter.read') && (
+            <SidebarLink to="/admin/newsletter" icon={<Mail size={18} />} label="Newsletter" active={location.pathname.startsWith('/admin/newsletter')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
+          {hasPermission('resources.protected.manage') && (
+            <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
+          {hasPermission('resources.read') && (
+            <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
+          )}
+
+          {/* RBAC Management */}
+          {(hasPermission('users.read') || hasPermission('roles.read') || hasPermission('permissions.read')) && (
+            <>
+              <div className="pt-4 pb-2">
+                <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/50">Access Control</p>
               </div>
-              {isSiteContentOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-            
-            <AnimatePresence>
-              {isSiteContentOpen && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="pl-11 pr-4 py-2 space-y-4">
-                    {/* Global Settings */}
-                    <div>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Global Settings</p>
-                      <div className="space-y-1">
-                        <SubSidebarLink to="/admin/page-manager/nav" label="Nav & Logo" active={location.pathname === '/admin/page-manager/nav'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/footer" label="Footer" active={location.pathname === '/admin/page-manager/footer'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/whatsapp" label="WhatsApp" active={location.pathname === '/admin/page-manager/whatsapp'} onClick={() => setIsMobileMenuOpen(false)} />
-                      </div>
-                    </div>
-                    
-                    {/* Home Page Sections */}
-                    <div>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Home Page Sections</p>
-                      <div className="space-y-1">
-                        <SubSidebarLink to="/admin/page-manager/hero" label="Hero & Intro" active={location.pathname === '/admin/page-manager/hero'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/stats" label="Expertise Stats" active={location.pathname === '/admin/page-manager/stats'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/ceo" label="CEO Message" active={location.pathname === '/admin/page-manager/ceo'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/story" label="Our Story" active={location.pathname === '/admin/page-manager/story'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/markets" label="Global Markets" active={location.pathname === '/admin/page-manager/markets'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/newsletter_markets" label="Newsletter Markets" active={location.pathname === '/admin/page-manager/newsletter_markets'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/services" label="Services" active={location.pathname === '/admin/page-manager/services'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/awards" label="Awards" active={location.pathname === '/admin/page-manager/awards'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/trust" label="Trust Indicators" active={location.pathname === '/admin/page-manager/trust'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/why-us" label="Why Us & Excellence" active={location.pathname === '/admin/page-manager/why-us'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/ctas" label="CTAs" active={location.pathname === '/admin/page-manager/ctas'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/system" label="System & DB" active={location.pathname === '/admin/page-manager/system'} onClick={() => setIsMobileMenuOpen(false)} />
-                      </div>
-                    </div>
-
-                    {/* Pages & Content */}
-                    <div>
-                      <p className="text-[8px] font-bold uppercase tracking-widest text-brand-beige/40 mb-2">Pages & Content</p>
-                      <div className="space-y-1">
-                        <SubSidebarLink to="/admin/page-manager/pages" label="Custom Pages" active={location.pathname === '/admin/page-manager/pages'} onClick={() => setIsMobileMenuOpen(false)} />
-                        <SubSidebarLink to="/admin/page-manager/guide" label="Travel Guide" active={location.pathname === '/admin/page-manager/guide'} onClick={() => setIsMobileMenuOpen(false)} />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
+              {hasPermission('users.read') && (
+                <SidebarLink to="/admin/users" icon={<UserCheck size={18} />} label="User Access" active={location.pathname.startsWith('/admin/users')} onClick={() => setIsMobileMenuOpen(false)} />
               )}
-            </AnimatePresence>
-          </div>
-
-          <SidebarLink to="/admin/newsletter" icon={<Mail size={18} />} label="Newsletter" active={location.pathname.startsWith('/admin/newsletter')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/password-manager" icon={<Shield size={18} />} label="Password Manager" active={location.pathname.startsWith('/admin/password-manager')} onClick={() => setIsMobileMenuOpen(false)} />
-          <SidebarLink to="/admin/resources" icon={<Settings size={18} />} label="Resources" active={location.pathname.startsWith('/admin/resources')} onClick={() => setIsMobileMenuOpen(false)} />
+              {hasPermission('roles.read') && (
+                <SidebarLink to="/admin/roles" icon={<Shield size={18} />} label="Roles" active={location.pathname.startsWith('/admin/roles')} onClick={() => setIsMobileMenuOpen(false)} />
+              )}
+              {hasPermission('permissions.read') && (
+                <SidebarLink to="/admin/permissions" icon={<Database size={18} />} label="Permissions" active={location.pathname.startsWith('/admin/permissions')} onClick={() => setIsMobileMenuOpen(false)} />
+              )}
+            </>
+          )}
           <div className="pt-8 mt-auto border-t border-white/10">
             <p className="px-4 mb-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/30">System Status</p>
             <div className="px-4 space-y-3">
@@ -307,15 +345,46 @@ export default function AdminDashboard() {
         <main className="flex-1 overflow-y-auto p-4 md:p-10 bg-brand-paper/30 relative">
           <Routes>
             <Route path="/" element={<AdminOverview />} />
-            <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} bulkImportEnabled={bulkImportEnabled} />} />
-            {bulkImportEnabled && <Route path="/imports" element={<AdminImportBatches />} />}
-            <Route path="/partners" element={<AdminPartners />} />
-            <Route path="/chats" element={<AdminChats />} />
-            <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
-            <Route path="/page-manager" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
-            <Route path="/newsletter" element={<AdminNewsletter />} />
-            <Route path="/password-manager" element={<AdminPasswordManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
-            <Route path="/resources" element={<AdminResources showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            {hasPermission('resorts.read') && (
+              <Route path="/resorts" element={<AdminResorts showNotification={showNotification} setUploadProgress={setUploadProgress} bulkImportEnabled={bulkImportEnabled} />} />
+            )}
+            {bulkImportEnabled && hasPermission('imports.read') && (
+              <Route path="/imports" element={<AdminImportBatches />} />
+            )}
+            {hasPermission('users.read') && (
+              <Route path="/partners" element={<AdminPartners />} />
+            )}
+            {hasPermission('chat.read') && (
+              <Route path="/chats" element={<AdminChats />} />
+            )}
+            {hasPermission('site_content.read') && (
+              <>
+                <Route path="/page-manager/:tab" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+                <Route path="/page-manager" element={<AdminPageManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+              </>
+            )}
+            {hasPermission('newsletter.read') && (
+              <Route path="/newsletter" element={<AdminNewsletter />} />
+            )}
+            {hasPermission('resources.protected.manage') && (
+              <Route path="/password-manager" element={<AdminPasswordManager showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            )}
+            {hasPermission('resources.read') && (
+              <Route path="/resources" element={<AdminResources showNotification={showNotification} setUploadProgress={setUploadProgress} />} />
+            )}
+            
+            {/* RBAC Routes */}
+            {hasPermission('users.read') && (
+              <Route path="/users" element={<UserAccessManagement />} />
+            )}
+            {hasPermission('roles.read') && (
+              <Route path="/roles" element={<RoleManagement />} />
+            )}
+            {hasPermission('permissions.read') && (
+              <Route path="/permissions" element={<PermissionMatrix />} />
+            )}
+            
+            <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </main>
       </div>
@@ -2047,6 +2116,12 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
       clearSettingsCache();
       setSettings(prev => ({ ...prev, [key]: newValue }));
       showNotification('Changes saved and published');
+      
+      // Audit log
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        logAuditAction(user.id, 'settings.update', 'site_settings', key, currentValue, newValue);
+      }
     } else {
       showNotification('Error saving changes');
     }

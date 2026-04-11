@@ -328,6 +328,30 @@ alter table public.role_permissions enable row level security;
 alter table public.user_roles enable row level security;
 alter table public.audit_logs enable row level security;
 
+-- RBAC Policies
+drop policy if exists "Admins can read roles" on public.roles;
+create policy "Admins can read roles" on public.roles for select using (public.has_permission('roles.read'));
+drop policy if exists "Admins can manage roles" on public.roles;
+create policy "Admins can manage roles" on public.roles for all using (public.has_permission('roles.manage'));
+
+drop policy if exists "Admins can read permissions" on public.permissions;
+create policy "Admins can read permissions" on public.permissions for select using (public.has_permission('permissions.read'));
+
+drop policy if exists "Admins can read role permissions" on public.role_permissions;
+create policy "Admins can read role permissions" on public.role_permissions for select using (public.has_permission('roles.read'));
+drop policy if exists "Admins can manage role permissions" on public.role_permissions;
+create policy "Admins can manage role permissions" on public.role_permissions for all using (public.has_permission('roles.manage'));
+
+drop policy if exists "Admins can read user roles" on public.user_roles;
+create policy "Admins can read user roles" on public.user_roles for select using (public.has_permission('users.read'));
+drop policy if exists "Admins can manage user roles" on public.user_roles;
+create policy "Admins can manage user roles" on public.user_roles for all using (public.has_permission('users.manage'));
+
+drop policy if exists "Admins can read audit logs" on public.audit_logs;
+create policy "Admins can read audit logs" on public.audit_logs for select using (public.has_permission('audit_logs.read'));
+drop policy if exists "Authenticated users can insert audit logs" on public.audit_logs;
+create policy "Authenticated users can insert audit logs" on public.audit_logs for insert with check (auth.uid() is not null);
+
 -- Seed Data
 insert into public.roles (key, label, description, is_system) values
 ('super_admin', 'Super Admin', 'Full system control', true),
@@ -440,7 +464,7 @@ end $$;
 
 -- RLS Policies
 drop policy if exists "Admins can read all newsletter submissions" on public.newsletter_submissions;
-create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (auth.uid() in (select id from public.profiles));
+create policy "Admins can read all newsletter submissions" on public.newsletter_submissions for select using (public.has_permission('newsletter.read'));
 drop policy if exists "Public can insert newsletter submissions" on public.newsletter_submissions;
 create policy "Public can insert newsletter submissions" on public.newsletter_submissions for insert with check (true);
 
