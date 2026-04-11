@@ -150,6 +150,93 @@ const classifyMedia = (folderName: string, fileName: string) => {
   return { category: detectedCategory, subcategory: detectedSubcategory };
 };
 
+// --- Authentication & RBAC Helpers ---
+
+/**
+ * Extracts and validates the JWT from the Authorization header.
+ * Returns the authenticated user object.
+ */
+async function getAuthenticatedUser(req: express.Request) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Missing or invalid Authorization header');
+  }
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    throw new Error('Invalid or expired token');
+  }
+
+  return user;
+}
+
+/**
+ * Fetches the user's effective permissions from the database.
+ */
+async function getUserPermissionsServerSide(userId: string) {
+  // Check if super admin first
+  const { data: roles, error: rolesError } = await supabaseAdmin
+    .from('user_roles')
+    .select('roles(key)')
+    .eq('user_id', userId);
+
+  if (rolesError) {
+    console.error('Error fetching user roles:', rolesError);
+    return [];
+  }
+
+  const isSuperAdmin = roles?.some((r: any) => r.roles.key === 'super_admin');
+  if (isSuperAdmin) {
+    // Super admins have all permissions
+    const { data: allPerms } = await supabaseAdmin.from('permissions').select('key');
+    return allPerms?.map(p => p.key) || [];
+  }
+
+  // Fetch specific permissions
+  const { data: perms, error: permsError } = await supabaseAdmin
+    .from('user_roles')
+    .select('role_permissions(permissions(key))')
+    .eq('user_id', userId);
+
+  if (permsError) {
+    console.error('Error fetching user permissions:', permsError);
+    return [];
+  }
+
+  const permissionKeys = new Set<string>();
+  perms?.forEach((ur: any) => {
+    ur.role_permissions?.forEach((rp: any) => {
+      if (rp.permissions?.key) {
+        permissionKeys.add(rp.permissions.key);
+      }
+    });
+  });
+
+  return Array.from(permissionKeys);
+}
+
+/**
+ * Middleware to require a specific permission.
+ */
+async function requirePermission(req: express.Request, res: express.Response, next: express.NextFunction, permissionKey: string) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    const permissions = await getUserPermissionsServerSide(user.id);
+
+    if (!permissions.includes(permissionKey)) {
+      return res.status(403).json({ error: `Forbidden: Missing permission ${permissionKey}` });
+    }
+
+    // Attach user to request for later use
+    (req as any).user = user;
+    next();
+  } catch (error: any) {
+    res.status(401).json({ error: error.message });
+  }
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -506,8 +593,9 @@ async function startServer() {
   });
 
   // Bulk Import Endpoints
-  app.post("/api/import/create-batch", async (req, res) => {
+  app.post("/api/import/create-batch", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
     const { batch_type, source_type, source_ref } = req.body;
+    const user = (req as any).user;
     
     try {
       const { data, error } = await supabaseAdmin
@@ -517,6 +605,7 @@ async function startServer() {
           source_type,
           source_ref,
           status: 'ingested',
+          created_by: user.id,
           summary_json: {
             resorts: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 },
             media: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 }
@@ -532,7 +621,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/import/resort-pdf", async (req, res) => {
+  app.post("/api/import/resort-pdf", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
     const { batchId, base64Data, filename } = req.body;
     if (!base64Data || !batchId) return res.status(400).json({ error: "Batch ID and Base64 data are required" });
 
@@ -665,7 +754,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/import/media-to-staging", async (req, res) => {
+  app.post("/api/import/media-to-staging", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
     const { batchId, mediaItems, resortStagingId, targetResortId } = req.body;
     
     try {
@@ -704,8 +793,9 @@ async function startServer() {
     }
   });
 
-  app.post("/api/import/publish-batch", async (req, res) => {
+  app.post("/api/import/publish-batch", (req, res, next) => requirePermission(req, res, next, 'imports.publish'), async (req, res) => {
     const { batchId } = req.body;
+    const user = (req as any).user;
     
     try {
       // 1. Get approved resorts that haven't been published
@@ -727,11 +817,17 @@ async function startServer() {
           
           if (resortId) {
             // Update existing
-            const { error: updateError } = await supabaseAdmin.from('resorts').update(staged.normalized_json).eq('id', resortId);
+            const { error: updateError } = await supabaseAdmin.from('resorts').update({
+              ...staged.normalized_json,
+              status: 'published'
+            }).eq('id', resortId);
             if (updateError) throw updateError;
           } else {
             // Create new
-            const { data: newResort, error: insertError } = await supabaseAdmin.from('resorts').insert(staged.normalized_json).select().single();
+            const { data: newResort, error: insertError } = await supabaseAdmin.from('resorts').insert({
+              ...staged.normalized_json,
+              status: 'published'
+            }).select().single();
             if (insertError) throw insertError;
             resortId = newResort.id;
           }
@@ -739,7 +835,8 @@ async function startServer() {
           // Update staging status and published_at
           await supabaseAdmin.from('resort_staging').update({ 
             review_status: 'approved',
-            published_at: new Date().toISOString()
+            published_at: new Date().toISOString(),
+            reviewer_id: user.id
           }).eq('id', staged.id);
           
           publishResults.push({ type: 'resort', id: resortId, stagingId: staged.id });
@@ -815,7 +912,8 @@ async function startServer() {
             // Update staging status and published_at
             await supabaseAdmin.from('media_staging').update({ 
               review_status: 'approved',
-              published_at: new Date().toISOString()
+              published_at: new Date().toISOString(),
+              reviewer_id: user.id
             }).eq('id', staged.id);
           } else {
             throw new Error("Target resort ID missing for media item");

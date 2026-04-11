@@ -424,9 +424,15 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setUploadProgress(0);
     
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const batchRes = await fetch('/api/import/create-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           batch_type: 'media_import',
           source_type: 'mixed_upload',
@@ -436,7 +442,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       const batch = await batchRes.json();
       const batchId = batch.id;
 
-      const stagingItems = [];
+      const mediaItemsToStage = [];
       
       for (let i = 0; i < importedMedia.length; i++) {
         const item = importedMedia[i];
@@ -475,20 +481,33 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           }
         }
 
-        stagingItems.push({ 
-          import_batch_id: batchId,
-          target_resort_id: editingResort.id,
-          staged_storage_path: storagePath,
-          inferred_category_key: item.category,
-          inferred_subcategory: item.subcategory,
+        mediaItemsToStage.push({ 
+          url: storagePath,
+          category: item.category,
+          subcategory: item.subcategory,
           original_filename: item.original_filename,
-          original_url: item.source_url,
-          review_status: 'pending'
+          source_url: item.source_url,
+          room_type_name: item.room_type_name
         });
       }
       
-      const { error } = await supabase.from('media_staging').insert(stagingItems);
-      if (error) throw error;
+      const stageRes = await fetch('/api/import/media-to-staging', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          batchId,
+          targetResortId: editingResort.id,
+          mediaItems: mediaItemsToStage
+        })
+      });
+
+      if (!stageRes.ok) {
+        const errData = await stageRes.json();
+        throw new Error(errData.error || 'Failed to stage media');
+      }
       
       setImportedMedia([]);
       setImportState('saved');

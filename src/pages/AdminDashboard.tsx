@@ -1218,10 +1218,16 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     setAiProcessing(true);
     
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       // 1. Create Batch
       const batchRes = await fetch('/api/import/create-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           batch_type: 'resort_pdf_import',
           source_type: 'local_upload'
@@ -1253,7 +1259,10 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
             try {
               const res = await fetch('/api/import/resort-pdf', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                   batchId,
                   base64Data: base64,
@@ -1380,10 +1389,16 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     setAiProcessing(true);
     
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       // 1. Create Batch
       const batchRes = await fetch('/api/import/create-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           batch_type: 'resort_pdf_import',
           source_type: 'google_drive',
@@ -1462,7 +1477,10 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
 
           const res = await fetch('/api/import/resort-pdf', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
               batchId,
               base64Data: base64,

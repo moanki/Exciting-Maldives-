@@ -355,9 +355,15 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
 
     setPublishing(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const response = await fetch('/api/import/publish-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ batchId })
       });
       

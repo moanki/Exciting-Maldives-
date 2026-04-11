@@ -307,16 +307,16 @@ create table if not exists public.role_permissions (
 
 create table if not exists public.user_roles (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid not null references public.profiles(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
   role_id uuid not null references public.roles(id) on delete cascade,
-  assigned_by uuid references public.profiles(id) on delete set null,
+  assigned_by uuid references auth.users(id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique(user_id, role_id)
 );
 
 create table if not exists public.audit_logs (
   id uuid default gen_random_uuid() primary key,
-  actor_user_id uuid references public.profiles(id) on delete set null,
+  actor_user_id uuid references auth.users(id) on delete set null,
   action_key text not null,
   entity_type text,
   entity_id uuid,
@@ -468,42 +468,38 @@ begin
 end $$;
 
 -- Bootstrap Super Admin Trigger
-create or replace function public.handle_super_admin_assignment_before()
-returns trigger as $$
-begin
-  if new.email = 'monk.eemoan@gmail.com' then
-    new.role := 'superadmin';
-  end if;
-  return new;
-end;
-$$ language plpgsql security definer;
-
-create or replace function public.handle_super_admin_assignment_after()
+-- This trigger ensures monk.eemoan@gmail.com is always a super admin
+create or replace function public.handle_auth_user_created()
 returns trigger as $$
 declare
   super_admin_role_id uuid;
 begin
+  -- Create profile
+  insert into public.profiles (id, email, full_name)
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name')
+  on conflict (id) do update set email = excluded.email;
+
+  -- Assign Super Admin role if email matches
   if new.email = 'monk.eemoan@gmail.com' then
     select id into super_admin_role_id from public.roles where key = 'super_admin';
     if super_admin_role_id is not null then
       insert into public.user_roles (user_id, role_id)
       values (new.id, super_admin_role_id)
       on conflict (user_id, role_id) do nothing;
+      
+      -- Update legacy role field for compatibility
+      update public.profiles set role = 'superadmin' where id = new.id;
     end if;
   end if;
+
   return new;
 end;
 $$ language plpgsql security definer;
 
-drop trigger if exists on_profile_created_bootstrap_before on public.profiles;
-create trigger on_profile_created_bootstrap_before
-  before insert on public.profiles
-  for each row execute function public.handle_super_admin_assignment_before();
-
-drop trigger if exists on_profile_created_bootstrap_after on public.profiles;
-create trigger on_profile_created_bootstrap_after
-  after insert on public.profiles
-  for each row execute function public.handle_super_admin_assignment_after();
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_auth_user_created();
 
 -- Also handle existing user if they already have a profile but no role
 do $$
@@ -511,10 +507,16 @@ declare
   target_user_id uuid;
   super_admin_role_id uuid;
 begin
-  select id into target_user_id from public.profiles where email = 'monk.eemoan@gmail.com';
+  select id into target_user_id from auth.users where email = 'monk.eemoan@gmail.com';
   select id into super_admin_role_id from public.roles where key = 'super_admin';
   
   if target_user_id is not null and super_admin_role_id is not null then
+    -- Ensure profile exists
+    insert into public.profiles (id, email)
+    values (target_user_id, 'monk.eemoan@gmail.com')
+    on conflict (id) do nothing;
+
+    -- Assign role
     insert into public.user_roles (user_id, role_id)
     values (target_user_id, super_admin_role_id)
     on conflict (user_id, role_id) do nothing;
