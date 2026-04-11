@@ -22,11 +22,11 @@ const Test3D = lazy(() => import('./pages/Test3D'));
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ChatWidget from './components/ChatWidget';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
-import { Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-function AppContent({ user, role, settings, loadingSettings }: { user: User | null, role: string | null, settings: any, loadingSettings: boolean }) {
+function AppContent({ user, settings, loadingSettings }: { user: User | null, settings: any, loadingSettings: boolean }) {
   const location = useLocation();
   const isDashboard = location.pathname.startsWith('/admin');
 
@@ -44,7 +44,7 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
 
   return (
     <div className="min-h-screen bg-[#f5f2ed] text-[#1a1a1a] font-sans relative">
-      <Navbar user={user} role={role} settings={settings} />
+      <Navbar user={user} settings={settings} />
       <main className="relative">
         <Suspense fallback={null}>
           <Routes>
@@ -64,7 +64,11 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
             {/* Protected Routes */}
             <Route 
               path="/admin/*" 
-              element={['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') ? <AdminDashboard /> : <Navigate to="/login" />} 
+              element={
+                <ProtectedRoute permission="resorts.read">
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
             />
             
             {/* Fallback route for inactive pages */}
@@ -80,7 +84,6 @@ function AppContent({ user, role, settings, loadingSettings }: { user: User | nu
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -103,87 +106,29 @@ export default function App() {
         user_metadata: { full_name: 'Demo Admin' }
       } as any;
       setUser(mockUser);
-      setRole('superadmin');
       setLoading(false);
       return;
     }
 
-    // Check Supabase connection
-    const checkConnection = async () => {
-      try {
-        const { data, error } = await supabase.from('resorts').select('id').limit(1);
-        if (error) {
-          console.error('Supabase connection test failed:', error.message);
-        } else {
-          console.log('Supabase connection successful!');
-        }
-      } catch (err) {
-        console.error('Unexpected error during Supabase connection test:', err);
-      }
-    };
-    checkConnection();
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
-        fetchUserRole(currentUser.id);
-      } else {
-        setRole(null);
-        setLoading(false);
-      }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserRole = async (userId: string) => {
-    try {
-      // Check if profile (for admin roles)
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (profileData) {
-        setRole(profileData.role);
-      } else {
-        // Check if agent
-        const { data: agentData } = await supabase
-          .from('agents')
-          .select('status')
-          .eq('id', userId)
-          .single();
-
-        if (agentData) {
-          setRole('partner');
-        } else {
-          setRole(null);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching user role:', error);
-      setRole(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Router>
-      <AppContent user={user} role={role} settings={settings} loadingSettings={loadingSettings} />
+      <AppContent user={user} settings={settings} loadingSettings={loadingSettings} />
     </Router>
   );
 }

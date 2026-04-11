@@ -1,24 +1,24 @@
-import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User } from '@supabase/supabase-js';
-import { Menu, X, User as UserIcon, LogOut, ChevronRight } from 'lucide-react';
+import { Menu, X, LogOut, ChevronRight } from 'lucide-react';
 import { useState, useEffect, memo } from 'react';
-import { getSiteSettings } from '../lib/settings';
 import { motion, AnimatePresence } from 'motion/react';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface NavbarProps {
   user: User | null;
-  role: string | null;
   settings: any;
 }
 
-const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
+const Navbar = memo(function Navbar({ user, settings }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const { hasPermission, loading } = usePermissions();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -58,8 +58,14 @@ const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
   const whiteLogo = settings.logos?.white || logo;
   const isTransparent = isHome && !scrolled;
   const activeLogo = isTransparent ? whiteLogo : logo;
-  const textColorClass = scrolled ? 'text-brand-navy' : (isTransparent ? 'text-white' : 'text-brand-navy');
-  const textHoverClass = scrolled ? 'hover:text-brand-teal' : (isTransparent ? 'hover:text-white/80' : 'hover:text-brand-teal');
+
+  const canAccessAdmin = !loading && (
+    hasPermission('resorts.read') || 
+    hasPermission('site_content.read') || 
+    hasPermission('imports.read') || 
+    hasPermission('analytics.read') || 
+    hasPermission('audit_logs.read')
+  );
 
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${!isTransparent ? 'bg-white/80 backdrop-blur-xl border-b border-brand-navy/5 py-0' : 'bg-transparent py-4'}`}>
@@ -93,7 +99,7 @@ const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
             
             {user ? (
               <div className={`flex items-center space-x-6 pl-6 border-l ${isTransparent ? 'border-white/20' : 'border-brand-navy/10'}`}>
-                {['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') && (
+                {canAccessAdmin && (
                   <Link to="/admin" className={`text-[10px] font-bold uppercase tracking-[0.3em] hover:opacity-80 transition-opacity ${isTransparent ? 'text-white' : 'text-brand-teal'}`}>Admin</Link>
                 )}
                 <button 
@@ -164,7 +170,7 @@ const Navbar = memo(function Navbar({ user, role, settings }: NavbarProps) {
               <div className="pt-6 border-t border-brand-navy/5 space-y-4">
                 {user ? (
                   <div className="space-y-4">
-                    {['superadmin', 'admin', 'sales', 'content_manager'].includes(role || '') && (
+                    {canAccessAdmin && (
                       <Link 
                         to="/admin" 
                         onClick={() => setIsOpen(false)}
