@@ -28,14 +28,66 @@ export const ResortImportPanel: React.FC<ResortImportPanelProps> = ({
     
     {importState === 'idle' && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="border-2 border-dashed border-brand-navy/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
-          <Upload className="text-brand-navy/20 mb-4" size={48} />
-          <p className="text-sm font-bold text-brand-navy mb-2">Drag & Drop Files</p>
-          <p className="text-xs text-brand-navy/40 mb-6">Support for JPG, PNG, ZIP</p>
-          <input type="file" multiple onChange={(e) => e.target.files && processFiles(e.target.files)} className="hidden" id="file-upload" />
-          <label htmlFor="file-upload" className="px-6 py-2 bg-brand-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest cursor-pointer hover:bg-brand-teal transition-all">Browse Files</label>
+        <div 
+          className="border-2 border-dashed border-brand-navy/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center hover:border-brand-teal/50 transition-all group"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.add('border-brand-teal', 'bg-brand-teal/5');
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('border-brand-teal', 'bg-brand-teal/5');
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('border-brand-teal', 'bg-brand-teal/5');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              processFiles(e.dataTransfer.files);
+            }
+          }}
+        >
+          <Upload className="text-brand-navy/20 mb-4 group-hover:text-brand-teal transition-colors" size={48} />
+          <p className="text-sm font-bold text-brand-navy mb-2">Drag & Drop Media</p>
+          <p className="text-xs text-brand-navy/40 mb-6 max-w-[200px]">Drop files, folders, or ZIP archives. Categories detected automatically.</p>
+          
+          <div className="flex flex-wrap justify-center gap-3">
+            <input 
+              type="file" 
+              multiple 
+              onChange={(e) => e.target.files && processFiles(e.target.files)} 
+              className="hidden" 
+              id="file-upload" 
+            />
+            <label 
+              htmlFor="file-upload" 
+              className="px-6 py-2 bg-brand-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest cursor-pointer hover:bg-brand-teal transition-all shadow-lg shadow-brand-navy/10"
+            >
+              Browse Files
+            </label>
+
+            <input 
+              {...({
+                type: "file",
+                multiple: true,
+                webkitdirectory: "",
+                directory: "",
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => e.target.files && processFiles(e.target.files),
+                className: "hidden",
+                id: "folder-upload"
+              } as any)}
+            />
+            <label 
+              htmlFor="folder-upload" 
+              className="px-6 py-2 bg-brand-paper border border-brand-navy/10 text-brand-navy rounded-full text-[10px] font-bold uppercase tracking-widest cursor-pointer hover:border-brand-teal hover:text-brand-teal transition-all"
+            >
+              Upload Folder
+            </label>
+          </div>
         </div>
-        <div className="border border-brand-navy/5 rounded-2xl p-8 space-y-4">
+        <div className="border border-brand-navy/5 rounded-2xl p-8 space-y-4 flex flex-col justify-center">
           <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy">Import from URL</h4>
           <div className="flex gap-2">
             <input type="text" value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://..." className="flex-1 bg-brand-paper/30 border border-brand-navy/10 rounded-xl px-4 py-3 text-sm focus:border-brand-teal outline-none" />

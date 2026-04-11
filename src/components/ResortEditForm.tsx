@@ -46,8 +46,10 @@ const classifyLocalMedia = (path: string, fileName: string) => {
     room_types: ['room', 'villa', 'suite', 'residence', 'bedroom', 'accommodation', 'stay', 'living'],
     restaurants: ['dining', 'restaurant', 'bar', 'breakfast', 'lunch', 'dinner', 'culinary', 'food', 'drink', 'kitchen'],
     spa: ['spa', 'wellness', 'treatment', 'massage', 'therapy', 'gym', 'fitness', 'yoga', 'pool'],
-    activities: ['activity', 'experience', 'diving', 'snorkel', 'excursion', 'marine', 'dolphin', 'cruise', 'sport', 'kids', 'club'],
-    maps: ['map', 'floorplan', 'floor plan', 'site plan', 'layout', 'location'],
+    activities: ['activity', 'experience', 'diving', 'snorkel', 'excursion', 'marine', 'dolphin', 'cruise', 'sport', 'kids', 'club', 'water sport'],
+    beaches: ['beach', 'sand', 'shore', 'coast'],
+    facilities: ['facility', 'gym', 'fitness', 'pool', 'tennis', 'court', 'boutique', 'shop', 'library'],
+    maps: ['map', 'floorplan', 'floor plan', 'site plan', 'layout', 'location', 'plan'],
     logos: ['logo', 'brand', 'wordmark', 'emblem', 'asset']
   };
 
