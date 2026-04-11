@@ -30,6 +30,9 @@ export function usePermissions() {
           if (mounted) {
             setPermissions(perms);
             setCanAccessAdminState(canAccess);
+            if (!canAccess && !superAdmin) {
+              console.warn(`User ${userId} does not have admin access.`);
+            }
           }
         }
       } catch (err: any) {
@@ -62,6 +65,7 @@ export function usePermissions() {
         setCanAccessAdminState(false);
         setIsSuperAdmin(false);
         setLoading(false);
+        setError(null);
       }
     });
 

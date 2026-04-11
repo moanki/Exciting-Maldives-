@@ -30,7 +30,11 @@ export async function getUserRoleKeys(userId: string): Promise<string[]> {
     console.error('Error fetching role keys:', error);
     return [];
   }
-  if (!data) return [];
+  
+  if (!data || data.length === 0) {
+    console.warn(`No roles found for user ${userId}`);
+    return [];
+  }
 
   return data
     .map((ur: any) => ur.roles?.key)
@@ -47,7 +51,8 @@ export async function getUserRoleLabels(userId: string): Promise<string[]> {
     console.error('Error fetching role labels:', error);
     return [];
   }
-  if (!data) return [];
+  
+  if (!data || data.length === 0) return [];
 
   return data
     .map((ur: any) => ur.roles?.label)
@@ -57,7 +62,7 @@ export async function getUserRoleLabels(userId: string): Promise<string[]> {
 export async function getUserPermissions(userId: string): Promise<Permission[]> {
   const roleIds = await getUserRoles(userId);
   if (roleIds.length === 0) {
-    console.warn(`No roles found for user ${userId}`);
+    console.warn(`Cannot fetch permissions: No roles for user ${userId}`);
     return [];
   }
 
@@ -70,6 +75,7 @@ export async function getUserPermissions(userId: string): Promise<Permission[]> 
     console.error('Error fetching permissions:', error);
     return [];
   }
+  
   if (!data) return [];
 
   // Flatten and unique
@@ -77,7 +83,7 @@ export async function getUserPermissions(userId: string): Promise<Permission[]> 
   const uniquePermissions = Array.from(new Map(permissions.map((p: Permission) => [p.key, p])).values());
   
   if (uniquePermissions.length === 0) {
-    console.warn(`No permissions found for roles: ${roleIds.join(', ')}`);
+    console.warn(`No permissions found for user ${userId} with roles ${roleIds.join(', ')}`);
   }
 
   return uniquePermissions;
@@ -111,7 +117,7 @@ export async function canAccessAdmin(userId: string): Promise<boolean> {
   const hasAccess = permissions.some(p => adminPermissions.includes(p.key));
   
   if (!hasAccess) {
-    console.log(`User ${userId} denied admin access. Roles: ${roleKeys.join(', ')}. Permissions: ${permissions.map(p => p.key).join(', ')}`);
+    console.log(`Admin access denied for user ${userId}. Roles: ${roleKeys.join(', ')}`);
   }
   
   return hasAccess;

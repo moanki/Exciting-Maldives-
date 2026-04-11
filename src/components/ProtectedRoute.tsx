@@ -13,23 +13,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ permission, admi
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center min-h-screen bg-brand-paper">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal"></div>
+          <p className="text-brand-navy/50 text-[10px] uppercase tracking-widest font-bold font-sans">Verifying Permissions...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <h1 className="text-2xl font-bold text-red-600 mb-2">Permission Error</h1>
-        <p className="text-gray-600 mb-4">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
-        >
-          Retry
-        </button>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-brand-paper">
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-brand-coral/10 text-center">
+          <h1 className="text-2xl font-serif text-brand-coral mb-4">Permission Error</h1>
+          <p className="text-brand-navy/60 mb-8 font-sans text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-8 py-3 bg-brand-navy text-white rounded-full font-bold uppercase tracking-widest hover:bg-brand-teal transition-all font-sans text-[10px]"
+          >
+            Retry Verification
+          </button>
+        </div>
       </div>
     );
   }
