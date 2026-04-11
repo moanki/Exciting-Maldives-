@@ -262,13 +262,19 @@ returns boolean
 language sql
 security definer
 as $$
-  select exists (
-    select 1 from public.role_permissions rp
-    join public.permissions p on rp.permission_id = p.id
-    join public.user_roles ur on rp.role_id = ur.role_id
-    where ur.user_id = auth.uid()
-    and p.key = permission_key
-  );
+  select 
+    (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
+    or exists (
+      select 1 from public.user_roles ur
+      join public.roles r on ur.role_id = r.id
+      where ur.user_id = auth.uid() and r.key = 'super_admin'
+    ) or exists (
+      select 1 from public.role_permissions rp
+      join public.permissions p on rp.permission_id = p.id
+      join public.user_roles ur on rp.role_id = ur.role_id
+      where ur.user_id = auth.uid()
+      and p.key = permission_key
+    );
 $$;
 
 create table if not exists public.roles (
@@ -330,20 +336,20 @@ alter table public.audit_logs enable row level security;
 
 -- RBAC Policies
 drop policy if exists "Admins can read roles" on public.roles;
-create policy "Admins can read roles" on public.roles for select using (public.has_permission('roles.read'));
+create policy "Admins can read roles" on public.roles for select using (public.has_permission('roles.read') or auth.role() = 'authenticated');
 drop policy if exists "Admins can manage roles" on public.roles;
 create policy "Admins can manage roles" on public.roles for all using (public.has_permission('roles.manage'));
 
 drop policy if exists "Admins can read permissions" on public.permissions;
-create policy "Admins can read permissions" on public.permissions for select using (public.has_permission('permissions.read'));
+create policy "Admins can read permissions" on public.permissions for select using (public.has_permission('permissions.read') or auth.role() = 'authenticated');
 
 drop policy if exists "Admins can read role permissions" on public.role_permissions;
-create policy "Admins can read role permissions" on public.role_permissions for select using (public.has_permission('roles.read'));
+create policy "Admins can read role permissions" on public.role_permissions for select using (public.has_permission('roles.read') or auth.role() = 'authenticated');
 drop policy if exists "Admins can manage role permissions" on public.role_permissions;
 create policy "Admins can manage role permissions" on public.role_permissions for all using (public.has_permission('roles.manage'));
 
 drop policy if exists "Admins can read user roles" on public.user_roles;
-create policy "Admins can read user roles" on public.user_roles for select using (public.has_permission('users.read'));
+create policy "Admins can read user roles" on public.user_roles for select using (public.has_permission('users.read') or auth.uid() = user_id);
 drop policy if exists "Admins can manage user roles" on public.user_roles;
 create policy "Admins can manage user roles" on public.user_roles for all using (public.has_permission('users.manage'));
 
@@ -463,7 +469,17 @@ begin
 end $$;
 
 -- Bootstrap Super Admin Trigger
-create or replace function public.handle_super_admin_assignment()
+create or replace function public.handle_super_admin_assignment_before()
+returns trigger as $$
+begin
+  if new.email = 'monk.eemoan@gmail.com' then
+    new.role := 'superadmin';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace function public.handle_super_admin_assignment_after()
 returns trigger as $$
 declare
   super_admin_role_id uuid;
@@ -475,17 +491,20 @@ begin
       values (new.id, super_admin_role_id)
       on conflict (user_id, role_id) do nothing;
     end if;
-    -- Also ensure legacy role field is set
-    new.role := 'superadmin';
   end if;
   return new;
 end;
 $$ language plpgsql security definer;
 
-drop trigger if exists on_profile_created_bootstrap on public.profiles;
-create trigger on_profile_created_bootstrap
+drop trigger if exists on_profile_created_bootstrap_before on public.profiles;
+create trigger on_profile_created_bootstrap_before
   before insert on public.profiles
-  for each row execute function public.handle_super_admin_assignment();
+  for each row execute function public.handle_super_admin_assignment_before();
+
+drop trigger if exists on_profile_created_bootstrap_after on public.profiles;
+create trigger on_profile_created_bootstrap_after
+  after insert on public.profiles
+  for each row execute function public.handle_super_admin_assignment_after();
 
 -- Also handle existing user if they already have a profile but no role
 do $$
@@ -533,6 +552,8 @@ drop policy if exists "Admins can read all profiles" on public.profiles;
 create policy "Admins can read all profiles" on public.profiles for select using (public.has_permission('users.read'));
 drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile" on public.profiles for select using (auth.uid() = id);
+drop policy if exists "Users can insert own profile" on public.profiles;
+create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id);
 
 -- Agents: Admins can read all, users can read own
 drop policy if exists "Admins can read all agents" on public.agents;

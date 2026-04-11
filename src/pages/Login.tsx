@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { motion } from 'motion/react';
@@ -11,6 +11,42 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const user = session.user;
+        
+        // Bootstrap super admin profile if email matches
+        // The database trigger will handle the user_roles assignment
+        if (user.email === 'monk.eemoan@gmail.com') {
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (!existingProfile) {
+            await supabase.from('profiles').insert({
+              id: user.id,
+              email: user.email,
+              role: 'superadmin',
+              full_name: 'Super Admin'
+            });
+          }
+        }
+
+        const hasAdminAccess = await canAccessAdmin(user.id);
+        if (hasAdminAccess) {
+          navigate('/admin');
+        } else if (event === 'SIGNED_IN') {
+          setError('Access denied. Admin only.');
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -39,9 +75,9 @@ export default function Login() {
       
       const user = data.user;
       if (user) {
-        // Bootstrap super admin if email matches
+        // Bootstrap super admin profile if email matches
+        // The database trigger will handle the user_roles assignment
         if (user.email === 'monk.eemoan@gmail.com') {
-          // Ensure profile exists
           const { data: existingProfile } = await supabase
             .from('profiles')
             .select('id')
@@ -55,15 +91,6 @@ export default function Login() {
               role: 'superadmin',
               full_name: 'Super Admin'
             });
-          }
-
-          // Ensure super_admin role is assigned
-          const { data: roles } = await supabase.from('roles').select('id').eq('key', 'super_admin').single();
-          if (roles) {
-            await supabase.from('user_roles').upsert({
-              user_id: user.id,
-              role_id: roles.id
-            }, { onConflict: 'user_id,role_id' });
           }
         }
 
