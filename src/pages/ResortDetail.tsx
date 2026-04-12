@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plane, Coffee, Home, Star, ArrowLeft, CheckCircle, Images, ChevronRight } from 'lucide-react';
+import { MapPin, Plane, Coffee, Home, Star, ArrowLeft, CheckCircle, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { MediaLightbox } from '../components/MediaLightbox';
 import { MediaGallerySection } from '../components/MediaGallerySection';
@@ -96,29 +96,19 @@ export default function ResortDetail() {
           <ArrowLeft size={20} className="md:size-24" />
         </button>
         
-        <div className="absolute bottom-8 md:bottom-12 left-6 right-6 md:left-8 md:right-8 max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[8px] md:text-[10px] font-bold mb-2 md:mb-4 font-sans">
-              <MapPin size={12} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
-            </div>
-            <h1 className="text-3xl md:text-7xl font-serif text-white mb-4 leading-tight">{resort.name}</h1>
-            <div className="flex gap-3 md:gap-4">
-              <span className="bg-brand-teal text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
-                {resort.category}
-              </span>
-              <span className="bg-white/20 backdrop-blur text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
-                {resort.transfer_type}
-              </span>
-            </div>
+        <div className="absolute bottom-8 md:bottom-12 left-6 right-6 md:left-8 md:right-8 max-w-7xl mx-auto">
+          <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[8px] md:text-[10px] font-bold mb-2 md:mb-4 font-sans">
+            <MapPin size={12} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
           </div>
-
-          <button 
-            onClick={() => openLightbox(allMedia, `${resort.name} Full Gallery`, 0, true)}
-            className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full hover:bg-white hover:text-brand-navy transition-all group self-start md:self-auto"
-          >
-            <Images size={18} className="group-hover:scale-110 transition-transform" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">See All {allMedia.length} Photos</span>
-          </button>
+          <h1 className="text-3xl md:text-7xl font-serif text-white mb-4 leading-tight">{resort.name}</h1>
+          <div className="flex gap-3 md:gap-4">
+            <span className="bg-brand-teal text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
+              {resort.category}
+            </span>
+            <span className="bg-white/20 backdrop-blur text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
+              {resort.transfer_type}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -187,52 +177,36 @@ export default function ResortDetail() {
 
           <section>
             <h2 className="text-3xl font-serif mb-8 text-brand-navy">Room <span className="italic text-brand-teal">Types</span></h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
               {resort.room_types?.map((room: any, i: number) => {
-                const matchingMedia = roomMedia?.filter((m: any) => 
+                const matchingMedia = roomMedia?.find((m: any) => 
                   m.room_type_name?.toLowerCase() === room.name?.toLowerCase() ||
                   m.subcategory?.toLowerCase() === room.name?.toLowerCase() || 
                   m.original_filename?.toLowerCase().includes(room.name?.toLowerCase())
                 );
-                const roomImage = room.image_url || matchingMedia?.[0]?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
+                const roomImage = room.image_url || matchingMedia?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
 
                 return (
-                  <motion.div 
-                    key={i} 
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="bg-white rounded-[32px] overflow-hidden border border-brand-navy/5 flex flex-col shadow-sm hover:shadow-2xl hover:shadow-brand-navy/10 transition-all group"
-                  >
-                    <div className="aspect-[4/3] relative overflow-hidden">
+                  <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">
+                    <div className="md:w-1/3 aspect-video md:aspect-auto">
                       <img 
-                        src={`${roomImage}${roomImage.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : ''}`} 
+                        src={`${roomImage}${roomImage.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=600' : ''}`} 
                         alt={room.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                         loading="lazy"
+                        decoding="async"
                       />
-                      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-brand-navy">
-                        {room.size}
+                    </div>
+                    <div className="p-8 flex-1">
+                      <h3 className="text-2xl font-serif mb-2 text-brand-navy">{room.name}</h3>
+                      <p className="text-brand-navy/60 text-sm font-sans font-light mb-4 leading-relaxed">{room.description}</p>
+                      <div className="flex gap-4 text-[10px] uppercase tracking-widest font-bold text-brand-teal font-sans">
+                        <span>Max Guests: {room.max_guests}</span>
+                        <span>Size: {room.size}</span>
                       </div>
                     </div>
-                    <div className="p-8 flex-1 flex flex-col">
-                      <h3 className="text-2xl font-serif mb-3 text-brand-navy">{room.name}</h3>
-                      <p className="text-brand-navy/60 text-sm font-sans font-light mb-6 leading-relaxed flex-1">{room.description}</p>
-                      <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-navy/5">
-                        <div className="flex gap-4 text-[9px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">
-                          <span>Max Guests: {room.max_guests}</span>
-                        </div>
-                        <button 
-                          onClick={() => openLightbox(matchingMedia || [], `${room.name} Gallery`)}
-                          className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:text-brand-navy transition-all"
-                        >
-                          View Gallery
-                          <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
