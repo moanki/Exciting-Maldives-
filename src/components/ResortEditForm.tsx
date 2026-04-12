@@ -438,6 +438,8 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           source_type: 'mixed_upload',
           source_ref: editingResort.name
         })
+      }).catch(err => {
+        throw new Error('Backend API is unreachable. Please ensure the server is running and accessible.');
       });
 
       if (!batchRes.ok) {

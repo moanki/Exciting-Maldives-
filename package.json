@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
+    "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -26,6 +27,7 @@
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "colorthief": "^3.3.1",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "dropbox": "^10.34.0",
     "express": "^4.21.2",

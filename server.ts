@@ -9,6 +9,7 @@ import { google } from "googleapis";
 import { JWT } from "google-auth-library";
 import fs from "fs";
 import dotenv from "dotenv";
+import cors from "cors";
 import { Dropbox } from "dropbox";
 import sizeOf from "image-size";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -16,14 +17,22 @@ import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
+// Validate critical environment variables
+const requiredEnv = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
+const missingEnv = requiredEnv.filter(key => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error(`CRITICAL: Missing required environment variables: ${missingEnv.join(', ')}`);
+  // We don't exit here to allow the server to start and potentially show a health check error
+}
+
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.VITE_SUPABASE_ANON_KEY!
+  process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.VITE_SUPABASE_ANON_KEY || 'placeholder'
 );
 
 const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
+  process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'placeholder',
   {
     auth: {
       autoRefreshToken: false,
@@ -239,8 +248,18 @@ async function requirePermission(req: express.Request, res: express.Response, ne
 
 async function startServer() {
   const app = express();
+  app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Request logging for debugging
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      console.log(`[API] ${req.method} ${req.path}`);
+    }
+    next();
+  });
+
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -271,7 +290,11 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      env: process.env.NODE_ENV || 'development'
+    });
   });
 
   app.post("/api/scrape-resort", async (req, res) => {
@@ -1162,6 +1185,16 @@ async function startServer() {
     res.json({ 
       configured: !!process.env.GEMINI_API_KEY,
       model: "gemini-1.5-pro/flash"
+    });
+  });
+
+  // 404 handler for API routes (must be before Vite/Static middleware)
+  app.all("/api/*", (req, res) => {
+    console.warn(`[API 404] ${req.method} ${req.path}`);
+    res.status(404).json({ 
+      error: "API route not found", 
+      method: req.method, 
+      path: req.path 
     });
   });
 
