@@ -6,39 +6,69 @@ export interface Permission {
   action: string;
 }
 
-export async function getUserRoles(userId: string): Promise<string[]> {
+export async function getLegacyUserRole(userId: string): Promise<string | null> {
   const { data, error } = await supabase
-    .from('user_roles')
-    .select('role_id')
-    .eq('user_id', userId);
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
 
   if (error) {
-    console.error('Error fetching user roles:', error);
+    console.error('Error fetching legacy role:', error);
+    return null;
+  }
+  return data?.role || null;
+}
+
+export async function getUserRoles(userId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      // If table doesn't exist, this is expected during migration
+      if (error.code === '42P01') {
+        console.warn('user_roles table does not exist yet.');
+      } else {
+        console.error('Error fetching user roles:', error);
+      }
+      return [];
+    }
+    if (!data) return [];
+    return data.map(ur => ur.role_id);
+  } catch (e) {
     return [];
   }
-  if (!data) return [];
-  return data.map(ur => ur.role_id);
 }
 
 export async function getUserRoleKeys(userId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('user_roles')
-    .select('roles(key)')
-    .eq('user_id', userId);
+  try {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('roles(key)')
+      .eq('user_id', userId);
 
-  if (error) {
-    console.error('Error fetching role keys:', error);
+    if (error) {
+      if (error.code === '42P01') {
+        console.warn('user_roles or roles table does not exist yet.');
+      } else {
+        console.error('Error fetching role keys:', error);
+      }
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    return data
+      .map((ur: any) => ur.roles?.key)
+      .filter(Boolean);
+  } catch (e) {
     return [];
   }
-  
-  if (!data || data.length === 0) {
-    console.warn(`No roles found for user ${userId}`);
-    return [];
-  }
-
-  return data
-    .map((ur: any) => ur.roles?.key)
-    .filter(Boolean);
 }
 
 export async function getUserRoleLabels(userId: string): Promise<string[]> {
@@ -94,10 +124,22 @@ export async function hasPermission(userId: string, permissionKey: string): Prom
   if (roleKeys.includes('super_admin')) return true;
   
   const permissions = await getUserPermissions(userId);
-  return permissions.some(p => p.key === permissionKey);
+  if (permissions.some(p => p.key === permissionKey)) return true;
+
+  // Fallback for legacy roles during migration
+  const legacyRole = await getLegacyUserRole(userId);
+  if (legacyRole === 'superadmin' || legacyRole === 'admin') return true;
+  if (legacyRole === 'content_manager') {
+    // Content managers get a subset of permissions in fallback mode
+    const contentManagerPerms = ['resorts.read', 'resorts.create', 'resorts.update', 'site_content.read', 'site_content.update', 'imports.read'];
+    return contentManagerPerms.includes(permissionKey);
+  }
+
+  return false;
 }
 
 export async function canAccessAdmin(userId: string): Promise<boolean> {
+  // 1. Try RBAC first
   const roleKeys = await getUserRoleKeys(userId);
   if (roleKeys.includes('super_admin')) return true;
 
@@ -114,13 +156,19 @@ export async function canAccessAdmin(userId: string): Promise<boolean> {
     'settings.read'
   ];
   
-  const hasAccess = permissions.some(p => adminPermissions.includes(p.key));
+  if (permissions.some(p => adminPermissions.includes(p.key))) return true;
+
+  // 2. Fallback to legacy profiles.role
+  const legacyRole = await getLegacyUserRole(userId);
+  const legacyAdminRoles = ['admin', 'superadmin', 'content_manager'];
   
-  if (!hasAccess) {
-    console.log(`Admin access denied for user ${userId}. Roles: ${roleKeys.join(', ')}`);
+  if (legacyRole && legacyAdminRoles.includes(legacyRole)) {
+    console.log(`Admin access granted via legacy role: ${legacyRole}`);
+    return true;
   }
   
-  return hasAccess;
+  console.log(`Admin access denied for user ${userId}. Roles: ${roleKeys.join(', ')}`);
+  return false;
 }
 
 export async function logAuditAction(

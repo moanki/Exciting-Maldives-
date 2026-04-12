@@ -104,8 +104,32 @@ export default function AdminDashboard() {
           .single();
         setProfile(profileData);
         
-        const labels = await getUserRoleLabels(user.id);
-        setRoleLabels(labels);
+        try {
+          const labels = await getUserRoleLabels(user.id);
+          setRoleLabels(labels);
+
+          // Auto-migration logic: If user has legacy role but no RBAC roles
+          if (profileData?.role && (!labels || labels.length === 0)) {
+            console.log('Attempting auto-migration for user:', user.email);
+            const roleKey = profileData.role === 'superadmin' ? 'super_admin' : profileData.role;
+            const { data: roleObj } = await supabase
+              .from('roles')
+              .select('id')
+              .eq('key', roleKey)
+              .maybeSingle();
+            
+            if (roleObj) {
+              await supabase.from('user_roles').insert({
+                user_id: user.id,
+                role_id: roleObj.id
+              });
+              const newLabels = await getUserRoleLabels(user.id);
+              setRoleLabels(newLabels);
+            }
+          }
+        } catch (e) {
+          console.warn('RBAC tables might be missing, skipping auto-migration.');
+        }
       }
     };
     fetchUser();
@@ -903,6 +927,28 @@ function AdminOverview() {
     fetchStats();
   }, []);
 
+  const [rbacStatus, setRbacStatus] = useState<{
+    roles: boolean;
+    permissions: boolean;
+    role_permissions: boolean;
+    user_roles: boolean;
+    audit_logs: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const checkRbac = async () => {
+      const tables = ['roles', 'permissions', 'role_permissions', 'user_roles', 'audit_logs'];
+      const status: any = {};
+      
+      for (const table of tables) {
+        const { error } = await supabase.from(table).select('id').limit(1);
+        status[table] = !error || error.code !== '42P01';
+      }
+      setRbacStatus(status);
+    };
+    checkRbac();
+  }, []);
+
   const fetchStats = async () => {
     try {
       const { count: resortsCount } = await supabase.from('resorts').select('*', { count: 'exact', head: true });
@@ -1076,6 +1122,29 @@ function AdminOverview() {
         <div className="bg-white p-8 rounded-[40px] border border-brand-navy/5 shadow-xl shadow-brand-navy/5">
           <h3 className="text-xl font-serif text-brand-navy mb-6">Database Management</h3>
           <div className="space-y-6">
+            {rbacStatus && Object.values(rbacStatus).some(v => !v) && (
+              <div className="p-6 bg-brand-coral/5 rounded-3xl border border-brand-coral/10 mb-6">
+                <div className="flex items-start gap-3 text-brand-coral mb-4">
+                  <Shield size={20} className="shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-bold font-sans">RBAC System Incomplete</h4>
+                    <p className="text-xs font-sans opacity-80 mt-1">Some RBAC tables are missing. The system is currently running in legacy fallback mode.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                  {Object.entries(rbacStatus).map(([table, exists]) => (
+                    <div key={table} className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${exists ? 'bg-green-500' : 'bg-brand-coral'}`} />
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-brand-navy/60">{table}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] font-sans text-brand-navy/60 leading-relaxed">
+                  Please run the latest SQL migration to enable full Role-Based Access Control and Audit Logging.
+                </p>
+              </div>
+            )}
+
             <div className="p-6 bg-brand-paper/50 rounded-3xl border border-brand-navy/5">
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 mb-4 font-sans">Quick Actions</h4>
               <div className="flex flex-wrap gap-4">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { getUserPermissions, Permission, canAccessAdmin, getUserRoleKeys } from '../lib/rbac';
+import { getUserPermissions, Permission, canAccessAdmin, getUserRoleKeys, getLegacyUserRole } from '../lib/rbac';
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -19,7 +19,15 @@ export function usePermissions() {
       
       try {
         const roleKeys = await getUserRoleKeys(userId);
-        const superAdmin = roleKeys.includes('super_admin');
+        let superAdmin = roleKeys.includes('super_admin');
+        
+        // Fallback for super admin detection during migration
+        if (!superAdmin) {
+          const legacyRole = await getLegacyUserRole(userId);
+          if (legacyRole === 'superadmin') {
+            superAdmin = true;
+          }
+        }
         
         if (mounted) {
           setIsSuperAdmin(superAdmin);
@@ -37,8 +45,13 @@ export function usePermissions() {
         }
       } catch (err: any) {
         console.error('Failed to load permissions:', err);
+        // We don't set error here if it's just a missing table, 
+        // because canAccessAdmin fallback might still work.
         if (mounted) {
-          setError(err.message || 'Failed to load permissions');
+          // Only set error if it's a critical failure (e.g. network)
+          if (err.message && !err.message.includes('42P01')) {
+            setError(err.message || 'Failed to load permissions');
+          }
         }
       } finally {
         if (mounted) {
