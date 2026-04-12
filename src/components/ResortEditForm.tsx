@@ -439,6 +439,20 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           source_ref: editingResort.name
         })
       });
+
+      if (!batchRes.ok) {
+        const text = await batchRes.text();
+        try {
+          const errData = JSON.parse(text);
+          throw new Error(errData.error || `Batch creation failed with status ${batchRes.status}`);
+        } catch (e) {
+          if (text.includes('<html>')) {
+            throw new Error('Import API (create-batch) returned HTML instead of JSON. Check backend route or deployment.');
+          }
+          throw new Error(`Batch creation failed: ${text.substring(0, 100)}`);
+        }
+      }
+
       const batch = await batchRes.json();
       const batchId = batch.id;
 
@@ -505,8 +519,16 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
       });
 
       if (!stageRes.ok) {
-        const errData = await stageRes.json();
-        throw new Error(errData.error || 'Failed to stage media');
+        const text = await stageRes.text();
+        try {
+          const errData = JSON.parse(text);
+          throw new Error(errData.error || `Staging failed with status ${stageRes.status}`);
+        } catch (e) {
+          if (text.includes('<html>')) {
+            throw new Error('Import API (media-to-staging) returned HTML instead of JSON. Check backend route or deployment.');
+          }
+          throw new Error(`Staging failed: ${text.substring(0, 100)}`);
+        }
       }
       
       setImportedMedia([]);

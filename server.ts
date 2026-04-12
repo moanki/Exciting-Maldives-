@@ -239,7 +239,8 @@ async function requirePermission(req: express.Request, res: express.Response, ne
 
 async function startServer() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -764,9 +765,10 @@ async function startServer() {
         target_resort_id: targetResortId,
         original_filename: item.original_filename,
         original_url: item.source_url,
-        staged_storage_path: item.storage_path,
+        staged_storage_path: item.url || item.storage_path,
         inferred_category_key: item.category,
         inferred_subcategory: item.subcategory,
+        inferred_room_type_name: item.room_type_name,
         confidence_score: 0.85,
         review_status: 'pending'
       }));
@@ -1160,6 +1162,16 @@ async function startServer() {
     res.json({ 
       configured: !!process.env.GEMINI_API_KEY,
       model: "gemini-1.5-pro/flash"
+    });
+  });
+
+  // Global API Error Handler to ensure JSON responses
+  app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("API Error:", err);
+    res.status(err.status || 500).json({
+      error: err.message || "Internal Server Error",
+      details: err.details || null,
+      path: req.path
     });
   });
 
