@@ -1665,94 +1665,92 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
         <h1 className="text-3xl font-serif text-brand-navy">Resort Management</h1>
         <div className="flex flex-wrap gap-4 items-center">
-          {bulkImportEnabled && (
-            <>
-              {/* Google Drive Import Section */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 bg-white rounded-full pl-6 pr-2 py-1 shadow-lg border border-brand-navy/5">
-                  <div className="flex items-center gap-2 text-brand-navy/40">
-                    <Database size={16} />
-                    <input 
-                      type="text" 
-                      placeholder="Drive Folder URL/ID" 
-                      className="text-[10px] font-bold uppercase tracking-widest outline-none border-none bg-transparent w-40"
-                      value={driveUrl}
-                      onChange={(e) => setDriveUrl(e.target.value)}
-                      disabled={isFetchingDrive || aiProcessing}
-                    />
+          {/* Google Drive Import Section */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 bg-white rounded-full pl-6 pr-2 py-1 shadow-lg border border-brand-navy/5">
+              <div className="flex items-center gap-2 text-brand-navy/40">
+                <Database size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Drive Folder URL/ID" 
+                  className="text-[10px] font-bold uppercase tracking-widest outline-none border-none bg-transparent w-40"
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  disabled={isFetchingDrive || aiProcessing}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={handleSaveDriveUrl}
+                  className="p-2 text-brand-navy/40 hover:text-brand-teal transition-colors"
+                  title="Save Folder URL"
+                >
+                  <Save size={14} />
+                </button>
+                <button 
+                  onClick={() => handleDriveUpload(false)}
+                  disabled={!driveUrl || isFetchingDrive || aiProcessing}
+                  className="px-4 py-2 bg-brand-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                  Import
+                </button>
+                <button 
+                  onClick={() => handleDriveUpload(true)}
+                  disabled={!driveUrl || isFetchingDrive || aiProcessing}
+                  className="px-4 py-2 bg-brand-teal text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
+                  Sync
+                </button>
+              </div>
+            </div>
+
+            {driveSyncSummary?.show && (
+              <div className="bg-white p-4 rounded-2xl shadow-xl border border-brand-teal/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-brand-teal">Sync Summary</h3>
+                  <button onClick={() => setDriveSyncSummary(null)} className="text-brand-navy/20 hover:text-brand-navy">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-lg font-serif text-brand-navy">{driveSyncSummary.total}</div>
+                    <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Total Found</div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={handleSaveDriveUrl}
-                      className="p-2 text-brand-navy/40 hover:text-brand-teal transition-colors"
-                      title="Save Folder URL"
-                    >
-                      <Save size={14} />
-                    </button>
-                    <button 
-                      onClick={() => handleDriveUpload(false)}
-                      disabled={!driveUrl || isFetchingDrive || aiProcessing}
-                      className="px-4 py-2 bg-brand-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal disabled:opacity-50 transition-all flex items-center gap-2"
-                    >
-                      {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
-                      Import
-                    </button>
-                    <button 
-                      onClick={() => handleDriveUpload(true)}
-                      disabled={!driveUrl || isFetchingDrive || aiProcessing}
-                      className="px-4 py-2 bg-brand-teal text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy disabled:opacity-50 transition-all flex items-center gap-2"
-                    >
-                      {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
-                      Sync
-                    </button>
+                  <div className="text-center">
+                    <div className="text-lg font-serif text-brand-teal">{driveSyncSummary.new}</div>
+                    <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">New Staged</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-serif text-amber-500">{driveSyncSummary.skipped}</div>
+                    <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Skipped</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-serif text-red-500">{driveSyncSummary.failed}</div>
+                    <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Failed</div>
                   </div>
                 </div>
-
-                {driveSyncSummary?.show && (
-                  <div className="bg-white p-4 rounded-2xl shadow-xl border border-brand-teal/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-brand-teal">Sync Summary</h3>
-                      <button onClick={() => setDriveSyncSummary(null)} className="text-brand-navy/20 hover:text-brand-navy">
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="text-center">
-                        <div className="text-lg font-serif text-brand-navy">{driveSyncSummary.total}</div>
-                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Total Found</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-serif text-brand-teal">{driveSyncSummary.new}</div>
-                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">New Staged</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-serif text-amber-500">{driveSyncSummary.skipped}</div>
-                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Skipped</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-serif text-red-500">{driveSyncSummary.failed}</div>
-                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Failed</div>
-                      </div>
-                    </div>
-                    {driveSyncSummary.new > 0 && (
-                      <div className="mt-4 pt-3 border-t border-brand-navy/5">
-                        <button 
-                          onClick={() => navigate('/admin/imports')}
-                          className="w-full py-2 bg-brand-navy text-white rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-brand-navy/90 transition-all"
-                        >
-                          Review New Resorts
-                        </button>
-                      </div>
-                    )}
+                {driveSyncSummary.new > 0 && (
+                  <div className="mt-4 pt-3 border-t border-brand-navy/5">
+                    <button 
+                      onClick={() => navigate('/admin/imports')}
+                      className="w-full py-2 bg-brand-navy text-white rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-brand-navy/90 transition-all"
+                    >
+                      Review New Resorts
+                    </button>
                   </div>
                 )}
               </div>
+            )}
+          </div>
 
-              <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
-                <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
-                <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
-              </label>
-            </>
+          {bulkImportEnabled && (
+            <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">
+              <Upload size={16} /> {aiProcessing && !isFetchingDrive ? 'Processing AI...' : 'Smart Upload PDF'}
+              <input type="file" className="hidden" accept=".pdf" multiple onChange={handleFileUpload} disabled={aiProcessing || isFetchingDrive} />
+            </label>
           )}
           <button 
             onClick={() => {

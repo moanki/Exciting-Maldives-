@@ -68,7 +68,8 @@ async function getDriveAuth() {
 
   if (fileExists) {
     try {
-      credentials = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+      const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
+      credentials = JSON.parse(fileContent);
       source = 'service_account.json';
     } catch (e) {
       console.error("Failed to parse service_account.json:", e);
@@ -100,6 +101,10 @@ async function getDriveAuth() {
     throw new Error(`Missing "private_key" in ${source}.`);
   }
 
+  console.log(`[Drive Auth] Service account JSON loaded from ${source}`);
+  console.log(`[Drive Auth] Client Email: ${credentials.client_email}`);
+  console.log(`[Drive Auth] Private Key exists: ${!!credentials.private_key}`);
+
   // Harden Private Key
   let privateKey = credentials.private_key.trim();
   
@@ -116,16 +121,22 @@ async function getDriveAuth() {
     throw new Error(`Invalid PEM format in ${source}: Missing BEGIN/END PRIVATE KEY markers.`);
   }
 
-  console.log(`Google Drive Auth initialized successfully.`);
-  console.log(`- Source: ${source}`);
-  console.log(`- Project ID: ${credentials.project_id || 'N/A'}`);
-  console.log(`- Client Email: ${credentials.client_email}`);
-
-  return new JWT({
-    email: credentials.client_email,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
+  try {
+    const auth = new JWT({
+      email: credentials.client_email,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    });
+    console.log(`Google Drive Auth initialized successfully.`);
+    return auth;
+  } catch (err: any) {
+    console.error("Failed to initialize JWT client:", err);
+    // Check for OpenSSL error and provide a more helpful message
+    if (err.message && err.message.includes('DECODER routines::unsupported')) {
+      throw new Error("Google Drive Authentication Error: The private key format is unsupported. This usually means the key is malformed or has incorrect line breaks. Ensure the private key in your service account JSON is a valid PEM string.");
+    }
+    throw new Error(`Google Drive Authentication Error: ${err.message}`);
+  }
 }
 
 // Helper for classification with weighted scoring
