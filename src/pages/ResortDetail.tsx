@@ -1,15 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { motion } from 'motion/react';
-import { MapPin, Plane, Coffee, Home, Star, ArrowLeft, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { MapPin, Plane, Coffee, Home, Star, ArrowLeft, CheckCircle, Images, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { MediaLightbox } from '../components/MediaLightbox';
+import { MediaGallerySection } from '../components/MediaGallerySection';
 
 export default function ResortDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [resort, setResort] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Lightbox State
+  const [lightbox, setLightbox] = useState({
+    isOpen: false,
+    media: [] as any[],
+    title: '',
+    initialIndex: 0,
+    showFilters: false
+  });
 
   useEffect(() => {
     const fetchResort = async () => {
@@ -43,6 +54,20 @@ export default function ResortDetail() {
   const activityMedia = getMediaByKeys(['activities', 'experiences'], 'activities');
   const roomMedia = getMediaByKeys(['room_types', 'rooms'], 'rooms');
   const mapMedia = getMediaByKeys(['maps'], 'maps');
+  const facilitiesMedia = getMediaByKeys(['facilities'], 'facilities');
+  const beachMedia = getMediaByKeys(['beaches'], 'beaches');
+
+  const allMedia = resort.resort_media || [];
+
+  const openLightbox = (media: any[], title: string, index: number = 0, showFilters: boolean = false) => {
+    setLightbox({
+      isOpen: true,
+      media,
+      title,
+      initialIndex: index,
+      showFilters
+    });
+  };
 
   const heroImage = resort.resort_media?.find((m: any) => m.is_hero)?.storage_path || 
                     resort.resort_media?.find((m: any) => m.resort_media_categories?.key === 'main_hero')?.storage_path ||
@@ -71,19 +96,29 @@ export default function ResortDetail() {
           <ArrowLeft size={20} className="md:size-24" />
         </button>
         
-        <div className="absolute bottom-8 md:bottom-12 left-6 right-6 md:left-8 md:right-8 max-w-7xl mx-auto">
-          <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[8px] md:text-[10px] font-bold mb-2 md:mb-4 font-sans">
-            <MapPin size={12} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
+        <div className="absolute bottom-8 md:bottom-12 left-6 right-6 md:left-8 md:right-8 max-w-7xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <div className="flex items-center text-white/80 uppercase tracking-[0.4em] text-[8px] md:text-[10px] font-bold mb-2 md:mb-4 font-sans">
+              <MapPin size={12} className="mr-2 text-brand-beige" /> {resort.atoll}, Maldives
+            </div>
+            <h1 className="text-3xl md:text-7xl font-serif text-white mb-4 leading-tight">{resort.name}</h1>
+            <div className="flex gap-3 md:gap-4">
+              <span className="bg-brand-teal text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
+                {resort.category}
+              </span>
+              <span className="bg-white/20 backdrop-blur text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
+                {resort.transfer_type}
+              </span>
+            </div>
           </div>
-          <h1 className="text-3xl md:text-7xl font-serif text-white mb-4 leading-tight">{resort.name}</h1>
-          <div className="flex gap-3 md:gap-4">
-            <span className="bg-brand-teal text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
-              {resort.category}
-            </span>
-            <span className="bg-white/20 backdrop-blur text-white px-3 md:px-4 py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest font-sans">
-              {resort.transfer_type}
-            </span>
-          </div>
+
+          <button 
+            onClick={() => openLightbox(allMedia, `${resort.name} Full Gallery`, 0, true)}
+            className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full hover:bg-white hover:text-brand-navy transition-all group self-start md:self-auto"
+          >
+            <Images size={18} className="group-hover:scale-110 transition-transform" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">See All {allMedia.length} Photos</span>
+          </button>
         </div>
       </div>
 
@@ -97,26 +132,23 @@ export default function ResortDetail() {
             </div>
           </section>
 
-          {/* Categorized Gallery */}
-          {[
-            { id: 'dining', label: 'Dining', items: diningMedia },
-            { id: 'spa', label: 'Spa & Wellness', items: spaMedia },
-            { id: 'activities', label: 'Experiences', items: activityMedia }
-          ].map(section => {
-            if (!section.items || section.items.length === 0) return null;
-            return (
-              <section key={section.id} className="space-y-6">
-                <h2 className="text-3xl font-serif text-brand-navy capitalize">{section.label} <span className="italic text-brand-teal">Gallery</span></h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {section.items.map((m: any) => (
-                    <div key={m.id} className="aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                      <img src={m.storage_path} alt={section.label} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" loading="lazy" />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          {/* Categorized Gallery Sections */}
+          <div className="space-y-24">
+            {[
+              { id: 'dining', label: 'Dining', items: diningMedia },
+              { id: 'spa', label: 'Spa & Wellness', items: spaMedia },
+              { id: 'activities', label: 'Experiences', items: activityMedia },
+              { id: 'beaches', label: 'Beaches', items: beachMedia },
+              { id: 'facilities', label: 'Facilities', items: facilitiesMedia }
+            ].map(section => (
+              <MediaGallerySection
+                key={section.id}
+                title={section.label}
+                media={section.items}
+                onViewMore={() => openLightbox(section.items, `${section.label} Gallery`)}
+              />
+            ))}
+          </div>
 
           <section className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12 border-y border-brand-navy/5">
             <div className="text-center">
@@ -155,37 +187,52 @@ export default function ResortDetail() {
 
           <section>
             <h2 className="text-3xl font-serif mb-8 text-brand-navy">Room <span className="italic text-brand-teal">Types</span></h2>
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {resort.room_types?.map((room: any, i: number) => {
-                // Try to find a matching image from roomMedia based on room name
-                const matchingMedia = roomMedia?.find((m: any) => 
+                const matchingMedia = roomMedia?.filter((m: any) => 
                   m.room_type_name?.toLowerCase() === room.name?.toLowerCase() ||
                   m.subcategory?.toLowerCase() === room.name?.toLowerCase() || 
                   m.original_filename?.toLowerCase().includes(room.name?.toLowerCase())
                 );
-                const roomImage = room.image_url || matchingMedia?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
+                const roomImage = room.image_url || matchingMedia?.[0]?.storage_path || room.image || `https://images.unsplash.com/photo-1514282401047-d79a71a590e8`;
 
                 return (
-                  <div key={i} className="bg-white rounded-3xl overflow-hidden border border-brand-navy/5 flex flex-col md:flex-row shadow-sm hover:shadow-xl hover:shadow-brand-navy/5 transition-all">
-                    <div className="md:w-1/3 aspect-video md:aspect-auto">
+                  <motion.div 
+                    key={i} 
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="bg-white rounded-[32px] overflow-hidden border border-brand-navy/5 flex flex-col shadow-sm hover:shadow-2xl hover:shadow-brand-navy/10 transition-all group"
+                  >
+                    <div className="aspect-[4/3] relative overflow-hidden">
                       <img 
-                        src={`${roomImage}${roomImage.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=600' : ''}`} 
+                        src={`${roomImage}${roomImage.includes('unsplash') ? '&auto=format&fit=crop&q=80&w=800' : ''}`} 
                         alt={room.name} 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                         referrerPolicy="no-referrer"
                         loading="lazy"
-                        decoding="async"
                       />
-                    </div>
-                    <div className="p-8 flex-1">
-                      <h3 className="text-2xl font-serif mb-2 text-brand-navy">{room.name}</h3>
-                      <p className="text-brand-navy/60 text-sm font-sans font-light mb-4 leading-relaxed">{room.description}</p>
-                      <div className="flex gap-4 text-[10px] uppercase tracking-widest font-bold text-brand-teal font-sans">
-                        <span>Max Guests: {room.max_guests}</span>
-                        <span>Size: {room.size}</span>
+                      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-brand-navy">
+                        {room.size}
                       </div>
                     </div>
-                  </div>
+                    <div className="p-8 flex-1 flex flex-col">
+                      <h3 className="text-2xl font-serif mb-3 text-brand-navy">{room.name}</h3>
+                      <p className="text-brand-navy/60 text-sm font-sans font-light mb-6 leading-relaxed flex-1">{room.description}</p>
+                      <div className="flex items-center justify-between mt-auto pt-6 border-t border-brand-navy/5">
+                        <div className="flex gap-4 text-[9px] uppercase tracking-widest font-bold text-brand-navy/40 font-sans">
+                          <span>Max Guests: {room.max_guests}</span>
+                        </div>
+                        <button 
+                          onClick={() => openLightbox(matchingMedia || [], `${room.name} Gallery`)}
+                          className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-brand-teal hover:text-brand-navy transition-all"
+                        >
+                          View Gallery
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -219,6 +266,15 @@ export default function ResortDetail() {
           </div>
         </div>
       </div>
+      {/* Lightbox Component */}
+      <MediaLightbox
+        isOpen={lightbox.isOpen}
+        onClose={() => setLightbox({ ...lightbox, isOpen: false })}
+        media={lightbox.media}
+        title={lightbox.title}
+        initialIndex={lightbox.initialIndex}
+        showFilters={lightbox.showFilters}
+      />
     </div>
   );
 }

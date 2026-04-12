@@ -140,6 +140,21 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const [category, setCategory] = useState(formData.category || '');
   const [bannerUrl, setBannerUrl] = useState(formData.banner_url || '');
 
+  const handleMediaSelect = (selectedMedia: any) => {
+    if (activeMediaField === 'banner') {
+      setBannerUrl(selectedMedia.storage_path);
+    } else if (activeMediaField?.startsWith('room_type_')) {
+      const index = parseInt(activeMediaField.replace('room_type_', ''));
+      if (!isNaN(index) && roomTypes[index]) {
+        const newTypes = [...roomTypes];
+        newTypes[index].image_url = selectedMedia.storage_path;
+        setRoomTypes(newTypes);
+      }
+    }
+    setIsMediaLibraryOpen(false);
+    setActiveMediaField(null);
+  };
+
   const handleGenerateAICopy = async () => {
     if (!formData.name) {
       showNotification('Please enter a resort name first');
@@ -584,6 +599,15 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           {editingResort ? 'Update Resort' : 'Add Resort'}
         </button>
       </div>
+
+      {isMediaLibraryOpen && (
+        <MediaLibraryModal
+          onClose={() => setIsMediaLibraryOpen(false)}
+          onSelect={handleMediaSelect}
+          resortId={editingResort?.id}
+          initialCategory={activeMediaField === 'banner' ? 'banner' : activeMediaField?.startsWith('room_type_') ? 'rooms' : undefined}
+        />
+      )}
     </form>
   );
 };
