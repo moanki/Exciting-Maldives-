@@ -24,6 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import { supabase } from '../supabase';
+import { importService } from '../services/importService';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ImportBatch {
@@ -355,20 +356,7 @@ function BatchReviewConsole({ batchId, onBack }: { batchId: string, onBack: () =
 
     setPublishing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const response = await fetch('/api/import/publish-batch', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ batchId })
-      });
-      
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Publish failed');
+      const result = await importService.publishBatch(batchId);
       
       if (result.errors && result.errors.length > 0) {
         alert(`Published with ${result.errors.length} errors. Check error log.`);

@@ -11,6 +11,7 @@ import { ResortRoomTypesPanel } from './ResortRoomTypesPanel';
 import { ResortMediaPanel } from './ResortMediaPanel';
 import { ResortImportPanel } from './ResortImportPanel';
 import { uploadResortFile } from '../pages/AdminDashboard';
+import { importService } from '../services/importService';
 
 const TextInput = ({ label, value, onChange, icon, type = 'text' }: any) => (
   <div className="space-y-2">
@@ -424,40 +425,14 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setUploadProgress(0);
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      const batchRes = await fetch('/api/import/create-batch', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          batch_type: 'media_import',
-          source_type: 'mixed_upload',
-          source_ref: editingResort.name
-        })
-      }).catch(err => {
-        throw new Error('Backend API is unreachable. Please ensure the server is running and accessible.');
+      // 1. Create Import Batch using importService (Direct Supabase)
+      const batch = await importService.createBatch({
+        batch_type: 'media_import',
+        source_type: 'mixed_upload',
+        source_ref: editingResort.name
       });
-
-      if (!batchRes.ok) {
-        const text = await batchRes.text();
-        try {
-          const errData = JSON.parse(text);
-          throw new Error(errData.error || `Batch creation failed with status ${batchRes.status}`);
-        } catch (e) {
-          if (text.includes('<html>')) {
-            throw new Error('Import API (create-batch) returned HTML instead of JSON. Check backend route or deployment.');
-          }
-          throw new Error(`Batch creation failed: ${text.substring(0, 100)}`);
-        }
-      }
-
-      const batch = await batchRes.json();
+      
       const batchId = batch.id;
-
       const mediaItemsToStage = [];
       
       for (let i = 0; i < importedMedia.length; i++) {
@@ -471,6 +446,7 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
             let fileToUpload = item.file;
             
             if (!fileToUpload && storagePath.startsWith('http')) {
+              // Note: Proxy still needs a backend, but we'll try to handle it
               const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(storagePath)}`;
               const response = await fetch(proxyUrl);
               if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
@@ -483,12 +459,14 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
             }
 
             if (fileToUpload) {
+              // Upload directly to Supabase Storage with staging path
               const internalUrl = await uploadResortFile(
                 fileToUpload, 
                 formData.name || editingResort.name, 
                 item.category, 
                 (p) => setUploadProgress(((i + p/100) / importedMedia.length) * 100),
-                showNotification
+                showNotification,
+                true // isStaging = true
               );
               if (internalUrl) storagePath = internalUrl;
             }
@@ -507,31 +485,8 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
         });
       }
       
-      const stageRes = await fetch('/api/import/media-to-staging', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          batchId,
-          targetResortId: editingResort.id,
-          mediaItems: mediaItemsToStage
-        })
-      });
-
-      if (!stageRes.ok) {
-        const text = await stageRes.text();
-        try {
-          const errData = JSON.parse(text);
-          throw new Error(errData.error || `Staging failed with status ${stageRes.status}`);
-        } catch (e) {
-          if (text.includes('<html>')) {
-            throw new Error('Import API (media-to-staging) returned HTML instead of JSON. Check backend route or deployment.');
-          }
-          throw new Error(`Staging failed: ${text.substring(0, 100)}`);
-        }
-      }
+      // 2. Stage Media Items using importService (Direct Supabase)
+      await importService.stageMediaItems(batchId, editingResort.id, mediaItemsToStage);
       
       setImportedMedia([]);
       setImportState('saved');

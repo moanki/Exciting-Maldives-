@@ -10,6 +10,7 @@ import { RoleManagement } from '../components/admin/rbac/RoleManagement';
 import { PermissionMatrix } from '../components/admin/rbac/PermissionMatrix';
 import { usePermissions } from '../hooks/usePermissions';
 import { logAuditAction, getUserRoleLabels } from '../lib/rbac';
+import { importService } from '../services/importService';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
 import maplibregl from 'maplibre-gl';
@@ -47,11 +48,12 @@ export async function uploadFile(file: File, path: string, bucket: string = 'sit
   return publicUrl;
 }
 
-export async function uploadResortFile(file: File, resortName: string, category: string, setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void) {
+export async function uploadResortFile(file: File, resortName: string, category: string, setUploadProgress?: (p: number | null) => void, showNotification?: (msg: string) => void, isStaging: boolean = false) {
   if (setUploadProgress) setUploadProgress(0);
   const fileExt = file.name.split('.').pop();
   const fileName = `${Math.random()}.${fileExt}`;
-  const filePath = `resorts/${resortName.toLowerCase().replace(/\s+/g, '-')}/${category.toLowerCase().replace(/\s+/g, '-')}/${fileName}`;
+  const baseDir = isStaging ? 'staging/resorts' : 'resorts';
+  const filePath = `${baseDir}/${resortName.toLowerCase().replace(/\s+/g, '-')}/${category.toLowerCase().replace(/\s+/g, '-')}/${fileName}`;
 
   const { error: uploadError, data } = await supabase.storage
     .from('site-assets')
@@ -1290,19 +1292,11 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      // 1. Create Batch
-      const batchRes = await fetch('/api/import/create-batch', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          batch_type: 'resort_pdf_import',
-          source_type: 'local_upload'
-        })
+      // 1. Create Batch using importService
+      const batch = await importService.createBatch({
+        batch_type: 'resort_pdf_import',
+        source_type: 'local_upload'
       });
-      const batch = await batchRes.json();
       const batchId = batch.id;
 
       setSmartUploadProgress({
@@ -1461,20 +1455,12 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      // 1. Create Batch
-      const batchRes = await fetch('/api/import/create-batch', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          batch_type: 'resort_pdf_import',
-          source_type: 'google_drive',
-          source_ref: driveUrl
-        })
+      // 1. Create Batch using importService
+      const batch = await importService.createBatch({
+        batch_type: 'resort_pdf_import',
+        source_type: 'google_drive',
+        source_ref: driveUrl
       });
-      const batch = await batchRes.json();
       const batchId = batch.id;
 
       setSmartUploadProgress({

@@ -660,3 +660,186 @@ drop policy if exists "Admins can manage all messages" on public.messages;
 create policy "Admins can manage all messages" on public.messages for all using (public.has_permission('chat.read'));
 drop policy if exists "Public can insert messages" on public.messages;
 create policy "Public can insert messages" on public.messages for insert with check (true);
+
+-- RPC for publishing import batches
+create or replace function public.publish_import_batch(batch_id uuid)
+returns json
+language plpgsql
+security definer
+as $$
+declare
+  staged_resort record;
+  staged_media record;
+  new_resort_id uuid;
+  target_res_id uuid;
+  cat_id uuid;
+  cat_key text;
+  pub_results jsonb := '[]'::jsonb;
+  err_log jsonb := '[]'::jsonb;
+  res_summary jsonb;
+  med_summary jsonb;
+  final_status text;
+  current_user_id uuid := auth.uid();
+begin
+  -- Check permissions
+  if not public.has_permission('imports.publish') then
+    raise exception 'Insufficient permissions';
+  end if;
+
+  -- 1. Publish Resorts
+  for staged_resort in 
+    select * from public.resort_staging 
+    where import_batch_id = batch_id 
+    and review_status = 'approved' 
+    and published_at is null
+  loop
+    begin
+      if staged_resort.duplicate_candidate_resort_id is not null then
+        update public.resorts 
+        set 
+          atoll = (staged_resort.normalized_json->>'atoll'),
+          location = (staged_resort.normalized_json->>'location'),
+          category = (staged_resort.normalized_json->>'category'),
+          transfer_type = (staged_resort.normalized_json->>'transfer_type'),
+          description = (staged_resort.normalized_json->>'description'),
+          highlights = (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'highlights') x),
+          meal_plans = (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'meal_plans') x),
+          rooms = (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'rooms') x),
+          room_types = (staged_resort.normalized_json->'room_types'),
+          status = 'published',
+          updated_at = now()
+        where id = staged_resort.duplicate_candidate_resort_id;
+        new_resort_id := staged_resort.duplicate_candidate_resort_id;
+      else
+        insert into public.resorts (
+          name, atoll, location, category, transfer_type, description, 
+          highlights, meal_plans, rooms, room_types, status
+        ) values (
+          staged_resort.normalized_json->>'name',
+          staged_resort.normalized_json->>'atoll',
+          staged_resort.normalized_json->>'location',
+          staged_resort.normalized_json->>'category',
+          staged_resort.normalized_json->>'transfer_type',
+          staged_resort.normalized_json->>'description',
+          (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'highlights') x),
+          (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'meal_plans') x),
+          (select array_agg(x) from jsonb_array_elements_text(staged_resort.normalized_json->'rooms') x),
+          staged_resort.normalized_json->'room_types',
+          'published'
+        ) returning id into new_resort_id;
+      end if;
+
+      update public.resort_staging 
+      set 
+        published_at = now(),
+        reviewer_id = current_user_id
+      where id = staged_resort.id;
+
+      pub_results := pub_results || jsonb_build_object('type', 'resort', 'id', new_resort_id, 'stagingId', staged_resort.id);
+    exception when others then
+      err_log := err_log || jsonb_build_object('type', 'resort', 'id', staged_resort.id, 'error', SQLERRM);
+    end;
+  end loop;
+
+  -- 2. Publish Media
+  for staged_media in 
+    select * from public.media_staging 
+    where import_batch_id = batch_id 
+    and review_status = 'approved' 
+    and published_at is null
+  loop
+    begin
+      target_res_id := staged_media.target_resort_id;
+      if target_res_id is null and staged_media.resort_staging_id is not null then
+        select id into target_res_id 
+        from (select (jsonb_array_elements(pub_results)->>'id')::uuid as id, (jsonb_array_elements(pub_results)->>'stagingId')::uuid as sid) x
+        where sid = staged_media.resort_staging_id;
+      end if;
+
+      if target_res_id is not null then
+        cat_key := coalesce(staged_media.reviewer_override_category_key, staged_media.inferred_category_key, 'uncategorized');
+        
+        select id into cat_id 
+        from public.resort_media_categories 
+        where resort_id = target_res_id and key = cat_key;
+
+        if cat_id is null then
+          insert into public.resort_media_categories (resort_id, key, label)
+          values (
+            target_res_id, 
+            cat_key, 
+            initcap(replace(cat_key, '_', ' '))
+          ) returning id into cat_id;
+        end if;
+
+        insert into public.resort_media (
+          resort_id, category, category_id, subcategory, room_type_name, 
+          storage_path, original_filename, source_url, import_batch_id, status
+        ) values (
+          target_res_id,
+          cat_key,
+          cat_id,
+          coalesce(staged_media.reviewer_override_subcategory, staged_media.inferred_subcategory),
+          coalesce(staged_media.reviewer_override_room_type_name, staged_media.inferred_room_type_name),
+          staged_media.staged_storage_path,
+          staged_media.original_filename,
+          staged_media.original_url,
+          batch_id,
+          'active'
+        );
+
+        update public.media_staging 
+        set 
+          published_at = now(),
+          reviewer_id = current_user_id
+        where id = staged_media.id;
+      else
+        raise exception 'Target resort ID missing';
+      end if;
+    exception when others then
+      err_log := err_log || jsonb_build_object('type', 'media', 'id', staged_media.id, 'error', SQLERRM);
+    end;
+  end loop;
+
+  -- 3. Update Batch Summary
+  select jsonb_build_object(
+    'total', count(*),
+    'pending', count(*) filter (where review_status = 'pending'),
+    'approved', count(*) filter (where review_status = 'approved' and published_at is null),
+    'rejected', count(*) filter (where review_status = 'rejected'),
+    'published', count(*) filter (where published_at is not null)
+  ) into res_summary from public.resort_staging where import_batch_id = batch_id;
+
+  select jsonb_build_object(
+    'total', count(*),
+    'pending', count(*) filter (where review_status = 'pending'),
+    'approved', count(*) filter (where review_status = 'approved' and published_at is null),
+    'rejected', count(*) filter (where review_status = 'rejected'),
+    'published', count(*) filter (where published_at is not null)
+  ) into med_summary from public.media_staging where import_batch_id = batch_id;
+
+  final_status := 'published';
+  if (res_summary->>'pending')::int > 0 or (med_summary->>'pending')::int > 0 then
+    final_status := 'reviewing';
+  elsif (res_summary->>'approved')::int > 0 or (med_summary->>'approved')::int > 0 then
+    final_status := 'partially_approved';
+  end if;
+  
+  if jsonb_array_length(err_log) > 0 and (res_summary->>'published')::int = 0 and (med_summary->>'published')::int = 0 then
+    final_status := 'failed';
+  end if;
+
+  update public.import_batches 
+  set 
+    status = final_status,
+    summary_json = jsonb_build_object('resorts', res_summary, 'media', med_summary),
+    error_log_json = err_log
+  where id = batch_id;
+
+  return json_build_object(
+    'success', jsonb_array_length(err_log) = 0,
+    'publishedCount', (res_summary->>'published')::int + (med_summary->>'published')::int,
+    'errors', err_log
+  );
+end;
+$$;
