@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles, Save, Download } from 'lucide-react';
 import { supabase } from '../supabase';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
@@ -1440,16 +1440,76 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     }
   };
 
-  const [driveUrl, setDriveUrl] = useState(() => localStorage.getItem('admin_drive_url') || '');
+  const [driveUrl, setDriveUrl] = useState('');
   const [isFetchingDrive, setIsFetchingDrive] = useState(false);
+  const [driveSyncSummary, setDriveSyncSummary] = useState<{
+    total: number;
+    new: number;
+    skipped: number;
+    failed: number;
+    show: boolean;
+  } | null>(null);
 
-  const handleDriveUpload = async () => {
+  useEffect(() => {
+    const loadDriveUrl = async () => {
+      try {
+        const settings = await getSiteSettings(true);
+        if (settings.google_drive_import_url) {
+          setDriveUrl(settings.google_drive_import_url);
+        } else {
+          // Fallback to localStorage for backward compatibility
+          const local = localStorage.getItem('admin_drive_url');
+          if (local) setDriveUrl(local);
+        }
+      } catch (e) {
+        console.error('Failed to load drive URL from settings:', e);
+      }
+    };
+    loadDriveUrl();
+  }, []);
+
+  const handleSaveDriveUrl = async () => {
+    if (!driveUrl) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Save to site_settings
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert({ 
+          key: 'google_drive_import_url:published', 
+          value: driveUrl 
+        }, { onConflict: 'key' });
+      
+      if (error) throw error;
+
+      // Also save draft
+      await supabase
+        .from('site_settings')
+        .upsert({ 
+          key: 'google_drive_import_url:draft', 
+          value: driveUrl 
+        }, { onConflict: 'key' });
+
+      localStorage.setItem('admin_drive_url', driveUrl);
+      clearSettingsCache();
+      showNotification('Google Drive folder URL saved to settings');
+    } catch (e: any) {
+      showNotification('Failed to save Drive URL: ' + e.message);
+    }
+  };
+
+  const handleDriveUpload = async (skipDuplicates = false) => {
     if (!driveUrl) return;
 
     localStorage.setItem('admin_drive_url', driveUrl);
 
     setIsFetchingDrive(true);
     setAiProcessing(true);
+    setDriveSyncSummary(null);
+    
+    let stats = { total: 0, new: 0, skipped: 0, failed: 0 };
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1497,6 +1557,8 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         throw new Error('No PDFs found in the provided Google Drive folder.');
       }
 
+      stats.total = files.length;
+
       setSmartUploadProgress({
         total: files.length,
         current: 0,
@@ -1539,21 +1601,33 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
             body: JSON.stringify({
               batchId,
               base64Data: base64,
-              filename: file.name
+              filename: file.name,
+              skipDuplicates
             })
           });
           
           if (!res.ok) throw new Error('Staging failed');
 
-          setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+          const result = await res.json();
+          if (result.skipped) {
+            stats.skipped++;
+          } else {
+            stats.new++;
+            setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+          }
         } catch (err) {
           console.error(`Failed processing ${file.name}:`, err);
+          stats.failed++;
           setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
         }
       }
       
-      showNotification('Google Drive batch ingested to staging');
-      navigate('/admin/imports');
+      setDriveSyncSummary({ ...stats, show: true });
+      showNotification(skipDuplicates ? 'Google Drive sync completed' : 'Google Drive batch ingested to staging');
+      
+      if (!skipDuplicates) {
+        navigate('/admin/imports');
+      }
     } catch (error: any) {
       console.error('Drive fetch error:', error);
       showNotification(`Error: ${error.message}`);
@@ -1594,26 +1668,84 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
           {bulkImportEnabled && (
             <>
               {/* Google Drive Import Section */}
-              <div className="flex items-center gap-2 bg-white rounded-full pl-6 pr-2 py-1 shadow-lg border border-brand-navy/5">
-                <div className="flex items-center gap-2 text-brand-navy/40">
-                  <Database size={16} />
-                  <input 
-                    type="text" 
-                    placeholder="Drive Folder URL/ID" 
-                    className="text-[10px] font-bold uppercase tracking-widest outline-none border-none bg-transparent w-40"
-                    value={driveUrl}
-                    onChange={(e) => setDriveUrl(e.target.value)}
-                    disabled={isFetchingDrive || aiProcessing}
-                  />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 bg-white rounded-full pl-6 pr-2 py-1 shadow-lg border border-brand-navy/5">
+                  <div className="flex items-center gap-2 text-brand-navy/40">
+                    <Database size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Drive Folder URL/ID" 
+                      className="text-[10px] font-bold uppercase tracking-widest outline-none border-none bg-transparent w-40"
+                      value={driveUrl}
+                      onChange={(e) => setDriveUrl(e.target.value)}
+                      disabled={isFetchingDrive || aiProcessing}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={handleSaveDriveUrl}
+                      className="p-2 text-brand-navy/40 hover:text-brand-teal transition-colors"
+                      title="Save Folder URL"
+                    >
+                      <Save size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleDriveUpload(false)}
+                      disabled={!driveUrl || isFetchingDrive || aiProcessing}
+                      className="px-4 py-2 bg-brand-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal disabled:opacity-50 transition-all flex items-center gap-2"
+                    >
+                      {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                      Import
+                    </button>
+                    <button 
+                      onClick={() => handleDriveUpload(true)}
+                      disabled={!driveUrl || isFetchingDrive || aiProcessing}
+                      className="px-4 py-2 bg-brand-teal text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy disabled:opacity-50 transition-all flex items-center gap-2"
+                    >
+                      {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
+                      Sync
+                    </button>
+                  </div>
                 </div>
-                <button 
-                  onClick={handleDriveUpload}
-                  disabled={!driveUrl || isFetchingDrive || aiProcessing}
-                  className="bg-brand-navy text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-teal disabled:opacity-50 transition-all flex items-center gap-2"
-                >
-                  {isFetchingDrive ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
-                  Import from Drive
-                </button>
+
+                {driveSyncSummary?.show && (
+                  <div className="bg-white p-4 rounded-2xl shadow-xl border border-brand-teal/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-brand-teal">Sync Summary</h3>
+                      <button onClick={() => setDriveSyncSummary(null)} className="text-brand-navy/20 hover:text-brand-navy">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <div className="text-lg font-serif text-brand-navy">{driveSyncSummary.total}</div>
+                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Total Found</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-serif text-brand-teal">{driveSyncSummary.new}</div>
+                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">New Staged</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-serif text-amber-500">{driveSyncSummary.skipped}</div>
+                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Skipped</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-serif text-red-500">{driveSyncSummary.failed}</div>
+                        <div className="text-[8px] uppercase tracking-widest text-brand-navy/40">Failed</div>
+                      </div>
+                    </div>
+                    {driveSyncSummary.new > 0 && (
+                      <div className="mt-4 pt-3 border-t border-brand-navy/5">
+                        <button 
+                          onClick={() => navigate('/admin/imports')}
+                          className="w-full py-2 bg-brand-navy text-white rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-brand-navy/90 transition-all"
+                        >
+                          Review New Resorts
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <label className="cursor-pointer bg-brand-teal text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all flex items-center gap-2 font-sans shadow-lg shadow-brand-teal/20">

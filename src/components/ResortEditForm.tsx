@@ -123,9 +123,11 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
   const tabs = ['Overview', 'Room Types', 'Media Library', 'Import Center'];
   const [media, setMedia] = useState<any[]>([]);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
+  const [importStats, setImportStats] = useState<{ pages_scanned: number; images_found: number } | null>(null);
   const [importUrl, setImportUrl] = useState('');
   const [importState, setImportState] = useState<'idle' | 'processing' | 'ready_for_review' | 'saving' | 'saved' | 'failed'>('idle');
   const [importedMedia, setImportedMedia] = useState<any[]>([]); 
+  const [importProgress, setImportProgress] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
   const [activeMediaField, setActiveMediaField] = useState<string | null>(null);
@@ -374,6 +376,8 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     if (!importUrl) return;
     setImportState('processing');
     setImportError(null);
+    setImportStats(null);
+    setImportProgress('Initializing smart crawler...');
     
     try {
       const response = await fetch('/api/import-media', {
@@ -393,9 +397,10 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           ...m,
           is_hero: m.category === 'main_hero' || m.category === 'banner'
         })));
+        setImportStats(data.stats);
         setImportState('ready_for_review');
       } else {
-        setImportError('No images found at the provided URL.');
+        setImportError('No images found at the provided URL. The site might be blocking automated access or has no direct image links.');
         setImportState('failed');
       }
     } catch (error: any) {
@@ -582,6 +587,8 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
           processFiles={processFiles}
           importState={importState}
           importError={importError}
+          importStats={importStats}
+          importProgress={importProgress}
           importedMedia={importedMedia}
           setImportedMedia={setImportedMedia}
           handleAIAutoTag={handleAIAutoTag}

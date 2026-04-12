@@ -8,6 +8,8 @@ interface ResortImportPanelProps {
   processFiles: (files: FileList | File[]) => void;
   importState: string;
   importError: string | null;
+  importStats?: { pages_scanned: number; images_found: number } | null;
+  importProgress?: string;
   importedMedia: any[];
   setImportedMedia: (media: any[]) => void;
   handleAIAutoTag: () => void;
@@ -19,7 +21,7 @@ interface ResortImportPanelProps {
 }
 
 export const ResortImportPanel: React.FC<ResortImportPanelProps> = ({ 
-  importUrl, setImportUrl, handleImportUrl, processFiles, importState, importError, importedMedia, setImportedMedia, handleAIAutoTag, isClassifyingAI, handleFinalSave, setImportState, defaultCategories, roomSubcategories
+  importUrl, setImportUrl, handleImportUrl, processFiles, importState, importError, importStats, importProgress, importedMedia, setImportedMedia, handleAIAutoTag, isClassifyingAI, handleFinalSave, setImportState, defaultCategories, roomSubcategories
 }) => (
   <div className="space-y-12">
     <div className="flex justify-between items-center">
@@ -99,8 +101,11 @@ export const ResortImportPanel: React.FC<ResortImportPanelProps> = ({
 
     {importState === 'processing' && (
       <div className="flex flex-col items-center justify-center py-20 text-brand-navy/40">
-        <Loader2 size={48} className="animate-spin mb-4" />
-        <p className="text-sm font-bold uppercase tracking-widest">Processing Media...</p>
+        <Loader2 size={48} className="animate-spin mb-4 text-brand-teal" />
+        <p className="text-sm font-bold uppercase tracking-widest mb-2">Processing Media...</p>
+        {importProgress && (
+          <p className="text-[10px] font-medium text-brand-navy/30 animate-pulse">{importProgress}</p>
+        )}
       </div>
     )}
 
@@ -119,7 +124,16 @@ export const ResortImportPanel: React.FC<ResortImportPanelProps> = ({
             </div>
             <div>
               <p className="text-sm font-bold text-brand-navy">Ready for Review</p>
-              <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold">Found {importedMedia.length} items. Please verify categories before saving.</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] text-brand-navy/40 uppercase tracking-widest font-bold">
+                  Found {importedMedia.length} items.
+                </p>
+                {importStats && (
+                  <span className="text-[8px] px-2 py-0.5 bg-brand-navy/5 rounded-full text-brand-navy/30 font-bold uppercase tracking-tighter">
+                    Scanned {importStats.pages_scanned} pages
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-3">

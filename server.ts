@@ -41,6 +41,18 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Helper to normalize resort names for duplicate detection
+const normalizeResortName = (name: string) => {
+  if (!name) return '';
+  return name.toLowerCase()
+    .replace(/resort/gi, '')
+    .replace(/spa/gi, '')
+    .replace(/maldives/gi, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+};
+
 // Helper for Google Drive Auth
 async function getDriveAuth() {
   const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
@@ -116,35 +128,161 @@ async function getDriveAuth() {
   });
 }
 
-// Helper for classification
-const classifyMedia = (folderName: string, fileName: string) => {
-  const combined = `${folderName.toLowerCase()} ${fileName.toLowerCase()}`;
+// Helper for classification with weighted scoring
+const classifyMedia = (folderName: string, fileName: string, pageTitle: string = '', altText: string = '') => {
+  const combined = `${folderName.toLowerCase()} ${fileName.toLowerCase()} ${pageTitle.toLowerCase()} ${altText.toLowerCase()}`;
   
-  // Priority keywords
-  const keywords = {
-    banner: ['hero', 'banner', 'cover', 'main', 'landing', 'exterior', 'aerial'],
-    rooms: ['room', 'villa', 'suite', 'residence', 'bedroom', 'accommodation', 'stay', 'living'],
-    dining: ['dining', 'restaurant', 'bar', 'breakfast', 'lunch', 'dinner', 'culinary', 'food', 'drink', 'kitchen'],
-    spa: ['spa', 'wellness', 'treatment', 'massage', 'therapy', 'gym', 'fitness', 'yoga', 'pool'],
-    activities: ['activity', 'experience', 'diving', 'snorkel', 'excursion', 'marine', 'dolphin', 'cruise', 'sport', 'kids', 'club'],
-    maps: ['map', 'floorplan', 'floor plan', 'site plan', 'layout', 'location'],
-    logos: ['logo', 'brand', 'wordmark', 'emblem', 'asset']
-  };
+  const categories = [
+    {
+      key: 'main_hero',
+      keywords: [
+        { word: 'hero', weight: 10 },
+        { word: 'banner', weight: 10 },
+        { word: 'cover', weight: 8 },
+        { word: 'main', weight: 5 },
+        { word: 'exterior', weight: 7 },
+        { word: 'aerial', weight: 9 },
+        { word: 'overview', weight: 4 },
+        { word: 'resort-view', weight: 6 }
+      ]
+    },
+    {
+      key: 'room_types',
+      keywords: [
+        { word: 'room', weight: 8 },
+        { word: 'villa', weight: 10 },
+        { word: 'suite', weight: 10 },
+        { word: 'residence', weight: 10 },
+        { word: 'bedroom', weight: 9 },
+        { word: 'accommodation', weight: 7 },
+        { word: 'stay', weight: 5 },
+        { word: 'living', weight: 6 },
+        { word: 'interior', weight: 4 },
+        { word: 'bathroom', weight: 7 }
+      ]
+    },
+    {
+      key: 'restaurants',
+      keywords: [
+        { word: 'dining', weight: 10 },
+        { word: 'restaurant', weight: 10 },
+        { word: 'bar', weight: 9 },
+        { word: 'breakfast', weight: 8 },
+        { word: 'lunch', weight: 8 },
+        { word: 'dinner', weight: 8 },
+        { word: 'culinary', weight: 7 },
+        { word: 'food', weight: 9 },
+        { word: 'drink', weight: 7 },
+        { word: 'kitchen', weight: 6 },
+        { word: 'buffet', weight: 8 },
+        { word: 'wine', weight: 7 }
+      ]
+    },
+    {
+      key: 'spa',
+      keywords: [
+        { word: 'spa', weight: 10 },
+        { word: 'wellness', weight: 10 },
+        { word: 'treatment', weight: 9 },
+        { word: 'massage', weight: 9 },
+        { word: 'therapy', weight: 8 },
+        { word: 'gym', weight: 7 },
+        { word: 'fitness', weight: 7 },
+        { word: 'yoga', weight: 8 },
+        { word: 'sauna', weight: 9 },
+        { word: 'steam', weight: 7 }
+      ]
+    },
+    {
+      key: 'activities',
+      keywords: [
+        { word: 'activity', weight: 10 },
+        { word: 'experience', weight: 8 },
+        { word: 'diving', weight: 10 },
+        { word: 'snorkel', weight: 10 },
+        { word: 'excursion', weight: 9 },
+        { word: 'marine', weight: 7 },
+        { word: 'dolphin', weight: 8 },
+        { word: 'cruise', weight: 8 },
+        { word: 'sport', weight: 7 },
+        { word: 'kids', weight: 9 },
+        { word: 'club', weight: 8 },
+        { word: 'water-sport', weight: 10 },
+        { word: 'surfing', weight: 9 },
+        { word: 'fishing', weight: 8 }
+      ]
+    },
+    {
+      key: 'beaches',
+      keywords: [
+        { word: 'beach', weight: 10 },
+        { word: 'sand', weight: 8 },
+        { word: 'shore', weight: 7 },
+        { word: 'coast', weight: 6 },
+        { word: 'ocean', weight: 5 },
+        { word: 'lagoon', weight: 7 }
+      ]
+    },
+    {
+      key: 'facilities',
+      keywords: [
+        { word: 'facility', weight: 10 },
+        { word: 'pool', weight: 9 },
+        { word: 'tennis', weight: 8 },
+        { word: 'court', weight: 7 },
+        { word: 'boutique', weight: 7 },
+        { word: 'shop', weight: 6 },
+        { word: 'library', weight: 8 },
+        { word: 'reception', weight: 7 },
+        { word: 'lobby', weight: 7 }
+      ]
+    },
+    {
+      key: 'maps',
+      keywords: [
+        { word: 'map', weight: 10 },
+        { word: 'floorplan', weight: 10 },
+        { word: 'floor plan', weight: 10 },
+        { word: 'site plan', weight: 10 },
+        { word: 'layout', weight: 9 },
+        { word: 'location', weight: 5 },
+        { word: 'plan', weight: 6 }
+      ]
+    },
+    {
+      key: 'logos',
+      keywords: [
+        { word: 'logo', weight: 10 },
+        { word: 'brand', weight: 8 },
+        { word: 'wordmark', weight: 10 },
+        { word: 'emblem', weight: 9 },
+        { word: 'asset', weight: 5 }
+      ]
+    }
+  ];
 
   const subcategories = {
-    'water villa': ['water villa', 'overwater', 'ocean villa'],
-    'beach villa': ['beach villa', 'sand villa'],
-    'residence': ['residence', 'estate', 'mansion'],
+    'water villa': ['water villa', 'overwater', 'ocean villa', 'lagoon villa'],
+    'beach villa': ['beach villa', 'sand villa', 'beachfront'],
+    'residence': ['residence', 'estate', 'mansion', 'palace'],
     'suite': ['suite'],
     'deluxe room': ['deluxe'],
     'family room': ['family']
   };
 
-  let detectedCategory = 'uncategorized';
-  for (const [cat, words] of Object.entries(keywords)) {
-    if (words.some(word => combined.includes(word))) {
-      detectedCategory = cat;
-      break;
+  let bestCategory = 'uncategorized';
+  let maxScore = 0;
+
+  for (const cat of categories) {
+    let score = 0;
+    for (const kw of cat.keywords) {
+      if (combined.includes(kw.word)) {
+        score += kw.weight;
+      }
+    }
+    if (score > maxScore) {
+      maxScore = score;
+      bestCategory = cat.key;
     }
   }
 
@@ -156,7 +294,11 @@ const classifyMedia = (folderName: string, fileName: string) => {
     }
   }
 
-  return { category: detectedCategory, subcategory: detectedSubcategory };
+  return { 
+    category: bestCategory, 
+    subcategory: detectedSubcategory,
+    confidence: Math.min(maxScore / 20, 1.0) // Normalize confidence
+  };
 };
 
 // --- Authentication & RBAC Helpers ---
@@ -408,191 +550,228 @@ async function startServer() {
     if (!url || !resort_id) return res.status(400).json({ error: "URL and Resort ID are required" });
 
     try {
-      console.log(`Importing media for resort ${resort_id} from ${url}`);
+      console.log(`[Smart Import] Starting import for resort ${resort_id} from ${url}`);
       
-      // Dropbox Check
+      const baseUrl = new URL(url);
+      const visited = new Set<string>();
+      const mediaMap = new Map<string, any>();
+      const queue: { url: string; depth: number; categoryHint?: string }[] = [{ url, depth: 0 }];
+      
+      const MAX_DEPTH = 2;
+      const MAX_PAGES = 15;
+      const MAX_IMAGES = 100;
+
+      // Provider Checks (Dropbox, GDrive)
       const dropboxMatch = url.match(/dropbox\.com\/(sh|scl\/fo)\/([a-zA-Z0-9-_]+)/);
       if (dropboxMatch) {
         const accessToken = process.env.DROPBOX_ACCESS_TOKEN;
         if (!accessToken) {
           return res.status(500).json({ error: "Dropbox access token missing. Please configure DROPBOX_ACCESS_TOKEN." });
         }
-        
         const dbx = new Dropbox({ accessToken });
-        const media: any[] = [];
-        
-        async function scanDropbox(sharedLink: string, path: string = "", currentCategory: string = 'uncategorized') {
-          const response = await dbx.filesListFolder({
-            path,
-            shared_link: { url: sharedLink }
+        const response = await dbx.filesListFolder({ path: "", shared_link: { url } });
+        const media = response.result.entries
+          .filter(entry => entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name))
+          .map(entry => {
+            const { category, subcategory, confidence } = classifyMedia("", entry.name);
+            return {
+              id: (entry as any).id,
+              storage_path: url.replace(/\?dl=[01]/, '') + '?raw=1&path=' + encodeURIComponent((entry as any).path_lower || ""),
+              category,
+              subcategory,
+              confidence_score: confidence,
+              original_filename: entry.name,
+              source_type: 'dropbox',
+              source_url: url
+            };
           });
-          
-          for (const entry of response.result.entries) {
-            if (entry['.tag'] === 'folder') {
-              const { category } = classifyMedia(entry.name, "");
-              await scanDropbox(sharedLink, entry.path_lower || "", category !== 'uncategorized' ? category : currentCategory);
-            } else if (entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name)) {
-              // Get temporary link for the file
-              const linkResponse = await dbx.sharingGetSharedLinkFile({
-                url: sharedLink,
-                path: entry.path_lower
-              });
-              
-              const { category, subcategory } = classifyMedia(path, entry.name);
-              media.push({
-                id: entry.id,
-                storage_path: url.replace('?dl=0', '?raw=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com') + '&path=' + encodeURIComponent(entry.path_lower || ""), // This is a bit hacky for dropbox shared links
-                // Better way for dropbox shared links:
-                webContentLink: url.replace('?dl=0', '?raw=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com') + '&path=' + encodeURIComponent(entry.path_lower || ""),
-                category: category !== 'uncategorized' ? category : currentCategory,
-                subcategory,
-                original_filename: entry.name,
-                source_type: 'dropbox',
-                source_url: url
-              });
-            }
-          }
-        }
-        
-        // Dropbox shared links for folders are tricky. 
-        // For now, let's use a simpler approach if it's a direct shared link to a folder.
-        // The above recursive scan is more for a full app integration.
-        // Let's try to just get the files in that shared link.
-        const response = await dbx.filesListFolder({
-          path: "",
-          shared_link: { url }
-        });
-        
-        for (const entry of response.result.entries) {
-          if (entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name)) {
-             const { category, subcategory } = classifyMedia("", entry.name);
-             media.push({
-                id: entry.id,
-                storage_path: url.replace(/\?dl=[01]/, '') + '?raw=1&path=' + encodeURIComponent(entry.path_lower || ""),
-                category,
-                subcategory,
-                original_filename: entry.name,
-                source_type: 'dropbox',
-                source_url: url
-             });
-          }
-        }
-
         return res.json({ success: true, media, source_type: 'dropbox' });
       }
 
-      // Google Drive Check
-      let folderId = null;
-      const folderMatch = url.match(/folders\/([a-zA-Z0-9-_]+)/);
-      if (folderMatch) {
-        folderId = folderMatch[1];
-      } else if (url.match(/^[a-zA-Z0-9-_]+$/)) {
-        folderId = url;
-      }
-
-      const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
-      const idMatch = url.match(/[?&]id=([a-zA-Z0-9-_]+)/);
-      
-      const fileId = fileMatch ? fileMatch[1] : (idMatch ? idMatch[1] : null);
-
-      if (folderId || fileId) {
+      const driveMatch = url.match(/drive\.google\.com\/(?:drive\/folders\/|file\/d\/|open\?id=)([a-zA-Z0-9-_]+)/);
+      if (driveMatch) {
         try {
           const authClient = await getDriveAuth();
           const drive = google.drive({ version: 'v3', auth: authClient });
+          const id = driveMatch[1];
           
-          if (folderId) {
+          // Check if it's a folder or file
+          const metadata = await drive.files.get({ fileId: id, fields: 'mimeType, name' });
+          if (metadata.data.mimeType === 'application/vnd.google-apps.folder') {
             const media: any[] = [];
+            const listResponse = await drive.files.list({
+              q: `'${id}' in parents and (mimeType contains 'image/' or mimeType = 'application/vnd.google-apps.folder')`,
+              fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
+            });
             
-            async function scanFolder(fId: string, currentCategory: string = 'uncategorized', path: string = "") {
-              const requestParams: any = {
-                q: `'${fId}' in parents`,
-                fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
-              };
-
-              const response = await drive.files.list(requestParams);
-              const files = response.data.files || [];
-
-              for (const file of files) {
-                if (file.mimeType === 'application/vnd.google-apps.folder') {
-                  const { category } = classifyMedia(file.name, "");
-                  await scanFolder(file.id, category !== 'uncategorized' ? category : currentCategory, path + "/" + file.name);
-                } else if (file.mimeType?.startsWith('image/')) {
-                  const { category, subcategory } = classifyMedia(path, file.name);
-                  media.push({
-                    id: file.id,
-                    storage_path: file.thumbnailLink?.replace('=s220', '=s1600') || file.webContentLink,
-                    category: category !== 'uncategorized' ? category : currentCategory,
-                    subcategory,
-                    original_filename: file.name,
-                    source_type: 'google_drive',
-                    source_url: url
-                  });
-                }
+            for (const file of listResponse.data.files || []) {
+              if (file.mimeType?.startsWith('image/')) {
+                const { category, subcategory, confidence } = classifyMedia("", file.name || "");
+                media.push({
+                  id: file.id,
+                  storage_path: file.thumbnailLink?.replace('=s220', '=s1600') || file.webContentLink,
+                  category,
+                  subcategory,
+                  confidence_score: confidence,
+                  original_filename: file.name,
+                  source_type: 'google_drive',
+                  source_url: url
+                });
               }
             }
-
-            await scanFolder(folderId);
             return res.json({ success: true, media, source_type: 'google_drive' });
-          } else if (fileId) {
-            const requestParams: any = {
-              fileId: fileId,
-              fields: 'id, name, webContentLink, thumbnailLink',
-            };
-
-            const fileResponse = await drive.files.get(requestParams);
-            const f = fileResponse.data;
-            const { category, subcategory } = classifyMedia("", f.name || "");
-            
+          } else {
+            const { category, subcategory, confidence } = classifyMedia("", metadata.data.name || "");
             const media = [{
-              id: f.id,
-              storage_path: f.thumbnailLink?.replace('=s220', '=s1600') || f.webContentLink,
+              id: id,
+              storage_path: `https://drive.google.com/thumbnail?id=${id}&sz=w1600`,
               category,
               subcategory,
-              original_filename: f.name,
+              confidence_score: confidence,
+              original_filename: metadata.data.name,
               source_type: 'google_drive',
               source_url: url
             }];
-            
             return res.json({ success: true, media, source_type: 'google_drive' });
           }
-        } catch (authError: any) {
-          console.error("Drive Auth error in import-media:", authError.message);
-          // Don't return yet, might fallback to scraping if it wasn't a drive link 
-          // but here folderId/fileId matched so it likely was.
+        } catch (e) {
+          console.warn("[Smart Import] Drive API failed, falling back to scraping if possible", e);
         }
       }
-      
-      // Fallback to scraping
-      const { data } = await axios.get(url);
-      const $ = cheerio.load(data);
-      const images: any[] = [];
-      $("img").each((i, el) => {
-        const src = $(el).attr("src");
-        if (src && src.startsWith("http") && !src.includes("logo") && !src.includes("icon")) {
-          const { category, subcategory } = classifyMedia("", path.basename(src));
-          images.push({
-            id: `scraped-${i}`,
-            storage_path: src,
-            category,
-            subcategory,
-            original_filename: path.basename(src),
-            source_type: 'local_upload'
+
+      // Smart Crawling Logic
+      while (queue.length > 0 && visited.size < MAX_PAGES && mediaMap.size < MAX_IMAGES) {
+        const { url: currentUrl, depth, categoryHint } = queue.shift()!;
+        if (visited.has(currentUrl)) continue;
+        visited.add(currentUrl);
+
+        try {
+          console.log(`[Smart Import] Fetching: ${currentUrl} (Depth: ${depth})`);
+          const response = await axios.get(currentUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
+            timeout: 10000
           });
+
+          const $ = cheerio.load(response.data);
+          const pageTitle = $("title").text();
+
+          // Check if it's a directory listing (Apache/Nginx)
+          const isDirectoryListing = pageTitle.includes("Index of") || $("h1").text().includes("Index of");
+
+          // 1. Extract Images
+          if (isDirectoryListing) {
+            console.log(`[Smart Import] Detected directory listing at ${currentUrl}`);
+            $("a").each((_, el) => {
+              const href = $(el).attr("href");
+              if (href && /\.(jpg|jpeg|png|webp|avif)$/i.test(href)) {
+                try {
+                  const src = new URL(href, currentUrl).href;
+                  const fileName = path.basename(new URL(src).pathname);
+                  const { category, subcategory, confidence } = classifyMedia(categoryHint || "", fileName, pageTitle, "");
+                  
+                  if (!mediaMap.has(src)) {
+                    mediaMap.set(src, {
+                      id: `scraped-${mediaMap.size}`,
+                      storage_path: src,
+                      category,
+                      subcategory,
+                      confidence_score: confidence,
+                      original_filename: fileName,
+                      source_type: 'url_import',
+                      source_url: currentUrl
+                    });
+                  }
+                } catch (e) {}
+              }
+            });
+          }
+
+          $("img").each((_, el) => {
+            let src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy-src");
+            if (!src) return;
+
+            // Resolve relative URLs
+            try {
+              src = new URL(src, currentUrl).href;
+            } catch (e) { return; }
+
+            // Filter out obvious non-resort images
+            if (src.includes("logo") || src.includes("icon") || src.includes("avatar") || src.includes("pixel") || src.includes("tracking")) return;
+            if (src.endsWith(".svg") || src.endsWith(".gif")) return;
+
+            const alt = $(el).attr("alt") || "";
+            const fileName = path.basename(new URL(src).pathname);
+            
+            // Classification
+            const { category, subcategory, confidence } = classifyMedia(categoryHint || "", fileName, pageTitle, alt);
+            
+            if (!mediaMap.has(src)) {
+              mediaMap.set(src, {
+                id: `scraped-${mediaMap.size}`,
+                storage_path: src,
+                category,
+                subcategory,
+                confidence_score: confidence,
+                original_filename: fileName,
+                source_type: 'url_import',
+                source_url: currentUrl
+              });
+            }
+          });
+
+          // 2. Discover Links (if depth < MAX_DEPTH)
+          if (depth < MAX_DEPTH) {
+            $("a").each((_, el) => {
+              let href = $(el).attr("href");
+              if (!href) return;
+
+              try {
+                const absoluteHref = new URL(href, currentUrl);
+                // Stay on same domain
+                if (absoluteHref.hostname !== baseUrl.hostname) return;
+                
+                const linkText = $(el).text().toLowerCase();
+                const linkHref = absoluteHref.href.toLowerCase();
+                
+                // Heuristics for gallery/folder links
+                const galleryKeywords = ['gallery', 'photo', 'media', 'image', 'album', 'resort', 'villa', 'room', 'dining', 'restaurant', 'spa', 'activity', 'experience'];
+                const isLikelyGallery = galleryKeywords.some(kw => linkText.includes(kw) || linkHref.includes(kw));
+                
+                if (isLikelyGallery && !visited.has(absoluteHref.href)) {
+                  // Determine hint from link text
+                  let hint = '';
+                  if (linkText.includes('room') || linkText.includes('villa')) hint = 'room_types';
+                  else if (linkText.includes('dining') || linkText.includes('restaurant')) hint = 'restaurants';
+                  else if (linkText.includes('spa')) hint = 'spa';
+                  else if (linkText.includes('activity')) hint = 'activities';
+
+                  queue.push({ url: absoluteHref.href, depth: depth + 1, categoryHint: hint });
+                }
+              } catch (e) {}
+            });
+          }
+        } catch (err) {
+          console.warn(`[Smart Import] Failed to fetch ${currentUrl}:`, err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      const finalMedia = Array.from(mediaMap.values());
+      console.log(`[Smart Import] Finished. Found ${finalMedia.length} images across ${visited.size} pages.`);
+
+      res.json({ 
+        success: true, 
+        media: finalMedia, 
+        source_type: 'url_import',
+        stats: {
+          pages_scanned: visited.size,
+          images_found: finalMedia.length
         }
       });
-
-      res.json({ success: true, media: images.slice(0, 20), source_type: 'local_upload' });
     } catch (error: any) {
-      console.error("Import error details:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        stack: error.stack
-      });
+      console.error("[Smart Import] Fatal error:", error);
       res.status(500).json({ 
         error: "Failed to import media", 
-        details: error.message,
-        code: error.response?.status
+        details: error.message
       });
     }
   });
@@ -646,7 +825,7 @@ async function startServer() {
   });
 
   app.post("/api/import/resort-pdf", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
-    const { batchId, base64Data, filename } = req.body;
+    const { batchId, base64Data, filename, skipDuplicates = false } = req.body;
     if (!base64Data || !batchId) return res.status(400).json({ error: "Batch ID and Base64 data are required" });
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -722,28 +901,62 @@ async function startServer() {
       const extracted = JSON.parse(result.text || '{}');
       
       // Improved Duplicate detection
-      // 1. Exact name match
-      // 2. Slug-based match (simplified)
-      const normalizedName = extracted.name?.toLowerCase().trim();
+      const resortName = extracted.name || '';
+      const normalizedName = normalizeResortName(resortName);
       
+      // Fetch existing resorts for comparison
       const { data: existingResorts } = await supabaseAdmin
         .from('resorts')
-        .select('id, name, atoll')
-        .or(`name.ilike.${normalizedName},name.ilike.%${normalizedName}%`);
+        .select('id, name, atoll, location');
       
       let duplicateCandidate = null;
       let confidence = 0.9;
+      let isDefiniteDuplicate = false;
 
       if (existingResorts && existingResorts.length > 0) {
-        // Find best match
-        const exactMatch = existingResorts.find(r => r.name.toLowerCase() === normalizedName);
-        if (exactMatch) {
-          duplicateCandidate = exactMatch.id;
-          confidence = 0.95;
-        } else {
-          duplicateCandidate = existingResorts[0].id;
-          confidence = 0.7; // Fuzzy match
+        for (const existing of existingResorts) {
+          const existingNormalized = normalizeResortName(existing.name);
+          
+          // 1. Exact normalized name match
+          if (existingNormalized === normalizedName) {
+            duplicateCandidate = existing.id;
+            isDefiniteDuplicate = true;
+            confidence = 0.99;
+            break;
+          }
+          
+          // 2. Fuzzy match (contains)
+          if (existingNormalized.includes(normalizedName) || normalizedName.includes(existingNormalized)) {
+            // Check atoll/location to increase confidence
+            const atollMatch = existing.atoll && extracted.atoll && 
+              (existing.atoll.toLowerCase().includes(extracted.atoll.toLowerCase()) || 
+               extracted.atoll.toLowerCase().includes(existing.atoll.toLowerCase()));
+            
+            if (atollMatch) {
+              duplicateCandidate = existing.id;
+              isDefiniteDuplicate = true;
+              confidence = 0.95;
+              break;
+            } else {
+              // Potential match but not certain
+              if (!duplicateCandidate) {
+                duplicateCandidate = existing.id;
+                confidence = 0.7;
+              }
+            }
+          }
         }
+      }
+
+      // If skipDuplicates is true and we found a definite duplicate, return early
+      if (skipDuplicates && isDefiniteDuplicate) {
+        console.log(`[Import] Skipping duplicate resort: ${resortName} (Matches existing ID: ${duplicateCandidate})`);
+        return res.json({ 
+          skipped: true, 
+          reason: 'duplicate', 
+          resortName, 
+          existingId: duplicateCandidate 
+        });
       }
 
       // Save to staging
