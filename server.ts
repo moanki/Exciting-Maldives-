@@ -714,6 +714,71 @@ async function startServer() {
     }
   });
 
+  app.get("/api/drive/list", async (req, res) => {
+    const folderId = req.query.folderId as string;
+
+    try {
+      const authClient = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth: authClient as any });
+
+      const response = await drive.files.list({
+        q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
+        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      res.json({ files: response.data.files || [] });
+    } catch (err: any) {
+      logDriveError("Direct Drive List failed", err, { folderId });
+      res.status(500).json({
+        error: err.message,
+        debug: serializeError(err),
+      });
+    }
+  });
+
+  app.post("/api/drive/import", async (req, res) => {
+    const { batchId, fileId, filename, skipDuplicates = false } = req.body;
+
+    if (!fileId || !batchId) {
+      return res.status(400).json({ error: "Batch ID and File ID are required" });
+    }
+
+    try {
+      const authClient = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth: authClient as any });
+
+      const driveResponse = await drive.files.get(
+        {
+          fileId,
+          alt: "media",
+          supportsAllDrives: true,
+        },
+        {
+          responseType: "stream",
+        }
+      );
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of driveResponse.data) {
+        chunks.push(Buffer.from(chunk));
+      }
+
+      const buffer = Buffer.concat(chunks);
+      const base64Data = buffer.toString("base64");
+
+      const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
+      res.json(result);
+    } catch (err: any) {
+      logDriveError("Direct Drive Import failed", err, { fileId, filename, batchId });
+      res.status(500).json({
+        error: err.message,
+        debug: serializeError(err),
+      });
+    }
+  });
+
 async function handleGList(req: any, res: any) {
   const folderId = req.query.folderId as string;
 

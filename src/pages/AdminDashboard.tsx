@@ -1552,15 +1552,9 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         folderId = folderMatch[1];
       }
 
-      const listPayload = btoa(JSON.stringify({
-        action: 'list',
-        data: { folderId }
-      }));
-
-      const listResponse = await apiFetch('/api/v1/data/sync', {
-        method: 'POST',
+      const listResponse = await apiFetch(`/api/drive/list?folderId=${folderId}`, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: listPayload }),
       });
 
       const { raw: listRaw, data: listData } = await readJsonSafe(listResponse);
@@ -1598,23 +1592,17 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         } : null);
 
         try {
-          // Process the Drive PDF directly on the backend via sync endpoint
-          const importPayload = btoa(JSON.stringify({
-            action: 'import-drive-pdf',
-            data: {
-              batchId,
-              fileId: file.id,
-              filename: file.name,
-              skipDuplicates
-            }
-          }));
-
-          const res = await apiFetch('/api/v1/data/sync', {
+          const res = await apiFetch('/api/drive/import', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ payload: importPayload })
+            body: JSON.stringify({
+              batchId,
+              fileId: file.id,
+              filename: file.name,
+              skipDuplicates
+            })
           });
           
           const { raw: resRaw, data: resData } = await readJsonSafe(res);
