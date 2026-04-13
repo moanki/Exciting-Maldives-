@@ -380,10 +380,21 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setImportProgress('Initializing smart crawler...');
     
     try {
-      const response = await fetch('/api/import-media', {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const importPayload = btoa(JSON.stringify({
+        action: 'import-url',
+        data: { url: importUrl, resort_id: editingResort?.id }
+      }));
+
+      const response = await fetch('/api/v1/data/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: importUrl, resort_id: editingResort?.id }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ payload: importPayload }),
       });
       
       if (!response.ok) {

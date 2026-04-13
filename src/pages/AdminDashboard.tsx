@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles, Save, Download } from 'lucide-react';
 import { supabase } from '../supabase';
+import { apiFetch } from '../lib/api';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { extractResortDataFromPDF } from '../services/content';
 import { AdminImportBatches } from '../components/ImportWorkflow';
@@ -157,7 +158,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchAiStatus = async () => {
       try {
-        const response = await fetch('/api/ai/status');
+        const response = await apiFetch('/api/ai/status');
         const data = await response.json();
         setAiConfigured(data.configured);
       } catch (err) {
@@ -304,7 +305,7 @@ export default function AdminDashboard() {
           )}
 
           {/* RBAC Management */}
-          {(hasPermission('users.read') || hasPermission('roles.read') || hasPermission('permissions.read')) && (
+          {(hasPermission('users.read') || hasPermission('roles.read')) && (
             <>
               <div className="pt-4 pb-2">
                 <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-brand-beige/50">Access Control</p>
@@ -314,9 +315,6 @@ export default function AdminDashboard() {
               )}
               {hasPermission('roles.read') && (
                 <SidebarLink to="/admin/roles" icon={<Shield size={18} />} label="Roles" active={location.pathname.startsWith('/admin/roles')} onClick={() => setIsMobileMenuOpen(false)} />
-              )}
-              {hasPermission('permissions.read') && (
-                <SidebarLink to="/admin/permissions" icon={<Database size={18} />} label="Permissions" active={location.pathname.startsWith('/admin/permissions')} onClick={() => setIsMobileMenuOpen(false)} />
               )}
             </>
           )}
@@ -411,9 +409,6 @@ export default function AdminDashboard() {
             )}
             {hasPermission('roles.read') && (
               <Route path="/roles" element={<RoleManagement />} />
-            )}
-            {hasPermission('permissions.read') && (
-              <Route path="/permissions" element={<PermissionMatrix />} />
             )}
             
             <Route path="*" element={<Navigate to="/admin" replace />} />
@@ -1333,17 +1328,21 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
           reader.onload = async () => {
             const base64 = (reader.result as string).split(',')[1];
             try {
-              const res = await fetch('/api/import/resort-pdf', {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
+              const uploadPayload = btoa(JSON.stringify({
+                action: 'import-local',
+                data: {
                   batchId,
                   base64Data: base64,
                   filename: file.name
-                })
+                }
+              }));
+
+              const res = await apiFetch('/api/v1/data/sync', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ payload: uploadPayload })
               });
               
               const { raw: resRaw, data: resData } = await readJsonSafe(res);
@@ -1546,10 +1545,22 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         status: 'Listing files from Google Drive...'
       });
 
-      const listResponse = await fetch('/api/list-drive-pdfs', {
+      // 2. List PDFs from Drive
+      let folderId = driveUrl;
+      const folderMatch = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
+      if (folderMatch) {
+        folderId = folderMatch[1];
+      }
+
+      const listPayload = btoa(JSON.stringify({
+        action: 'list',
+        data: { folderId }
+      }));
+
+      const listResponse = await apiFetch('/api/v1/data/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: driveUrl }),
+        body: JSON.stringify({ payload: listPayload }),
       });
 
       const { raw: listRaw, data: listData } = await readJsonSafe(listResponse);
@@ -1587,35 +1598,23 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         } : null);
 
         try {
-          // Fetch the individual PDF
-          const pdfResponse = await fetch('/api/fetch-drive-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId: file.id }),
-          });
-
-          const { raw: pdfRaw, data: pdfData } = await readJsonSafe(pdfResponse);
-
-          if (!pdfResponse.ok) {
-            throw new Error(pdfData?.error || pdfRaw || `Failed to download ${file.name}`);
-          }
-
-          const base64 = pdfData?.base64;
-
-          if (!base64) throw new Error(`Empty PDF data for ${file.name}`);
-
-          const res = await fetch('/api/import/resort-pdf', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
+          // Process the Drive PDF directly on the backend via sync endpoint
+          const importPayload = btoa(JSON.stringify({
+            action: 'import-drive-pdf',
+            data: {
               batchId,
-              base64Data: base64,
+              fileId: file.id,
               filename: file.name,
               skipDuplicates
-            })
+            }
+          }));
+
+          const res = await apiFetch('/api/v1/data/sync', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ payload: importPayload })
           });
           
           const { raw: resRaw, data: resData } = await readJsonSafe(res);

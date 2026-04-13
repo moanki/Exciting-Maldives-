@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { getUserPermissions, Permission, canAccessAdmin, getUserRoleKeys, getLegacyUserRole } from '../lib/rbac';
 
@@ -88,7 +88,7 @@ export function usePermissions() {
     };
   }, []);
 
-  const hasPermission = (key: string) => isSuperAdmin || permissions.some(p => p.key === key);
+  const hasPermission = useCallback((key: string) => isSuperAdmin || permissions.some(p => p.key === key), [isSuperAdmin, permissions]);
 
   return { permissions, hasPermission, canAccessAdmin: canAccessAdminState, loading, isSuperAdmin, error };
 }
