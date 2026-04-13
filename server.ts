@@ -99,32 +99,18 @@ const normalizeResortName = (name: string) => {
 
 // Helper for Google Drive Auth
 async function getDriveAuth() {
-  try {
-    const serviceAccountPath = path.join(process.cwd(), "service_account.json");
+  const serviceAccountPath = path.join(process.cwd(), "service_account.json");
 
-    console.log("[Drive Auth] Using key file:", serviceAccountPath);
-    console.log("[Drive Auth] File exists:", fs.existsSync(serviceAccountPath));
-
-    if (!fs.existsSync(serviceAccountPath)) {
-      throw new Error("service_account.json not found in app root");
-    }
-
-    const auth = new google.auth.GoogleAuth({
-      keyFile: serviceAccountPath,
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-    });
-
-    const authClient = await auth.getClient();
-    console.log("[Drive Auth] getClient() succeeded");
-
-    const token = await authClient.getAccessToken();
-    console.log("[Drive Auth] getAccessToken() succeeded:", !!token?.token);
-
-    return authClient;
-  } catch (err: any) {
-    logDriveError("Drive Auth failed", err);
-    throw new Error(`Google Drive Authentication Error: ${err.message}`);
+  if (!fs.existsSync(serviceAccountPath)) {
+    throw new Error("service_account.json not found in app root");
   }
+
+  const auth = new google.auth.GoogleAuth({
+    keyFile: serviceAccountPath,
+    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+  });
+
+  return await auth.getClient();
 }
 
 // Bootstrap Initial Admin
@@ -730,7 +716,6 @@ async function startServer() {
 
 async function handleGList(req: any, res: any) {
   const folderId = req.query.folderId as string;
-  console.log("[Drive List] folderId:", folderId);
 
   try {
     const authClient = await getDriveAuth();
@@ -743,12 +728,8 @@ async function handleGList(req: any, res: any) {
       includeItemsFromAllDrives: true,
     });
 
-    console.log("[Drive List] file count:", response.data.files?.length || 0);
-    console.log("[Drive List] files:", response.data.files || []);
-
     res.json({ files: response.data.files || [] });
   } catch (err: any) {
-    logDriveError("Drive List failed", err, { folderId });
     res.status(500).json({
       error: err.message,
       debug: serializeError(err),
@@ -852,54 +833,45 @@ async function handleGList(req: any, res: any) {
     }
   }
 
-  async function handleDrivePdfImport(req: any, res: any) {
-    const { batchId, fileId, filename, skipDuplicates = false } = req.body;
-    if (!fileId || !batchId) return res.status(400).json({ error: "Batch ID and File ID are required" });
+async function handleDrivePdfImport(req: any, res: any) {
+  const { batchId, fileId, filename, skipDuplicates = false } = req.body;
 
-    try {
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: "v3", auth: authClient as any });
-
-      console.log("[Drive Import] fileId:", fileId, "filename:", filename, "batchId:", batchId);
-
-      const meta = await drive.files.get({
-        fileId,
-        fields: "id,name,mimeType,size,driveId,parents",
-        supportsAllDrives: true,
-      });
-
-      console.log("[Drive Import] metadata:", meta.data);
-
-      const driveResponse = await drive.files.get(
-        {
-          fileId,
-          alt: "media",
-          supportsAllDrives: true,
-        },
-        {
-          responseType: "stream",
-        }
-      );
-
-      const chunks: Buffer[] = [];
-      for await (const chunk of driveResponse.data) {
-        chunks.push(Buffer.from(chunk));
-      }
-
-      const buffer = Buffer.concat(chunks);
-      console.log("[Drive Import] downloaded bytes:", buffer.length);
-
-      const base64Data = buffer.toString("base64");
-      const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
-      res.json(result);
-    } catch (err: any) {
-      logDriveError("Drive Import failed", err, { fileId, filename, batchId });
-      res.status(500).json({
-        error: err.message,
-        debug: serializeError(err),
-      });
-    }
+  if (!fileId || !batchId) {
+    return res.status(400).json({ error: "Batch ID and File ID are required" });
   }
+
+  try {
+    const authClient = await getDriveAuth();
+    const drive = google.drive({ version: "v3", auth: authClient as any });
+
+    const driveResponse = await drive.files.get(
+      {
+        fileId,
+        alt: "media",
+        supportsAllDrives: true,
+      },
+      {
+        responseType: "stream",
+      }
+    );
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of driveResponse.data) {
+      chunks.push(Buffer.from(chunk));
+    }
+
+    const buffer = Buffer.concat(chunks);
+    const base64Data = buffer.toString("base64");
+
+    const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({
+      error: err.message,
+      debug: serializeError(err),
+    });
+  }
+}
 
   async function handleUrlImport(req: any, res: any) {
     const { url, resort_id } = req.body;
@@ -1755,6 +1727,7 @@ async function handleGList(req: any, res: any) {
   });
 
   app.get("/api/ai/status", (req, res) => {
+    console.log("[AI Status] Request received");
     res.json({ 
       configured: !!process.env.GEMINI_API_KEY,
       model: "gemini-1.5-pro/flash"
