@@ -15,6 +15,40 @@ import sizeOf from "image-size";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 
+function serializeError(err: any) {
+  return {
+    name: err?.name,
+    message: err?.message,
+    code: err?.code,
+    stack: err?.stack,
+    cause: err?.cause ? String(err.cause) : undefined,
+    response: err?.response
+      ? {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          data: err.response.data,
+          headers: err.response.headers,
+        }
+      : undefined,
+    errors: err?.errors,
+  };
+}
+
+function logDriveError(context: string, err: any, extra?: Record<string, any>) {
+  console.error(
+    `[${context}]`,
+    JSON.stringify(
+      {
+        context,
+        extra,
+        error: serializeError(err),
+      },
+      null,
+      2
+    )
+  );
+}
+
 dotenv.config();
 
 // Validate critical environment variables
@@ -65,19 +99,45 @@ const normalizeResortName = (name: string) => {
 
 // Helper for Google Drive Auth
 async function getDriveAuth() {
-  const rawEnvJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-
   try {
+    const rawEnvJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+
+    console.log("[Drive Auth] Starting auth setup");
+    console.log("[Drive Auth] GOOGLE_SERVICE_ACCOUNT_JSON exists:", !!rawEnvJson);
+    console.log("[Drive Auth] GOOGLE_SERVICE_ACCOUNT_JSON length:", rawEnvJson?.length || 0);
+
     if (!rawEnvJson) {
-      throw new Error(
-        "Missing GOOGLE_SERVICE_ACCOUNT_JSON. Put the full service account JSON into this env var."
-      );
+      throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_JSON");
     }
 
-    const credentials = JSON.parse(rawEnvJson);
+    let credentials: any;
+    try {
+      credentials = JSON.parse(rawEnvJson);
+    } catch (parseErr: any) {
+      logDriveError("Drive Auth JSON parse failed", parseErr, {
+        rawStartsWith: rawEnvJson.slice(0, 40),
+      });
+      throw new Error(`Invalid GOOGLE_SERVICE_ACCOUNT_JSON: ${parseErr.message}`);
+    }
 
-    if (!credentials.client_email || !credentials.private_key) {
-      throw new Error("Service account JSON is missing client_email or private_key");
+    console.log("[Drive Auth] Parsed JSON keys:", Object.keys(credentials || {}));
+    console.log("[Drive Auth] client_email:", credentials?.client_email || null);
+    console.log(
+      "[Drive Auth] private_key markers:",
+      !!credentials?.private_key?.includes("-----BEGIN PRIVATE KEY-----"),
+      !!credentials?.private_key?.includes("-----END PRIVATE KEY-----")
+    );
+    console.log(
+      "[Drive Auth] private_key length:",
+      credentials?.private_key?.length || 0
+    );
+
+    if (!credentials?.client_email) {
+      throw new Error("Service account JSON missing client_email");
+    }
+
+    if (!credentials?.private_key) {
+      throw new Error("Service account JSON missing private_key");
     }
 
     const auth = new google.auth.GoogleAuth({
@@ -85,9 +145,22 @@ async function getDriveAuth() {
       scopes: ["https://www.googleapis.com/auth/drive.readonly"],
     });
 
-    return await auth.getClient();
+    const authClient = await auth.getClient();
+    console.log("[Drive Auth] getClient() succeeded");
+
+    try {
+      const token = await authClient.getAccessToken();
+      console.log("[Drive Auth] getAccessToken() succeeded:", !!token?.token);
+    } catch (tokenErr: any) {
+      logDriveError("Drive Auth token fetch failed", tokenErr, {
+        client_email: credentials.client_email,
+      });
+      throw tokenErr;
+    }
+
+    return authClient;
   } catch (err: any) {
-    console.error("[Drive Auth] Failed to initialize:", err);
+    logDriveError("Drive Auth failed", err);
     throw new Error(`Google Drive Authentication Error: ${err.message}`);
   }
 }
@@ -693,26 +766,34 @@ async function startServer() {
     }
   });
 
-  async function handleGList(req: any, res: any) {
-    const folderId = req.query.folderId as string;
-    console.log(`[Drive List] Listing files in folder: ${folderId}`);
-    try {
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: 'v3', auth: authClient as any });
-      const response = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
-        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        corpora: "allDrives",
-      });
-      console.log(`[Drive List] Found ${response.data.files?.length || 0} files.`);
-      res.json({ files: response.data.files || [] });
-    } catch (error: any) {
-      console.error("[Drive List] Error:", error);
-      res.status(500).json({ error: error.message });
-    }
+async function handleGList(req: any, res: any) {
+  const folderId = req.query.folderId as string;
+  console.log("[Drive List] folderId:", folderId);
+
+  try {
+    const authClient = await getDriveAuth();
+    const drive = google.drive({ version: "v3", auth: authClient as any });
+
+    const response = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
+      fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: "allDrives",
+    });
+
+    console.log("[Drive List] file count:", response.data.files?.length || 0);
+    console.log("[Drive List] files:", response.data.files || []);
+
+    res.json({ files: response.data.files || [] });
+  } catch (err: any) {
+    logDriveError("Drive List failed", err, { folderId });
+    res.status(500).json({
+      error: err.message,
+      debug: serializeError(err),
+    });
   }
+}
 
   async function handleGFetch(req: any, res: any) {
     try {
@@ -815,50 +896,47 @@ async function startServer() {
     if (!fileId || !batchId) return res.status(400).json({ error: "Batch ID and File ID are required" });
 
     try {
-      // 1. Fetch from Drive
       const authClient = await getDriveAuth();
-      const drive = google.drive({ version: 'v3', auth: authClient as any });
-      
-      console.log(`[Drive Import] Fetching file content for ID: ${fileId} (${filename})`);
-      
-      try {
-        const driveResponse = await drive.files.get(
-          {
-            fileId,
-            alt: "media",
-            supportsAllDrives: true,
-          },
-          {
-            responseType: "stream",
-          }
-        );
-        
-        if (driveResponse.status !== 200) {
-          throw new Error(`Google Drive returned status ${driveResponse.status}`);
-        }
-        
-        const chunks: Buffer[] = [];
-        for await (const chunk of driveResponse.data) {
-          chunks.push(Buffer.from(chunk));
-        }
-        const buffer = Buffer.concat(chunks);
-        const base64Data = buffer.toString('base64');
-        
-        console.log(`[Drive Import] Successfully fetched ${buffer.length} bytes for ${filename}. Starting Gemini processing...`);
+      const drive = google.drive({ version: "v3", auth: authClient as any });
 
-        const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
-        res.json(result);
-      } catch (driveError: any) {
-        console.error("[Drive Import] API call failed:", driveError);
-        if (driveError.response) {
-          console.error("[Drive Import] Response data:", driveError.response.data);
-          console.error("[Drive Import] Response status:", driveError.response.status);
+      console.log("[Drive Import] fileId:", fileId, "filename:", filename, "batchId:", batchId);
+
+      const meta = await drive.files.get({
+        fileId,
+        fields: "id,name,mimeType,size,driveId,parents",
+        supportsAllDrives: true,
+      });
+
+      console.log("[Drive Import] metadata:", meta.data);
+
+      const driveResponse = await drive.files.get(
+        {
+          fileId,
+          alt: "media",
+          supportsAllDrives: true,
+        },
+        {
+          responseType: "stream",
         }
-        throw driveError;
+      );
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of driveResponse.data) {
+        chunks.push(Buffer.from(chunk));
       }
-    } catch (error: any) {
-      console.error("Drive API import error:", error);
-      res.status(500).json({ error: error.message || "Failed to import file from Google Drive" });
+
+      const buffer = Buffer.concat(chunks);
+      console.log("[Drive Import] downloaded bytes:", buffer.length);
+
+      const base64Data = buffer.toString("base64");
+      const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
+      res.json(result);
+    } catch (err: any) {
+      logDriveError("Drive Import failed", err, { fileId, filename, batchId });
+      res.status(500).json({
+        error: err.message,
+        debug: serializeError(err),
+      });
     }
   }
 
@@ -1740,6 +1818,45 @@ async function startServer() {
       details: err.details || null,
       path: req.path
     });
+  });
+
+  app.get("/api/debug/drive-test", async (req, res) => {
+    const folderId = req.query.folderId as string;
+
+    try {
+      const authClient = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth: authClient as any });
+
+      const about = await drive.about.get({
+        fields: "user,storageQuota",
+      });
+
+      let filesResult: any = null;
+      if (folderId) {
+        filesResult = await drive.files.list({
+          q: `'${folderId}' in parents and trashed = false`,
+          fields: "files(id,name,mimeType,driveId,parents)",
+          pageSize: 20,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+          corpora: "allDrives",
+        });
+      }
+
+      res.json({
+        ok: true,
+        serviceAccountSeen: true,
+        driveUser: about.data.user || null,
+        files: filesResult?.data?.files || [],
+      });
+    } catch (err: any) {
+      logDriveError("Drive Debug Test failed", err, { folderId });
+      res.status(500).json({
+        ok: false,
+        error: err.message,
+        debug: serializeError(err),
+      });
+    }
   });
 
   // Vite middleware for development
