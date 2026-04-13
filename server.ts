@@ -105,12 +105,14 @@ async function getDriveAuth() {
     throw new Error("service_account.json not found in app root");
   }
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: serviceAccountPath,
+  const key = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  const auth = new JWT({
+    email: key.client_email,
+    key: key.private_key,
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
   });
 
-  return await auth.getClient();
+  return auth;
 }
 
 // Bootstrap Initial Admin
@@ -1001,7 +1003,6 @@ async function handleDrivePdfImport(req: any, res: any) {
               fields: "files(id,name,mimeType,webContentLink,thumbnailLink)",
               supportsAllDrives: true,
               includeItemsFromAllDrives: true,
-              corpora: "allDrives",
             });
             
             for (const file of (listResponse.data as any).files || []) {

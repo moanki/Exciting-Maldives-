@@ -1337,12 +1337,16 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
                 }
               }));
 
-              const res = await apiFetch('/api/v1/data/sync', {
+              const res = await apiFetch('/api/drive/import', {
                 method: 'POST',
                 headers: { 
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ payload: uploadPayload })
+                body: JSON.stringify({
+                  batchId,
+                  fileId: file.id,
+                  filename: file.name
+                })
               });
               
               const { raw: resRaw, data: resData } = await readJsonSafe(res);
