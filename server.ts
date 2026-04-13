@@ -65,91 +65,29 @@ const normalizeResortName = (name: string) => {
 
 // Helper for Google Drive Auth
 async function getDriveAuth() {
-  const serviceAccountPath = path.join(process.cwd(), 'service_account.json');
-  let credentials: any = null;
-  let source = '';
-
-  const fileExists = fs.existsSync(serviceAccountPath);
-  const envExists = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-
-  // Prefer backend file first because it avoids broken env escaping
-  if (fileExists) {
-    try {
-      const fileContent = fs.readFileSync(serviceAccountPath, 'utf8').trim();
-      credentials = JSON.parse(fileContent);
-      source = 'service_account.json';
-    } catch (e: any) {
-      console.error('Failed to parse service_account.json:', e);
-      throw new Error(`Malformed service_account.json: ${e.message}`);
-    }
-  } else if (envExists) {
-    try {
-      const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON!.trim();
-      credentials = JSON.parse(raw);
-      source = 'GOOGLE_SERVICE_ACCOUNT_JSON environment variable';
-    } catch (e: any) {
-      console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', e);
-      throw new Error(`Malformed GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`);
-    }
-  } else {
-    throw new Error('No valid Google Drive service account credentials found (service_account.json or GOOGLE_SERVICE_ACCOUNT_JSON).');
-  }
-
-  if (!credentials.client_email) {
-    throw new Error(`Missing "client_email" in ${source}.`);
-  }
-
-  if (!credentials.private_key) {
-    throw new Error(`Missing "private_key" in ${source}.`);
-  }
-
-  // CORRECT normalization: convert escaped sequences into REAL newlines
-  let privateKey = String(credentials.private_key);
-  
-  // Log the first few characters of the raw key for debugging (safe)
-  console.log(`[Drive Auth] Raw private key starts with: ${privateKey.substring(0, 20)}...`);
-
-  // Aggressively replace all variations of escaped newlines
-  privateKey = privateKey
-    .replace(/\\r\\n/g, '\n')
-    .replace(/\\n/g, '\n')
-    .replace(/\r\n/g, '\n');
-  
-  privateKey = privateKey.trim();
-
-  // Log the first few characters of the normalized key (safe)
-  console.log(`[Drive Auth] Normalized private key starts with: ${privateKey.substring(0, 20)}...`);
-
-  if (
-    !privateKey.includes('-----BEGIN PRIVATE KEY-----') ||
-    !privateKey.includes('-----END PRIVATE KEY-----')
-  ) {
-    throw new Error(`Invalid PEM format in ${source}: Missing BEGIN/END PRIVATE KEY markers.`);
-  }
+  const rawEnvJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
   try {
-    let auth;
-    if (fileExists) {
-      auth = new google.auth.GoogleAuth({
-        keyFile: serviceAccountPath,
-        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-      });
-    } else {
-      auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: credentials.client_email,
-          private_key: privateKey,
-        },
-        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-      });
+    if (!rawEnvJson) {
+      throw new Error(
+        "Missing GOOGLE_SERVICE_ACCOUNT_JSON. Put the full service account JSON into this env var."
+      );
     }
 
-    console.log(`[Drive Auth] Attempting to get client...`);
-    const authClient = await auth.getClient();
-    console.log(`[Drive Auth] Google Drive Auth initialized successfully from ${source}.`);
-    return authClient;
+    const credentials = JSON.parse(rawEnvJson);
+
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error("Service account JSON is missing client_email or private_key");
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+
+    return await auth.getClient();
   } catch (err: any) {
-    console.error('Failed to initialize Google Auth client:', err);
+    console.error("[Drive Auth] Failed to initialize:", err);
     throw new Error(`Google Drive Authentication Error: ${err.message}`);
   }
 }
@@ -763,7 +701,10 @@ async function startServer() {
       const drive = google.drive({ version: 'v3', auth: authClient as any });
       const response = await drive.files.list({
         q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
-        fields: 'files(id, name)',
+        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        corpora: "allDrives",
       });
       console.log(`[Drive List] Found ${response.data.files?.length || 0} files.`);
       res.json({ files: response.data.files || [] });
@@ -779,7 +720,16 @@ async function startServer() {
       console.log(`[Drive Fetch] Fetching file: ${fileId}`);
       const authClient = await getDriveAuth();
       const drive = google.drive({ version: 'v3', auth: authClient as any });
-      const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+      const response = await drive.files.get(
+        {
+          fileId,
+          alt: "media",
+          supportsAllDrives: true,
+        },
+        {
+          responseType: "stream",
+        }
+      );
       response.data.pipe(res);
     } catch (error: any) {
       console.error("[Drive Fetch] Error:", error);
@@ -872,7 +822,16 @@ async function startServer() {
       console.log(`[Drive Import] Fetching file content for ID: ${fileId} (${filename})`);
       
       try {
-        const driveResponse = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+        const driveResponse = await drive.files.get(
+          {
+            fileId,
+            alt: "media",
+            supportsAllDrives: true,
+          },
+          {
+            responseType: "stream",
+          }
+        );
         
         if (driveResponse.status !== 200) {
           throw new Error(`Google Drive returned status ${driveResponse.status}`);
@@ -954,12 +913,19 @@ async function startServer() {
           const id = driveMatch[1];
           
           // Check if it's a folder or file
-          const metadata = await drive.files.get({ fileId: id, fields: 'mimeType, name' });
+          const metadata = await drive.files.get({
+            fileId: id,
+            fields: "mimeType,name",
+            supportsAllDrives: true,
+          });
           if (metadata.data.mimeType === 'application/vnd.google-apps.folder') {
             const media: any[] = [];
             const listResponse = await drive.files.list({
               q: `'${id}' in parents and (mimeType contains 'image/' or mimeType = 'application/vnd.google-apps.folder')`,
-              fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
+              fields: "files(id,name,mimeType,webContentLink,thumbnailLink)",
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+              corpora: "allDrives",
             });
             
             for (const file of (listResponse.data as any).files || []) {
