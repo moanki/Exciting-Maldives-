@@ -100,63 +100,25 @@ const normalizeResortName = (name: string) => {
 // Helper for Google Drive Auth
 async function getDriveAuth() {
   try {
-    const rawEnvJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    const serviceAccountPath = path.join(process.cwd(), "service_account.json");
 
-    console.log("[Drive Auth] Starting auth setup");
-    console.log("[Drive Auth] GOOGLE_SERVICE_ACCOUNT_JSON exists:", !!rawEnvJson);
-    console.log("[Drive Auth] GOOGLE_SERVICE_ACCOUNT_JSON length:", rawEnvJson?.length || 0);
+    console.log("[Drive Auth] Using key file:", serviceAccountPath);
+    console.log("[Drive Auth] File exists:", fs.existsSync(serviceAccountPath));
 
-    if (!rawEnvJson) {
-      throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_JSON");
-    }
-
-    let credentials: any;
-    try {
-      credentials = JSON.parse(rawEnvJson);
-    } catch (parseErr: any) {
-      logDriveError("Drive Auth JSON parse failed", parseErr, {
-        rawStartsWith: rawEnvJson.slice(0, 40),
-      });
-      throw new Error(`Invalid GOOGLE_SERVICE_ACCOUNT_JSON: ${parseErr.message}`);
-    }
-
-    console.log("[Drive Auth] Parsed JSON keys:", Object.keys(credentials || {}));
-    console.log("[Drive Auth] client_email:", credentials?.client_email || null);
-    console.log(
-      "[Drive Auth] private_key markers:",
-      !!credentials?.private_key?.includes("-----BEGIN PRIVATE KEY-----"),
-      !!credentials?.private_key?.includes("-----END PRIVATE KEY-----")
-    );
-    console.log(
-      "[Drive Auth] private_key length:",
-      credentials?.private_key?.length || 0
-    );
-
-    if (!credentials?.client_email) {
-      throw new Error("Service account JSON missing client_email");
-    }
-
-    if (!credentials?.private_key) {
-      throw new Error("Service account JSON missing private_key");
+    if (!fs.existsSync(serviceAccountPath)) {
+      throw new Error("service_account.json not found in app root");
     }
 
     const auth = new google.auth.GoogleAuth({
-      credentials,
+      keyFile: serviceAccountPath,
       scopes: ["https://www.googleapis.com/auth/drive.readonly"],
     });
 
     const authClient = await auth.getClient();
     console.log("[Drive Auth] getClient() succeeded");
 
-    try {
-      const token = await authClient.getAccessToken();
-      console.log("[Drive Auth] getAccessToken() succeeded:", !!token?.token);
-    } catch (tokenErr: any) {
-      logDriveError("Drive Auth token fetch failed", tokenErr, {
-        client_email: credentials.client_email,
-      });
-      throw tokenErr;
-    }
+    const token = await authClient.getAccessToken();
+    console.log("[Drive Auth] getAccessToken() succeeded:", !!token?.token);
 
     return authClient;
   } catch (err: any) {
@@ -779,7 +741,6 @@ async function handleGList(req: any, res: any) {
       fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
-      corpora: "allDrives",
     });
 
     console.log("[Drive List] file count:", response.data.files?.length || 0);
@@ -1827,27 +1788,31 @@ async function handleGList(req: any, res: any) {
       const authClient = await getDriveAuth();
       const drive = google.drive({ version: "v3", auth: authClient as any });
 
-      const about = await drive.about.get({
-        fields: "user,storageQuota",
-      });
-
-      let filesResult: any = null;
-      if (folderId) {
-        filesResult = await drive.files.list({
-          q: `'${folderId}' in parents and trashed = false`,
-          fields: "files(id,name,mimeType,driveId,parents)",
-          pageSize: 20,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-          corpora: "allDrives",
+      if (!folderId) {
+        return res.json({
+          ok: true,
+          message: "Auth works. Pass folderId to test folder access."
         });
       }
 
+      const folder = await drive.files.get({
+        fileId: folderId,
+        fields: "id,name,mimeType,driveId,parents",
+        supportsAllDrives: true,
+      });
+
+      const filesResult = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: "files(id,name,mimeType,driveId,parents)",
+        pageSize: 20,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
       res.json({
         ok: true,
-        serviceAccountSeen: true,
-        driveUser: about.data.user || null,
-        files: filesResult?.data?.files || [],
+        folder: folder.data,
+        files: filesResult.data.files || [],
       });
     } catch (err: any) {
       logDriveError("Drive Debug Test failed", err, { folderId });
