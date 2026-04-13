@@ -62,43 +62,48 @@ async function getDriveAuth() {
   const fileExists = fs.existsSync(serviceAccountPath);
   const envExists = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
+  // Prefer backend file first because it avoids broken env escaping
   if (fileExists) {
     try {
-      const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
+      const fileContent = fs.readFileSync(serviceAccountPath, 'utf8').trim();
       credentials = JSON.parse(fileContent);
       source = 'service_account.json';
-    } catch (e) {
-      console.error("Failed to parse service_account.json:", e);
-      throw new Error("Malformed service_account.json: Invalid JSON format.");
+    } catch (e: any) {
+      console.error('Failed to parse service_account.json:', e);
+      throw new Error('Malformed service_account.json: Invalid JSON format.');
     }
   } else if (envExists) {
     try {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
+      const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON!.trim();
+      credentials = JSON.parse(raw);
       source = 'GOOGLE_SERVICE_ACCOUNT_JSON environment variable';
-    } catch (e) {
-      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:", e);
-      throw new Error("Malformed GOOGLE_SERVICE_ACCOUNT_JSON: Invalid JSON format.");
+    } catch (e: any) {
+      console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', e);
+      throw new Error(`Malformed GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`);
     }
   } else {
-    throw new Error("No valid Google Drive service account credentials found (service_account.json or GOOGLE_SERVICE_ACCOUNT_JSON).");
+    throw new Error('No valid Google Drive service account credentials found (service_account.json or GOOGLE_SERVICE_ACCOUNT_JSON).');
   }
 
-  // Validate Service Account structure
   if (!credentials.client_email) {
     throw new Error(`Missing "client_email" in ${source}.`);
   }
+
   if (!credentials.private_key) {
     throw new Error(`Missing "private_key" in ${source}.`);
   }
 
-  // Normalize Private Key exactly as requested
-  let privateKey = credentials.private_key;
-  privateKey = privateKey.replace(/\r\n/g, '\n');
-  privateKey = privateKey.replace(/\\n/g, '\n');
-  privateKey = privateKey.trim();
+  // CORRECT normalization: convert escaped sequences into REAL newlines
+  const privateKey = String(credentials.private_key)
+    .replace(/\r\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .trim();
 
-  // Verify PEM markers
-  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') || !privateKey.includes('-----END PRIVATE KEY-----')) {
+  if (
+    !privateKey.includes('-----BEGIN PRIVATE KEY-----') ||
+    !privateKey.includes('-----END PRIVATE KEY-----')
+  ) {
     throw new Error(`Invalid PEM format in ${source}: Missing BEGIN/END PRIVATE KEY markers.`);
   }
 
@@ -110,15 +115,12 @@ async function getDriveAuth() {
       },
       scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
-    
+
     const authClient = await auth.getClient();
     console.log(`[Drive Auth] Google Drive Auth initialized successfully from ${source}.`);
     return authClient;
   } catch (err: any) {
-    console.error("Failed to initialize Google Auth client:", err);
-    if (err.message && err.message.includes('DECODER routines::unsupported')) {
-      throw new Error("Google Drive Authentication Error: The private key format is unsupported. This usually means the key is malformed or has incorrect line breaks. Ensure the private key in your service account JSON is a valid PEM string.");
-    }
+    console.error('Failed to initialize Google Auth client:', err);
     throw new Error(`Google Drive Authentication Error: ${err.message}`);
   }
 }
