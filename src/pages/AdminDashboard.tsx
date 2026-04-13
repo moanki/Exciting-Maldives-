@@ -1234,6 +1234,19 @@ function StatCard({ icon, label, value, color }: any) {
 
 function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }: { showNotification: (msg: string) => void, setUploadProgress: (p: number | null) => void, bulkImportEnabled: boolean }) {
   const navigate = useNavigate();
+  
+  // Helper to read response body safely only once
+  const readJsonSafe = async (response: Response) => {
+    const raw = await response.text();
+    let data = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      data = null;
+    }
+    return { raw, data };
+  };
+
   const [resorts, setResorts] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingResort, setEditingResort] = useState<any>(null);
@@ -1333,7 +1346,9 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
                 })
               });
               
-              if (!res.ok) throw new Error('Upload failed');
+              const { raw: resRaw, data: resData } = await readJsonSafe(res);
+              
+              if (!res.ok) throw new Error(resData?.error || resRaw || 'Upload failed');
 
               setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
             } catch (err) {
@@ -1537,21 +1552,17 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         body: JSON.stringify({ url: driveUrl }),
       });
 
+      const { raw: listRaw, data: listData } = await readJsonSafe(listResponse);
+
       if (!listResponse.ok) {
-        let errorMessage = 'Failed to list files from Google Drive';
-        try {
-          const errorData = await listResponse.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          const errorText = await listResponse.text();
-          console.error('Non-JSON error response:', listResponse.status, errorText.substring(0, 200));
-          errorMessage = `Server error (${listResponse.status}). The server might have crashed or timed out.`;
+        const errorMessage = listData?.error || listRaw || `Server error (${listResponse.status})`;
+        if (!listData) {
+          console.error('Non-JSON error response:', listResponse.status, listRaw.substring(0, 200));
         }
         throw new Error(errorMessage);
       }
 
-      const listData = await listResponse.json();
-      const files = listData.files; // Array of { id, name }
+      const files = listData?.files; // Array of { id, name }
 
       if (!files || files.length === 0) {
         throw new Error('No PDFs found in the provided Google Drive folder.');
@@ -1583,12 +1594,13 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
             body: JSON.stringify({ fileId: file.id }),
           });
 
+          const { raw: pdfRaw, data: pdfData } = await readJsonSafe(pdfResponse);
+
           if (!pdfResponse.ok) {
-            throw new Error(`Failed to download ${file.name}`);
+            throw new Error(pdfData?.error || pdfRaw || `Failed to download ${file.name}`);
           }
 
-          const pdfData = await pdfResponse.json();
-          const base64 = pdfData.base64;
+          const base64 = pdfData?.base64;
 
           if (!base64) throw new Error(`Empty PDF data for ${file.name}`);
 
@@ -1606,10 +1618,11 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
             })
           });
           
-          if (!res.ok) throw new Error('Staging failed');
+          const { raw: resRaw, data: resData } = await readJsonSafe(res);
+          
+          if (!res.ok) throw new Error(resData?.error || resRaw || 'Staging failed');
 
-          const result = await res.json();
-          if (result.skipped) {
+          if (resData?.skipped) {
             stats.skipped++;
           } else {
             stats.new++;

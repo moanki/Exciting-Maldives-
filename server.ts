@@ -62,10 +62,6 @@ async function getDriveAuth() {
   const fileExists = fs.existsSync(serviceAccountPath);
   const envExists = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-  if (fileExists && envExists) {
-    console.log("Note: Both service_account.json and GOOGLE_SERVICE_ACCOUNT_JSON exist. Preferring service_account.json.");
-  }
-
   if (fileExists) {
     try {
       const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
@@ -83,17 +79,11 @@ async function getDriveAuth() {
       console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:", e);
       throw new Error("Malformed GOOGLE_SERVICE_ACCOUNT_JSON: Invalid JSON format.");
     }
-  } else if (process.env.GOOGLE_DRIVE_API_KEY) {
-    console.log("Using GOOGLE_DRIVE_API_KEY for Drive authentication (fallback).");
-    return process.env.GOOGLE_DRIVE_API_KEY;
   } else {
     throw new Error("No valid Google Drive service account credentials found (service_account.json or GOOGLE_SERVICE_ACCOUNT_JSON).");
   }
 
   // Validate Service Account structure
-  if (credentials.type !== 'service_account') {
-    throw new Error(`Invalid credential type in ${source}: Expected "service_account", got "${credentials.type}".`);
-  }
   if (!credentials.client_email) {
     throw new Error(`Missing "client_email" in ${source}.`);
   }
@@ -101,20 +91,11 @@ async function getDriveAuth() {
     throw new Error(`Missing "private_key" in ${source}.`);
   }
 
-  console.log(`[Drive Auth] Service account JSON loaded from ${source}`);
-  console.log(`[Drive Auth] Client Email: ${credentials.client_email}`);
-  console.log(`[Drive Auth] Private Key exists: ${!!credentials.private_key}`);
-
-  // Harden Private Key
-  let privateKey = credentials.private_key.trim();
-  
-  // Remove accidental wrapping quotes if present (common when pasting into env vars)
-  if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
-    privateKey = privateKey.substring(1, privateKey.length - 1);
-  }
-
-  // Replace literal \n with actual newlines
+  // Normalize Private Key exactly as requested
+  let privateKey = credentials.private_key;
+  privateKey = privateKey.replace(/\r\n/g, '\n');
   privateKey = privateKey.replace(/\\n/g, '\n');
+  privateKey = privateKey.trim();
 
   // Verify PEM markers
   if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') || !privateKey.includes('-----END PRIVATE KEY-----')) {
@@ -122,20 +103,98 @@ async function getDriveAuth() {
   }
 
   try {
-    const auth = new JWT({
-      email: credentials.client_email,
-      key: privateKey,
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: credentials.client_email,
+        private_key: privateKey,
+      },
       scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
-    console.log(`Google Drive Auth initialized successfully.`);
-    return auth;
+    
+    const authClient = await auth.getClient();
+    console.log(`[Drive Auth] Google Drive Auth initialized successfully from ${source}.`);
+    return authClient;
   } catch (err: any) {
-    console.error("Failed to initialize JWT client:", err);
-    // Check for OpenSSL error and provide a more helpful message
+    console.error("Failed to initialize Google Auth client:", err);
     if (err.message && err.message.includes('DECODER routines::unsupported')) {
       throw new Error("Google Drive Authentication Error: The private key format is unsupported. This usually means the key is malformed or has incorrect line breaks. Ensure the private key in your service account JSON is a valid PEM string.");
     }
     throw new Error(`Google Drive Authentication Error: ${err.message}`);
+  }
+}
+
+// Bootstrap Super Admin
+async function bootstrapSuperAdmin() {
+  const email = 'shakila@excitingmv.com';
+  const password = 'welcome123#';
+  
+  try {
+    console.log(`[Bootstrap] Checking for super admin: ${email}`);
+    
+    // 1. Check if user exists in auth.users
+    const { data: userData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    if (listError) {
+      // If we can't list users, we might not have service role key
+      console.warn(`[Bootstrap] Could not list users (likely missing service role key): ${listError.message}`);
+      return;
+    }
+    
+    const users = userData?.users || [];
+    let user = users.find((u: any) => u.email === email);
+    
+    if (!user) {
+      console.log(`[Bootstrap] Creating new user: ${email}`);
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true
+      });
+      if (createError) throw createError;
+      user = newUser.user;
+    } else {
+      console.log(`[Bootstrap] User already exists: ${email}`);
+      // Update password as requested
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        password
+      });
+      if (updateError) console.warn(`[Bootstrap] Could not update password for ${email}:`, updateError.message);
+    }
+
+    if (!user) throw new Error("User creation/retrieval failed");
+
+    // 2. Ensure profile exists and has superadmin role
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email: email,
+        role: 'superadmin',
+        full_name: 'Shakila'
+      }, { onConflict: 'id' });
+    
+    if (profileError) throw profileError;
+
+    // 3. Ensure user has super_admin role in RBAC system
+    const { data: roleData, error: roleFetchError } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('key', 'super_admin')
+      .single();
+    
+    if (roleFetchError) throw roleFetchError;
+
+    const { error: userRoleError } = await supabaseAdmin
+      .from('user_roles')
+      .upsert({
+        user_id: user.id,
+        role_id: roleData.id
+      }, { onConflict: 'user_id,role_id' });
+    
+    if (userRoleError) throw userRoleError;
+
+    console.log(`[Bootstrap] Super admin rights granted to ${email} successfully.`);
+  } catch (err: any) {
+    console.error(`[Bootstrap] Failed to bootstrap super admin ${email}:`, err.message);
   }
 }
 
@@ -450,6 +509,9 @@ async function startServer() {
     });
   });
 
+  // Bootstrap Super Admin
+  await bootstrapSuperAdmin();
+
   app.post("/api/scrape-resort", async (req, res) => {
     const { url, crawl } = req.body;
     if (!url) return res.status(400).json({ error: "URL is required" });
@@ -522,14 +584,14 @@ async function startServer() {
       }
 
       const authClient = await getDriveAuth();
-      const drive = google.drive({ version: 'v3', auth: authClient });
+      const drive = google.drive({ version: 'v3', auth: authClient as any });
       const requestParams: any = {
         q: `'${folderId}' in parents and mimeType='application/pdf'`,
         fields: 'files(id, name)',
       };
 
       const listResponse = await drive.files.list(requestParams);
-      res.json({ files: listResponse.data.files || [] });
+      res.json({ files: (listResponse.data as any).files || [] });
     } catch (error: any) {
       console.error("Drive API list error:", error);
       res.status(500).json({ error: `Failed to list files from Google Drive: ${error.message}` });
@@ -542,7 +604,7 @@ async function startServer() {
 
     try {
       const authClient = await getDriveAuth();
-      const drive = google.drive({ version: 'v3', auth: authClient });
+      const drive = google.drive({ version: 'v3', auth: authClient as any });
       const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
       
       const chunks: Buffer[] = [];
@@ -603,7 +665,7 @@ async function startServer() {
       if (driveMatch) {
         try {
           const authClient = await getDriveAuth();
-          const drive = google.drive({ version: 'v3', auth: authClient });
+          const drive = google.drive({ version: 'v3', auth: authClient as any });
           const id = driveMatch[1];
           
           // Check if it's a folder or file
@@ -615,7 +677,7 @@ async function startServer() {
               fields: 'files(id, name, mimeType, webContentLink, thumbnailLink)',
             });
             
-            for (const file of listResponse.data.files || []) {
+            for (const file of (listResponse.data as any).files || []) {
               if (file.mimeType?.startsWith('image/')) {
                 const { category, subcategory, confidence } = classifyMedia("", file.name || "");
                 media.push({
@@ -632,14 +694,14 @@ async function startServer() {
             }
             return res.json({ success: true, media, source_type: 'google_drive' });
           } else {
-            const { category, subcategory, confidence } = classifyMedia("", metadata.data.name || "");
+            const { category, subcategory, confidence } = classifyMedia("", (metadata.data as any).name || "");
             const media = [{
               id: id,
               storage_path: `https://drive.google.com/thumbnail?id=${id}&sz=w1600`,
               category,
               subcategory,
               confidence_score: confidence,
-              original_filename: metadata.data.name,
+              original_filename: (metadata.data as any).name,
               source_type: 'google_drive',
               source_url: url
             }];
