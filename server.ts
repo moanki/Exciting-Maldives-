@@ -509,6 +509,20 @@ async function startServer() {
     });
   });
 
+  app.get("/api/debug/gemini-test", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const genAI = new GoogleGenAI({ apiKey });
+      const result = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: "Say OK" }] }],
+      });
+      res.json({ ok: true, text: result.text });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   await bootstrapInitialAdmin();
 
 
