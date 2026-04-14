@@ -93,7 +93,7 @@ export const ResortImportPanel: React.FC<ResortImportPanelProps> = ({
           <h4 className="text-xs font-bold uppercase tracking-widest text-brand-navy">Import from URL</h4>
           <div className="flex gap-2">
             <input type="text" value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://..." className="flex-1 bg-brand-paper/30 border border-brand-navy/10 rounded-xl px-4 py-3 text-sm focus:border-brand-teal outline-none" />
-            <button onClick={handleImportUrl} className="px-6 py-2 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Import</button>
+            <button type="button" onClick={handleImportUrl} className="px-6 py-2 bg-brand-teal text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-brand-navy transition-all">Import</button>
           </div>
         </div>
       </div>

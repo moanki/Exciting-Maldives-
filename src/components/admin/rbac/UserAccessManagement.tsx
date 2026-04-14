@@ -358,7 +358,7 @@ const UserModal = ({ user, roles, onClose, onSuccess }: any) => {
         exit={{ opacity: 0, scale: 0.9 }}
         className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl relative overflow-hidden"
       >
-        <button onClick={onClose} className="absolute top-8 right-8 text-brand-navy/20 hover:text-brand-coral transition-colors">
+        <button type="button" onClick={onClose} className="absolute top-8 right-8 text-brand-navy/20 hover:text-brand-coral transition-colors">
           <X size={24} />
         </button>
 

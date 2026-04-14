@@ -515,12 +515,13 @@ async function startServer() {
   // --- Generic Sync Endpoint to bypass WAF ---
   async function processResortPDF(base64Data: string, filename: string, batchId: string, skipDuplicates: boolean = false) {
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log("[DEBUG] API Key prefix:", apiKey?.substring(0, 5));
     if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
       throw new Error("Gemini API key is missing or invalid.");
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-pro";
+    const model = "gemini-3.1-pro-preview";
     const prompt = `
       Extract resort information from this PDF document. 
       Return a JSON object with the following fields:
@@ -536,52 +537,61 @@ async function startServer() {
       - seo_summary: string (short, luxury tone, human sounding, concise, suitable for listing/introduction)
     `;
 
-    const result = await genAI.models.generateContent({
-      model,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "application/pdf",
-                data: base64Data,
+    let result;
+    try {
+      result = await genAI.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: base64Data,
+                },
               },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            location: { type: Type.STRING },
-            atoll: { type: Type.STRING },
-            description: { type: Type.STRING },
-            category: { type: Type.STRING },
-            transfer_type: { type: Type.STRING },
-            meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
-            room_types: { 
-              type: Type.ARRAY, 
-              items: { 
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  max_guests: { type: Type.STRING },
-                  size: { type: Type.STRING }
-                }
-              } 
-            },
-            highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-            seo_summary: { type: Type.STRING }
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              location: { type: Type.STRING },
+              atoll: { type: Type.STRING },
+              description: { type: Type.STRING },
+              category: { type: Type.STRING },
+              transfer_type: { type: Type.STRING },
+              meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
+              room_types: { 
+                type: Type.ARRAY, 
+                items: { 
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    max_guests: { type: Type.STRING },
+                    size: { type: Type.STRING }
+                  }
+                } 
+              },
+              highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+              seo_summary: { type: Type.STRING }
+            }
           }
         }
+      });
+    } catch (error: any) {
+      console.error("[Gemini API Error]", error);
+      if (error.message && error.message.includes("API key not valid")) {
+        throw new Error("Gemini API key is invalid. Please configure a valid GEMINI_API_KEY in the Settings menu.");
       }
-    });
+      throw error;
+    }
 
     const extracted = JSON.parse(result.text || '{}');
     
@@ -1610,7 +1620,7 @@ async function handleDrivePdfImport(req: any, res: any) {
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-pro";
+    const model = "gemini-3.1-pro-preview";
     const prompt = `
       Extract resort information from this PDF document. 
       Return a JSON object with the following fields. IMPORTANT: Keep all descriptions concise to prevent output truncation.
@@ -1676,6 +1686,9 @@ async function handleDrivePdfImport(req: any, res: any) {
       res.json(JSON.parse(result.text || '{}'));
     } catch (error: any) {
       console.error('PDF extraction error:', error);
+      if (error.message && error.message.includes("API key not valid")) {
+        return res.status(500).json({ error: "Gemini API key is invalid. Please configure a valid GEMINI_API_KEY in the Settings menu." });
+      }
       res.status(500).json({ error: error.message });
     }
   });
@@ -1690,7 +1703,7 @@ async function handleDrivePdfImport(req: any, res: any) {
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-pro";
+    const model = "gemini-3.1-pro-preview";
     const prompt = `
       You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
       Create high-end marketing copy for the following resort:
@@ -1742,7 +1755,7 @@ async function handleDrivePdfImport(req: any, res: any) {
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-flash";
+    const model = "gemini-3-flash-preview";
     const prompt = `
       Analyze this image of a Maldives resort and classify it into one of these categories:
       - main_hero (exterior shots, aerials, main pool, landing)
@@ -1796,7 +1809,7 @@ async function handleDrivePdfImport(req: any, res: any) {
     console.log("[AI Status] Request received");
     res.json({ 
       configured: !!process.env.GEMINI_API_KEY,
-      model: "gemini-1.5-pro/flash"
+      model: "gemini-3.1-pro-preview/gemini-3-flash-preview"
     });
   });
 

@@ -181,6 +181,7 @@ export default function Login() {
           </div>
 
           <button 
+            type="button"
             onClick={handleGoogleLogin}
             className="w-full border border-brand-navy/10 text-brand-navy py-4 rounded-full font-bold uppercase tracking-widest hover:bg-brand-paper transition-all flex items-center justify-center gap-2 font-sans"
           >
@@ -189,6 +190,7 @@ export default function Login() {
 
           <div className="mt-8 flex justify-center">
             <button 
+              type="button"
               onClick={() => {
                 localStorage.setItem('demo_mode', 'admin');
                 window.location.href = '/admin';

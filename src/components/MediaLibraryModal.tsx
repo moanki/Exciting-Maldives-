@@ -113,7 +113,7 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({ onClose, o
       <div className="bg-white w-full max-w-4xl rounded-[32px] p-8 shadow-2xl h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-serif text-brand-navy">Media Library</h3>
-          <button onClick={onClose} className="p-2 hover:bg-brand-paper rounded-full"><X size={20} /></button>
+          <button type="button" onClick={onClose} className="p-2 hover:bg-brand-paper rounded-full"><X size={20} /></button>
         </div>
         
         <div className="flex flex-col md:flex-row gap-4 mb-6">
