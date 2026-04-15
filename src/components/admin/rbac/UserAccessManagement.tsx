@@ -179,8 +179,12 @@ export const UserAccessManagement: React.FC = () => {
                       <div className="flex flex-wrap gap-2">
                         {user.user_roles?.length > 0 ? (
                           user.user_roles.map((ur: any) => (
-                            <span key={ur.role_id} className="px-3 py-1 bg-brand-teal/10 text-brand-teal text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center gap-2">
-                              {ur.roles?.label}
+                            <span 
+                              key={ur.role_id} 
+                              title={ur.roles?.description || ''}
+                              className="px-3 py-1 bg-brand-teal/10 text-brand-teal text-[10px] font-bold uppercase tracking-widest rounded-full flex items-center gap-2 cursor-help"
+                            >
+                              {ur.roles?.label || ur.roles?.key}
                               {hasPermission('users.manage') && (
                                 <button 
                                   onClick={async () => {
@@ -204,6 +208,10 @@ export const UserAccessManagement: React.FC = () => {
                               )}
                             </span>
                           ))
+                        ) : user.role ? (
+                          <span title="Legacy profile role fallback" className="px-3 py-1 bg-brand-navy/5 text-brand-navy/40 text-[10px] font-bold uppercase tracking-widest rounded-full">
+                            {user.role}
+                          </span>
                         ) : (
                           <span className="text-[10px] text-brand-navy/20 font-bold uppercase tracking-widest">No Roles</span>
                         )}

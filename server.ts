@@ -118,6 +118,22 @@ async function getSuperAdminCount() {
   return rows.length;
 }
 
+async function listAllAuthUsers() {
+  const users: any[] = [];
+  const perPage = 200;
+  let page = 1;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const batch = data?.users || [];
+    users.push(...batch);
+    if (batch.length < perPage) break;
+    page += 1;
+  }
+  return users;
+}
+
 const GEMINI_KEY_PLACEHOLDERS = new Set(['', 'TODO_KEYHERE', 'YOUR_GEMINI_API_KEY_HERE', 'changeme']);
 const GEMINI_SETTINGS_KEYS = ['gemini_api_key:published', 'gemini_api_key', 'gemini_api_key:draft'];
 let cachedGeminiApiKey: { value: string | null; expiresAt: number } = { value: null, expiresAt: 0 };
@@ -610,27 +626,33 @@ async function getUserPermissionsServerSide(userId: string) {
 }
 
 /**
- * Middleware to require a specific permission.
+ * Middleware factory to require a specific permission.
  */
-async function requirePermission(req: express.Request, res: express.Response, next: express.NextFunction, permissionKey: string) {
-  try {
-    const user = await getAuthenticatedUser(req);
-    const permissions = await getUserPermissionsServerSide(user.id);
+function requirePermission(permissionKey: string) {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      const user = await getAuthenticatedUser(req);
+      const permissions = await getUserPermissionsServerSide(user.id);
 
-    if (!permissions.includes(permissionKey)) {
-      return res.status(403).json({ error: `Forbidden: Missing permission ${permissionKey}` });
+      if (!permissions.includes(permissionKey)) {
+        console.warn(`[RBAC] Forbidden: User ${user.id} missing ${permissionKey}`);
+        return res.status(403).json({ error: `Forbidden: Missing permission ${permissionKey}` });
+      }
+
+      // Attach user to request for later use
+      (req as any).user = user;
+      next();
+    } catch (error: any) {
+      console.error(`[RBAC] Auth error for ${req.path}: ${error.message}`);
+      res.status(401).json({ error: error.message });
     }
-
-    // Attach user to request for later use
-    (req as any).user = user;
-    next();
-  } catch (error: any) {
-    res.status(401).json({ error: error.message });
-  }
+  };
 }
 
 async function startServer() {
   const app = express();
+  console.log("--- STARTING SERVER WITH RBAC FIXES ---");
+  
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -645,7 +667,7 @@ async function startServer() {
 
   // --- Admin RBAC Endpoints (Moved up for priority) ---
 
-  app.get("/api/admin/roles", (req, res, next) => requirePermission(req, res, next, "roles.read"), async (req, res) => {
+  app.get("/api/admin/roles", requirePermission("roles.read"), async (req, res) => {
     try {
       if (!ensureAdminService(res)) return;
 
@@ -662,29 +684,29 @@ async function startServer() {
     }
   });
 
-  app.get("/api/admin/users", (req, res, next) => requirePermission(req, res, next, "users.read"), async (req, res) => {
+  app.get("/api/admin/users", requirePermission("users.read"), async (req, res) => {
     try {
       if (!ensureAdminService(res)) return;
 
       const { data: profiles, error: profileError } = await supabaseAdmin
         .from("profiles")
-        .select("*, user_roles(role_id, roles(key, label))")
+        .select("*, user_roles(role_id, roles(key, label, description))")
         .order("created_at", { ascending: false });
 
       if (profileError) throw profileError;
 
-      const { data: authList, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-      if (authError) throw authError;
+      const authUsers = await listAllAuthUsers();
 
-      const authUsers = authList?.users || [];
-
-      const combinedUsers = (profiles || []).map((profile: any) => {
-        const authUser = authUsers.find((u: any) => u.id === profile.id);
+      const combinedUsers = (authUsers || []).map((authUser: any) => {
+        const profile = (profiles || []).find((p: any) => p.id === authUser.id);
         return {
           ...profile,
-          email: authUser?.email || profile.email,
-          last_sign_in_at: authUser?.last_sign_in_at || null,
-          confirmed_at: authUser?.confirmed_at || null
+          id: authUser.id,
+          email: authUser.email,
+          full_name: profile?.full_name || authUser.user_metadata?.full_name || 'No Name',
+          last_sign_in_at: authUser.last_sign_in_at || null,
+          confirmed_at: authUser.confirmed_at || null,
+          user_roles: profile?.user_roles || []
         };
       });
 
@@ -694,7 +716,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/admin/users", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+  app.post("/api/admin/users", requirePermission("users.manage"), async (req, res) => {
     const { email, password, full_name, role_id } = req.body;
 
     try {
@@ -737,9 +759,7 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/admin/users/:id", async (req, res, next) => {
-    await requirePermission(req, res, next, 'users.manage');
-  }, async (req, res) => {
+  app.patch("/api/admin/users/:id", requirePermission("users.manage"), async (req, res) => {
     try {
       const { id } = req.params;
       const { email, password, full_name } = req.body;
@@ -770,7 +790,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/admin/users/:id", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+  app.delete("/api/admin/users/:id", requirePermission("users.manage"), async (req, res) => {
     const { id } = req.params;
     const currentUser = (req as any).user;
 
@@ -797,7 +817,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/admin/users/:id/roles", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+  app.post("/api/admin/users/:id/roles", requirePermission("users.manage"), async (req, res) => {
     const { id } = req.params;
     const { role_id } = req.body;
 
@@ -820,7 +840,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/admin/users/:id/roles/:roleId", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+  app.delete("/api/admin/users/:id/roles/:roleId", requirePermission("users.manage"), async (req, res) => {
     const { id, roleId } = req.params;
     const currentUser = (req as any).user;
 

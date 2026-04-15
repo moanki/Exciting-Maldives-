@@ -104,12 +104,29 @@ export const RoleManagement: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 {(expandedRoleId === role.id ? role.role_permissions : role.role_permissions?.slice(0, 6))?.map((rp: any) => (
                   <div
-                    key={rp.permissions.key}
-                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 bg-brand-paper px-3 py-1.5 rounded-lg"
-                    title={rp.permissions.description || rp.permissions.key}
+                    key={`${role.id}-${rp.permission_id}`}
+                    className={`flex flex-col gap-1 p-3 rounded-xl border transition-all ${
+                      expandedRoleId === role.id 
+                        ? 'w-full bg-brand-paper/50 border-brand-navy/5' 
+                        : 'bg-brand-paper border-transparent'
+                    }`}
                   >
-                    <CheckCircle2 size={10} className="text-brand-teal" />
-                    {rp.permissions.label}
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={10} className="text-brand-teal" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/60">
+                        {rp.permissions?.label || rp.permissions?.key}
+                      </span>
+                    </div>
+                    {expandedRoleId === role.id && (
+                      <div className="pl-5 space-y-1">
+                        <p className="text-[9px] font-mono text-brand-navy/30 uppercase tracking-tighter">
+                          Key: {rp.permissions?.key}
+                        </p>
+                        <p className="text-xs text-brand-navy/60 font-sans leading-relaxed">
+                          {rp.permissions?.description || 'No permission description provided.'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {expandedRoleId !== role.id && role.role_permissions?.length > 6 && (
