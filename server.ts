@@ -761,6 +761,7 @@ async function startServer() {
 
   app.patch("/api/admin/users/:id", requirePermission("users.manage"), async (req, res) => {
     try {
+      if (!ensureAdminService(res)) return;
       const { id } = req.params;
       const { email, password, full_name } = req.body;
 

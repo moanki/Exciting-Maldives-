@@ -22,15 +22,11 @@ export const UserAccessManagement: React.FC = () => {
 
     try {
       const response = await apiFetch("/api/admin/users");
-      const data = await readApiJson(response);
-
-      if (!response.ok) throw new Error(data.error || "Failed to fetch users");
+      const data = await readApiJson<any[]>(response);
       setUsers(data);
 
       const rolesResponse = await apiFetch("/api/admin/roles");
-      const rolesData = await readApiJson(rolesResponse);
-
-      if (!rolesResponse.ok) throw new Error(rolesData.error || "Failed to fetch roles");
+      const rolesData = await readApiJson<any[]>(rolesResponse);
       setRoles(rolesData);
     } catch (err: any) {
       console.error("Failed to fetch users:", err);
@@ -54,9 +50,7 @@ export const UserAccessManagement: React.FC = () => {
 
     try {
       const response = await apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
-      const data = await readApiJson(response);
-
-      if (!response.ok) throw new Error(data.error || "Failed to delete user");
+      await readApiJson(response);
       await fetchUsers();
     } catch (err: any) {
       setError(err.message || "Failed to delete user");
@@ -192,8 +186,7 @@ export const UserAccessManagement: React.FC = () => {
                                     setError(null);
                                     try {
                                       const response = await apiFetch(`/api/admin/users/${user.id}/roles/${ur.role_id}`, { method: "DELETE" });
-                                      const data = await readApiJson(response);
-                                      if (!response.ok) throw new Error(data.error || "Failed to remove role");
+                                      await readApiJson(response);
                                       await fetchUsers();
                                     } catch (err: any) {
                                       setError(err.message || "Failed to remove role");
@@ -228,8 +221,7 @@ export const UserAccessManagement: React.FC = () => {
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ role_id: roleId })
                                 });
-                                const data = await readApiJson(response);
-                                if (!response.ok) throw new Error(data.error || "Failed to assign role");
+                                await readApiJson(response);
                                 await fetchUsers();
                               } catch (err: any) {
                                 setError(err.message || "Failed to assign role");
@@ -391,9 +383,7 @@ const UserModal = ({ user, roles, onClose, onSuccess }: any) => {
         body: JSON.stringify(body)
       });
 
-      const data = await readApiJson(response);
-      if (!response.ok) throw new Error(data.error || "Failed to save user");
-
+      await readApiJson(response);
       onSuccess();
     } catch (err: any) {
       setError(err.message || "Failed to save user");

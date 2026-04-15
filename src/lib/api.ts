@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 /**
  * Resolves an API URL, prepending the base URL if it's a relative path.
@@ -10,11 +10,8 @@ function resolveApiUrl(url: string): string {
     return url;
   }
   
-  // Ensure we don't have double slashes if API_BASE_URL ends with / and url starts with /
-  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const path = url.startsWith('/') ? url : `/${url}`;
-  
-  return `${base}${path}`;
+  return `${API_BASE_URL}${path}`;
 }
 
 /**
@@ -52,18 +49,34 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
  * If HTML comes back from /api routes, the request likely hit the frontend app 
  * or wrong proxy instead of the Express server.
  */
-export async function readApiJson(response: Response) {
+export async function readApiJson<T = any>(response: Response): Promise<T> {
   const text = await response.text();
   
   try {
-    return JSON.parse(text);
-  } catch (err) {
+    const data = JSON.parse(text);
+    
+    // If response is not ok, throw the best available message
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `API Error: ${response.status} ${response.statusText}`);
+    }
+    
+    return data;
+  } catch (err: any) {
+    // If it's already an error with a message we just threw, rethrow it
+    if (err.message && !err.message.includes('Unexpected token')) {
+      throw err;
+    }
+
     // If it's not JSON, check if it looks like HTML
     if (text.trim().toLowerCase().startsWith('<!doctype html') || text.trim().toLowerCase().startsWith('<html')) {
       throw new Error("Server returned HTML instead of JSON. Check API route, proxy, or API base URL.");
     }
     
-    // Fallback for other non-JSON content
+    // Fallback for other non-JSON content or empty response
+    if (!text.trim()) {
+      throw new Error("Server returned an empty response.");
+    }
+
     throw new Error(`Failed to parse server response as JSON: ${text.slice(0, 100)}${text.length > 100 ? '...' : ''}`);
   }
 }

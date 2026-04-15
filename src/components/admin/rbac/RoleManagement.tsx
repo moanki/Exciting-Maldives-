@@ -19,9 +19,7 @@ export const RoleManagement: React.FC = () => {
 
       try {
         const response = await apiFetch("/api/admin/roles");
-        const data = await readApiJson(response);
-
-        if (!response.ok) throw new Error(data.error || "Failed to fetch roles");
+        const data = await readApiJson<any[]>(response);
         setRoles(data);
       } catch (err: any) {
         console.error("Failed to fetch roles:", err);
