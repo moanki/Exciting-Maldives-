@@ -8,23 +8,30 @@ import { apiFetch } from '../../../lib/api';
 export const RoleManagement: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
   const { hasPermission, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     async function fetchRoles() {
+      setLoading(true);
+      setError(null);
+
       try {
-        const response = await apiFetch('/api/admin/roles');
+        const response = await apiFetch("/api/admin/roles");
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
+
+        if (!response.ok) throw new Error(data.error || "Failed to fetch roles");
         setRoles(data);
-      } catch (err) {
-        console.error('Failed to fetch roles:', err);
+      } catch (err: any) {
+        console.error("Failed to fetch roles:", err);
+        setError(err.message || "Failed to load roles");
       } finally {
         setLoading(false);
       }
     }
 
-    if (!permissionsLoading && hasPermission('roles.read')) {
+    if (!permissionsLoading && hasPermission("roles.read")) {
       fetchRoles();
     }
   }, [permissionsLoading, hasPermission]);
@@ -49,6 +56,12 @@ export const RoleManagement: React.FC = () => {
         <h1 className="text-3xl font-serif text-brand-navy">Role Management</h1>
         <p className="text-brand-navy/40 text-sm mt-1">View system roles and their associated permissions.</p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-brand-coral/10 border border-brand-coral/20 rounded-2xl text-brand-coral text-sm font-medium">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {roles.map((role, idx) => (
@@ -79,19 +92,27 @@ export const RoleManagement: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-brand-paper pb-2">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/40">Permissions</span>
-                <span className="text-[10px] font-bold text-brand-teal bg-brand-teal/10 px-2 py-0.5 rounded-full">
-                  {role.role_permissions?.length || 0} Total
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setExpandedRoleId(expandedRoleId === role.id ? null : role.id)}
+                  className="text-[10px] font-bold text-brand-teal bg-brand-teal/10 px-2 py-0.5 rounded-full"
+                >
+                  {expandedRoleId === role.id ? "Hide" : `${role.role_permissions?.length || 0} Total`}
+                </button>
               </div>
-              
+
               <div className="flex flex-wrap gap-2">
-                {role.role_permissions?.slice(0, 6).map((rp: any) => (
-                  <div key={rp.permissions.key} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 bg-brand-paper px-3 py-1.5 rounded-lg">
+                {(expandedRoleId === role.id ? role.role_permissions : role.role_permissions?.slice(0, 6))?.map((rp: any) => (
+                  <div
+                    key={rp.permissions.key}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-navy/40 bg-brand-paper px-3 py-1.5 rounded-lg"
+                    title={rp.permissions.description || rp.permissions.key}
+                  >
                     <CheckCircle2 size={10} className="text-brand-teal" />
                     {rp.permissions.label}
                   </div>
                 ))}
-                {role.role_permissions?.length > 6 && (
+                {expandedRoleId !== role.id && role.role_permissions?.length > 6 && (
                   <div className="text-[10px] font-bold uppercase tracking-widest text-brand-navy/20 px-3 py-1.5">
                     + {role.role_permissions.length - 6} more
                   </div>

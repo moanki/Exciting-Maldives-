@@ -85,6 +85,39 @@ const supabaseAdmin = (() => {
   });
 })();
 
+const isAdminServiceConfigured =
+  !!process.env.VITE_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+function ensureAdminService(res: express.Response) {
+  if (!isAdminServiceConfigured) {
+    res.status(503).json({
+      error: "Admin service is not configured on the server. Check SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL."
+    });
+    return false;
+  }
+  return true;
+}
+
+async function getSuperAdminAssignments() {
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id, role_id, roles!inner(key)")
+    .eq("roles.key", "super_admin");
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function isUserSuperAdmin(userId: string) {
+  const rows = await getSuperAdminAssignments();
+  return rows.some((row: any) => row.user_id === userId);
+}
+
+async function getSuperAdminCount() {
+  const rows = await getSuperAdminAssignments();
+  return rows.length;
+}
+
 const GEMINI_KEY_PLACEHOLDERS = new Set(['', 'TODO_KEYHERE', 'YOUR_GEMINI_API_KEY_HERE', 'changeme']);
 const GEMINI_SETTINGS_KEYS = ['gemini_api_key:published', 'gemini_api_key', 'gemini_api_key:draft'];
 let cachedGeminiApiKey: { value: string | null; expiresAt: number } = { value: null, expiresAt: 0 };
@@ -157,12 +190,24 @@ const normalizeResortName = (name: string) => {
 // Helper for Google Drive Auth
 async function getDriveAuth() {
   const serviceAccountPath = path.join(process.cwd(), "service_account.json");
+  let key: any;
 
-  if (!fs.existsSync(serviceAccountPath)) {
-    throw new Error("service_account.json not found in app root");
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    } catch (e) {
+      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON env var");
+    }
   }
 
-  const key = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  if (!key && fs.existsSync(serviceAccountPath)) {
+    key = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  }
+
+  if (!key) {
+    throw new Error("Google Service Account credentials not found. Please set GOOGLE_SERVICE_ACCOUNT_JSON environment variable or provide service_account.json file.");
+  }
+
   const auth = new JWT({
     email: key.client_email,
     key: key.private_key,
@@ -250,6 +295,75 @@ async function bootstrapInitialAdmin() {
   } catch (err: any) {
     console.error(`[Bootstrap] Failed to bootstrap super admin ${email}:`, err.message);
   }
+}
+
+// Seed Role and Permission Metadata
+async function seedMetadata() {
+  console.log('[Seed] Updating role and permission metadata...');
+  
+  const roles = [
+    {
+      key: 'super_admin',
+      label: 'Super Administrator',
+      description: 'Absolute system access. Can manage all aspects of the platform including security, users, and system settings.'
+    },
+    {
+      key: 'admin',
+      label: 'Administrator',
+      description: 'Full administrative access to resorts, content, and imports. Can manage users but cannot modify system-level security settings.'
+    },
+    {
+      key: 'content_manager',
+      label: 'Content Manager',
+      description: 'Responsible for managing resort data, media, and site content. Has access to import tools and content moderation.'
+    },
+    {
+      key: 'partner',
+      label: 'Resort Partner',
+      description: 'Limited access to manage their own resort data and view relevant analytics.'
+    }
+  ];
+
+  for (const role of roles) {
+    try {
+      await supabaseAdmin
+        .from('roles')
+        .update({ 
+          label: role.label, 
+          description: role.description 
+        })
+        .eq('key', role.key);
+    } catch (e) {
+      // Ignore errors if columns don't exist
+    }
+  }
+
+  // Seed some permission labels if they are missing
+  const permissions = [
+    { key: 'users.read', label: 'View Users' },
+    { key: 'users.manage', label: 'Manage Users' },
+    { key: 'roles.read', label: 'View Roles' },
+    { key: 'roles.manage', label: 'Manage Roles' },
+    { key: 'resorts.read', label: 'View Resorts' },
+    { key: 'resorts.create', label: 'Create Resorts' },
+    { key: 'resorts.update', label: 'Update Resorts' },
+    { key: 'resorts.delete', label: 'Delete Resorts' },
+    { key: 'imports.read', label: 'View Imports' },
+    { key: 'imports.create', label: 'Run Imports' }
+  ];
+
+  for (const perm of permissions) {
+    try {
+      await supabaseAdmin
+        .from('permissions')
+        .update({ label: perm.label })
+        .eq('key', perm.key);
+    } catch (e) {
+      // Ignore
+    }
+  }
+  
+  console.log('[Seed] Metadata update completed.');
 }
 
 // Helper for classification with weighted scoring
@@ -529,6 +643,224 @@ async function startServer() {
     next();
   });
 
+  // --- Admin RBAC Endpoints (Moved up for priority) ---
+
+  app.get("/api/admin/roles", (req, res, next) => requirePermission(req, res, next, "roles.read"), async (req, res) => {
+    try {
+      if (!ensureAdminService(res)) return;
+
+      const { data, error } = await supabaseAdmin
+        .from("roles")
+        .select("*, role_permissions(permission_id, permissions(key, label, description, module, action))")
+        .order("label");
+
+      if (error) throw error;
+
+      res.json(data || []);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch roles" });
+    }
+  });
+
+  app.get("/api/admin/users", (req, res, next) => requirePermission(req, res, next, "users.read"), async (req, res) => {
+    try {
+      if (!ensureAdminService(res)) return;
+
+      const { data: profiles, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("*, user_roles(role_id, roles(key, label))")
+        .order("created_at", { ascending: false });
+
+      if (profileError) throw profileError;
+
+      const { data: authList, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+      if (authError) throw authError;
+
+      const authUsers = authList?.users || [];
+
+      const combinedUsers = (profiles || []).map((profile: any) => {
+        const authUser = authUsers.find((u: any) => u.id === profile.id);
+        return {
+          ...profile,
+          email: authUser?.email || profile.email,
+          last_sign_in_at: authUser?.last_sign_in_at || null,
+          confirmed_at: authUser?.confirmed_at || null
+        };
+      });
+
+      res.json(combinedUsers);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+    const { email, password, full_name, role_id } = req.body;
+
+    try {
+      if (!ensureAdminService(res)) return;
+
+      if (!email || !password || !full_name) {
+        return res.status(400).json({ error: "Email, password, and full name are required" });
+      }
+
+      if (!role_id) {
+        return res.status(400).json({ error: "Initial role is required when creating a user" });
+      }
+
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true
+      });
+
+      if (authError) throw authError;
+
+      const userId = authData.user.id;
+
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .update({ full_name })
+        .eq("id", userId);
+
+      if (profileError) throw profileError;
+
+      const { error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: userId, role_id });
+
+      if (roleError) throw roleError;
+
+      res.json({ success: true, user: authData.user });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", async (req, res, next) => {
+    await requirePermission(req, res, next, 'users.manage');
+  }, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { email, password, full_name } = req.body;
+
+      // Update Auth
+      if (email || password) {
+        const updateData: any = {};
+        if (email) updateData.email = email;
+        if (password) updateData.password = password;
+        
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, updateData);
+        if (authError) throw authError;
+      }
+
+      // Update Profile
+      if (full_name || email) {
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update({ full_name, email })
+          .eq('id', id);
+        if (profileError) throw profileError;
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('[Admin API] Error updating user:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+    const { id } = req.params;
+    const currentUser = (req as any).user;
+
+    try {
+      if (!ensureAdminService(res)) return;
+
+      if (id === currentUser.id) {
+        return res.status(400).json({ error: "You cannot delete your own account" });
+      }
+
+      const targetIsSuperAdmin = await isUserSuperAdmin(id);
+      const superAdminCount = await getSuperAdminCount();
+
+      if (targetIsSuperAdmin && superAdminCount <= 1) {
+        return res.status(400).json({ error: "Cannot delete the last super admin account" });
+      }
+
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
+      if (error) throw error;
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to delete user" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/roles", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+    const { id } = req.params;
+    const { role_id } = req.body;
+
+    try {
+      if (!ensureAdminService(res)) return;
+
+      if (!role_id) {
+        return res.status(400).json({ error: "role_id is required" });
+      }
+
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: id, role_id });
+
+      if (error) throw error;
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to assign role" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id/roles/:roleId", (req, res, next) => requirePermission(req, res, next, "users.manage"), async (req, res) => {
+    const { id, roleId } = req.params;
+    const currentUser = (req as any).user;
+
+    try {
+      if (!ensureAdminService(res)) return;
+
+      const { data: roleRow, error: roleRowError } = await supabaseAdmin
+        .from("roles")
+        .select("id, key")
+        .eq("id", roleId)
+        .single();
+
+      if (roleRowError) throw roleRowError;
+
+      if (roleRow.key === "super_admin") {
+        const superAdminCount = await getSuperAdminCount();
+
+        if (superAdminCount <= 1) {
+          return res.status(400).json({ error: "Cannot remove the last super admin role" });
+        }
+
+        if (id === currentUser.id) {
+          return res.status(400).json({ error: "You cannot remove your own super admin role" });
+        }
+      }
+
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", id)
+        .eq("role_id", roleId);
+
+      if (error) throw error;
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to remove role" });
+    }
+  });
+
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -584,7 +916,7 @@ async function startServer() {
   });
 
   await bootstrapInitialAdmin();
-
+  await seedMetadata();
 
   // --- Generic Sync Endpoint to bypass WAF ---
   async function processResortPDF(base64Data: string, filename: string, batchId: string, skipDuplicates: boolean = false) {
@@ -798,999 +1130,148 @@ async function startServer() {
 
   app.get("/api/drive/list", async (req, res) => {
     const folderId = req.query.folderId as string;
-
     try {
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: "v3", auth: authClient as any });
+      const auth = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth });
 
       const response = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
-        fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
+        q: `'${folderId || "root"}' in parents and trashed = false and mimeType = 'application/pdf'`,
+        fields: "files(id, name, mimeType, size, thumbnailLink, webViewLink)",
       });
 
       res.json({ files: response.data.files || [] });
     } catch (err: any) {
-      logDriveError("Direct Drive List failed", err, { folderId });
-      res.status(500).json({
-        error: err.message,
-        debug: serializeError(err),
-      });
+      logDriveError("Drive List", err, { folderId });
+      res.status(500).json({ error: err.message });
     }
   });
 
-  app.post("/api/drive/import", async (req, res) => {
-    const { batchId, fileId, filename, skipDuplicates = false } = req.body;
-
-    if (!fileId || !batchId) {
-      return res.status(400).json({ error: "Batch ID and File ID are required" });
-    }
-
+  async function handleGList(req: express.Request, res: express.Response) {
+    const folderId = req.query.folderId as string;
     try {
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: "v3", auth: authClient as any });
+      const auth = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth });
 
-      const driveResponse = await drive.files.get(
-        {
-          fileId,
-          alt: "media",
-          supportsAllDrives: true,
-        },
-        {
-          responseType: "stream",
-        }
+      const response = await drive.files.list({
+        q: `'${folderId || "root"}' in parents and trashed = false and mimeType = 'application/pdf'`,
+        fields: "files(id, name, mimeType, size, thumbnailLink, webViewLink)",
+      });
+
+      res.json({ files: response.data.files || [] });
+    } catch (err: any) {
+      logDriveError("Sync List", err, { folderId });
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  async function handleDrivePdfImport(req: express.Request, res: express.Response) {
+    const { fileId, filename, batchId, skipDuplicates } = req.body;
+    try {
+      const auth = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth });
+
+      const response = await drive.files.get(
+        { fileId, alt: "media" },
+        { responseType: "arraybuffer" }
       );
 
-      const chunks: Buffer[] = [];
-      for await (const chunk of driveResponse.data) {
-        chunks.push(Buffer.from(chunk));
-      }
-
-      const buffer = Buffer.concat(chunks);
-      const base64Data = buffer.toString("base64");
-
-      const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
+      const base64 = Buffer.from(response.data as ArrayBuffer).toString("base64");
+      const result = await processResortPDF(base64, filename, batchId, skipDuplicates);
       res.json(result);
     } catch (err: any) {
-      logDriveError("Direct Drive Import failed", err, { fileId, filename, batchId });
-      res.status(500).json({
-        error: err.message,
-        debug: serializeError(err),
-      });
-    }
-  });
-
-async function handleGList(req: any, res: any) {
-  const folderId = req.query.folderId as string;
-
-  try {
-    const authClient = await getDriveAuth();
-    const drive = google.drive({ version: "v3", auth: authClient as any });
-
-    const response = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType = 'application/pdf' and trashed = false`,
-      fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    });
-
-    res.json({ files: response.data.files || [] });
-  } catch (err: any) {
-    res.status(500).json({
-      error: err.message,
-      debug: serializeError(err),
-    });
-  }
-}
-
-  async function handleGFetch(req: any, res: any) {
-    try {
-      const { fileId } = req.body;
-      console.log(`[Drive Fetch] Fetching file: ${fileId}`);
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: 'v3', auth: authClient as any });
-      const response = await drive.files.get(
-        {
-          fileId,
-          alt: "media",
-          supportsAllDrives: true,
-        },
-        {
-          responseType: "stream",
-        }
-      );
-      response.data.pipe(res);
-    } catch (error: any) {
-      console.error("[Drive Fetch] Error:", error);
-      res.status(500).json({ error: error.message });
+      logDriveError("Drive PDF Import", err, { fileId, filename });
+      res.status(500).json({ error: err.message });
     }
   }
 
-  async function handleLocalImport(req: any, res: any) {
-    try {
-      const { batchId, base64Data, filename, skipDuplicates = false } = req.body;
-      const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
-      res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
-
-  async function handleScrape(req: any, res: any) {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: "URL is required" });
-
-    try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-      const $ = cheerio.load(response.data);
-      const images = new Set<string>();
-      
-      $("img").each((i, el) => {
-        const src = $(el).attr("src");
-        if (src) {
-          try {
-            const absoluteUrl = new URL(src, url).toString();
-            images.add(absoluteUrl);
-          } catch (e) {}
-        }
-      });
-
-      async function scrapePage(pageUrl: string) {
-        try {
-          const pageResponse = await axios.get(pageUrl, { timeout: 5000 });
-          const page$ = cheerio.load(pageResponse.data);
-          page$("img").each((i, el) => {
-            const src = page$(el).attr("src");
-            if (src) {
-              try {
-                const absoluteUrl = new URL(src, pageUrl).toString();
-                images.add(absoluteUrl);
-              } catch (e) {}
-            }
-          });
-        } catch (e) {}
-      }
-
-      const links: string[] = [];
-      $("a").each((i, el) => {
-        const href = $(el).attr("href");
-        if (href) {
-          try {
-            const absoluteUrl = new URL(href, url).toString();
-            if (absoluteUrl.startsWith(url) && !absoluteUrl.includes("#")) {
-              links.push(absoluteUrl);
-            }
-          } catch (e) {}
-        }
-      });
-
-      for (const link of links.slice(0, 3)) {
-        await scrapePage(link);
-      }
-      
-      const filteredImages = Array.from(images).filter(img => !img.includes("logo") && !img.includes("icon"));
-      res.json({ images: filteredImages.slice(0, 50) });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to scrape URL" });
-    }
-  }
-
-async function handleDrivePdfImport(req: any, res: any) {
-  const { batchId, fileId, filename, skipDuplicates = false } = req.body;
-
-  if (!fileId || !batchId) {
-    return res.status(400).json({ error: "Batch ID and File ID are required" });
-  }
-
-  try {
-    const authClient = await getDriveAuth();
-    const drive = google.drive({ version: "v3", auth: authClient as any });
-
-    const driveResponse = await drive.files.get(
-      {
-        fileId,
-        alt: "media",
-        supportsAllDrives: true,
-      },
-      {
-        responseType: "stream",
-      }
-    );
-
-    const chunks: Buffer[] = [];
-    for await (const chunk of driveResponse.data) {
-      chunks.push(Buffer.from(chunk));
-    }
-
-    const buffer = Buffer.concat(chunks);
-    const base64Data = buffer.toString("base64");
-
-    const result = await processResortPDF(base64Data, filename, batchId, skipDuplicates);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({
-      error: err.message,
-      debug: serializeError(err),
-    });
-  }
-}
-
-  async function handleUrlImport(req: any, res: any) {
+  async function handleUrlImport(req: express.Request, res: express.Response) {
     const { url, resort_id } = req.body;
-    if (!url || !resort_id) return res.status(400).json({ error: "URL and Resort ID are required" });
-
     try {
-      console.log(`[Smart Import] Starting import for resort ${resort_id} from ${url}`);
+      const response = await axios.get(url);
+      const $ = cheerio.load(response.data);
+      const images: any[] = [];
       
-      const baseUrl = new URL(url);
-      const visited = new Set<string>();
-      const mediaMap = new Map<string, any>();
-      const queue: { url: string; depth: number; categoryHint?: string }[] = [{ url, depth: 0 }];
-      
-      const MAX_DEPTH = 2;
-      const MAX_PAGES = 15;
-      const MAX_IMAGES = 100;
-
-      // Provider Checks (Dropbox, GDrive)
-      const dropboxMatch = url.match(/dropbox\.com\/(sh|scl\/fo)\/([a-zA-Z0-9-_]+)/);
-      if (dropboxMatch) {
-        const accessToken = process.env.DROPBOX_ACCESS_TOKEN;
-        if (!accessToken) {
-          return res.status(500).json({ error: "Dropbox access token missing. Please configure DROPBOX_ACCESS_TOKEN." });
-        }
-        const dbx = new Dropbox({ accessToken });
-        const response = await dbx.filesListFolder({ path: "", shared_link: { url } });
-        const media = response.result.entries
-          .filter(entry => entry['.tag'] === 'file' && /\.(jpg|jpeg|png|webp|avif|svg)$/i.test(entry.name))
-          .map(entry => {
-            const { category, subcategory, confidence } = classifyMedia("", entry.name);
-            return {
-              id: (entry as any).id,
-              storage_path: url.replace(/\?dl=[01]/, '') + '?raw=1&path=' + encodeURIComponent((entry as any).path_lower || ""),
-              category,
-              subcategory,
-              confidence_score: confidence,
-              original_filename: entry.name,
-              source_type: 'dropbox',
-              source_url: url
-            };
-          });
-        return res.json({ success: true, media, source_type: 'dropbox' });
-      }
-
-      const driveMatch = url.match(/drive\.google\.com\/(?:drive\/folders\/|file\/d\/|open\?id=)([a-zA-Z0-9-_]+)/);
-      if (driveMatch) {
-        try {
-          const authClient = await getDriveAuth();
-          const drive = google.drive({ version: 'v3', auth: authClient as any });
-          const id = driveMatch[1];
+      $('img').each((i, el) => {
+        const src = $(el).attr('src');
+        const alt = $(el).attr('alt') || '';
+        if (src && (src.startsWith('http') || src.startsWith('//'))) {
+          const absoluteSrc = src.startsWith('//') ? `https:${src}` : src;
+          const fileName = absoluteSrc.split('/').pop()?.split('?')[0] || 'image.jpg';
+          const { category, subcategory } = classifyMedia('', fileName, $('title').text(), alt);
           
-          // Check if it's a folder or file
-          const metadata = await drive.files.get({
-            fileId: id,
-            fields: "mimeType,name",
-            supportsAllDrives: true,
+          images.push({
+            source_url: absoluteSrc,
+            storage_path: absoluteSrc, // Temporary until saved
+            original_filename: fileName,
+            category,
+            subcategory,
+            alt_text: alt
           });
-          if (metadata.data.mimeType === 'application/vnd.google-apps.folder') {
-            const media: any[] = [];
-            const listResponse = await drive.files.list({
-              q: `'${id}' in parents and (mimeType contains 'image/' or mimeType = 'application/vnd.google-apps.folder')`,
-              fields: "files(id,name,mimeType,webContentLink,thumbnailLink)",
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            });
-            
-            for (const file of (listResponse.data as any).files || []) {
-              if (file.mimeType?.startsWith('image/')) {
-                const { category, subcategory, confidence } = classifyMedia("", file.name || "");
-                media.push({
-                  id: file.id,
-                  storage_path: file.thumbnailLink?.replace('=s220', '=s1600') || file.webContentLink,
-                  category,
-                  subcategory,
-                  confidence_score: confidence,
-                  original_filename: file.name,
-                  source_type: 'google_drive',
-                  source_url: url
-                });
-              }
-            }
-            return res.json({ success: true, media, source_type: 'google_drive' });
-          } else {
-            const { category, subcategory, confidence } = classifyMedia("", (metadata.data as any).name || "");
-            const media = [{
-              id: id,
-              storage_path: `https://drive.google.com/thumbnail?id=${id}&sz=w1600`,
-              category,
-              subcategory,
-              confidence_score: confidence,
-              original_filename: (metadata.data as any).name,
-              source_type: 'google_drive',
-              source_url: url
-            }];
-            return res.json({ success: true, media, source_type: 'google_drive' });
-          }
-        } catch (e) {
-          console.warn("[Smart Import] Drive API failed, falling back to scraping if possible", e);
         }
-      }
-
-      // Smart Crawling Logic
-      while (queue.length > 0 && visited.size < MAX_PAGES && mediaMap.size < MAX_IMAGES) {
-        const { url: currentUrl, depth, categoryHint } = queue.shift()!;
-        if (visited.has(currentUrl)) continue;
-        visited.add(currentUrl);
-
-        try {
-          console.log(`[Smart Import] Fetching: ${currentUrl} (Depth: ${depth})`);
-          const response = await axios.get(currentUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' },
-            timeout: 10000
-          });
-
-          const $ = cheerio.load(response.data);
-          const pageTitle = $("title").text();
-
-          // Check if it's a directory listing (Apache/Nginx)
-          const isDirectoryListing = pageTitle.includes("Index of") || $("h1").text().includes("Index of");
-
-          // 1. Extract Images
-          if (isDirectoryListing) {
-            console.log(`[Smart Import] Detected directory listing at ${currentUrl}`);
-            $("a").each((_, el) => {
-              const href = $(el).attr("href");
-              if (href && /\.(jpg|jpeg|png|webp|avif)$/i.test(href)) {
-                try {
-                  const src = new URL(href, currentUrl).href;
-                  const fileName = path.basename(new URL(src).pathname);
-                  const { category, subcategory, confidence } = classifyMedia(categoryHint || "", fileName, pageTitle, "");
-                  
-                  if (!mediaMap.has(src)) {
-                    mediaMap.set(src, {
-                      id: `scraped-${mediaMap.size}`,
-                      storage_path: src,
-                      category,
-                      subcategory,
-                      confidence_score: confidence,
-                      original_filename: fileName,
-                      source_type: 'url_import',
-                      source_url: currentUrl
-                    });
-                  }
-                } catch (e) {}
-              }
-            });
-          }
-
-          $("img").each((_, el) => {
-            let src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy-src");
-            if (!src) return;
-
-            // Resolve relative URLs
-            try {
-              src = new URL(src, currentUrl).href;
-            } catch (e) { return; }
-
-            // Filter out obvious non-resort images
-            if (src.includes("logo") || src.includes("icon") || src.includes("avatar") || src.includes("pixel") || src.includes("tracking")) return;
-            if (src.endsWith(".svg") || src.endsWith(".gif")) return;
-
-            const alt = $(el).attr("alt") || "";
-            const fileName = path.basename(new URL(src).pathname);
-            
-            // Classification
-            const { category, subcategory, confidence } = classifyMedia(categoryHint || "", fileName, pageTitle, alt);
-            
-            if (!mediaMap.has(src)) {
-              mediaMap.set(src, {
-                id: `scraped-${mediaMap.size}`,
-                storage_path: src,
-                category,
-                subcategory,
-                confidence_score: confidence,
-                original_filename: fileName,
-                source_type: 'url_import',
-                source_url: currentUrl
-              });
-            }
-          });
-
-          // 2. Discover Links (if depth < MAX_DEPTH)
-          if (depth < MAX_DEPTH) {
-            $("a").each((_, el) => {
-              let href = $(el).attr("href");
-              if (!href) return;
-
-              try {
-                const absoluteHref = new URL(href, currentUrl);
-                // Stay on same domain
-                if (absoluteHref.hostname !== baseUrl.hostname) return;
-                
-                const linkText = $(el).text().toLowerCase();
-                const linkHref = absoluteHref.href.toLowerCase();
-                
-                // Heuristics for gallery/folder links
-                const galleryKeywords = ['gallery', 'photo', 'media', 'image', 'album', 'resort', 'villa', 'room', 'dining', 'restaurant', 'spa', 'activity', 'experience'];
-                const isLikelyGallery = galleryKeywords.some(kw => linkText.includes(kw) || linkHref.includes(kw));
-                
-                if (isLikelyGallery && !visited.has(absoluteHref.href)) {
-                  // Determine hint from link text
-                  let hint = '';
-                  if (linkText.includes('room') || linkText.includes('villa')) hint = 'room_types';
-                  else if (linkText.includes('dining') || linkText.includes('restaurant')) hint = 'restaurants';
-                  else if (linkText.includes('spa')) hint = 'spa';
-                  else if (linkText.includes('activity')) hint = 'activities';
-
-                  queue.push({ url: absoluteHref.href, depth: depth + 1, categoryHint: hint });
-                }
-              } catch (e) {}
-            });
-          }
-        } catch (err) {
-          console.warn(`[Smart Import] Failed to fetch ${currentUrl}:`, err instanceof Error ? err.message : String(err));
-        }
-      }
-
-      const finalMedia = Array.from(mediaMap.values());
-      console.log(`[Smart Import] Finished. Found ${finalMedia.length} images across ${visited.size} pages.`);
+      });
 
       res.json({ 
-        success: true, 
-        media: finalMedia, 
-        source_type: 'url_import',
-        stats: {
-          pages_scanned: visited.size,
-          images_found: finalMedia.length
-        }
+        media: images,
+        stats: { pages_scanned: 1, images_found: images.length }
       });
-    } catch (error: any) {
-      console.error("[Smart Import] Fatal error:", error);
-      res.status(500).json({ 
-        error: "Failed to import media", 
-        details: error.message
-      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   }
 
+  async function handleLocalImport(req: express.Request, res: express.Response) {
+    // This is mostly a placeholder as local files are handled by the client
+    // but we might need it for server-side processing of large uploads
+    res.json({ status: 'ok' });
+  }
 
-
-  app.get("/api/proxy-image", async (req, res) => {
-    const { url } = req.query;
-    if (!url || typeof url !== 'string') return res.status(400).send("URL required");
-    
+  async function handleGFetch(req: express.Request, res: express.Response) {
+    const { fileId } = req.body;
     try {
-      const response = await axios.get(url, { 
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-      res.set("Content-Type", response.headers["content-type"]);
+      const auth = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const response = await drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+      res.send(Buffer.from(response.data as ArrayBuffer));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  async function handleScrape(req: express.Request, res: express.Response) {
+    const { url } = req.body;
+    try {
+      const response = await axios.get(url);
       res.send(response.data);
-    } catch (error: any) {
-      console.error("Proxy error:", error.message);
-      res.status(500).send("Failed to proxy image");
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
-  });
+  }
 
-  // User Management Endpoints
-  app.get("/api/admin/users", (req, res, next) => requirePermission(req, res, next, 'users.read'), async (req, res) => {
-    try {
-      const { data: profiles, error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .select('*, user_roles(role_id, roles(key, label))')
-        .order('created_at', { ascending: false });
-
-      if (profileError) throw profileError;
-
-      // Fetch auth user data for each profile to get email and last sign in
-      const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-      if (authError) throw authError;
-
-      const combinedUsers = profiles.map(profile => {
-        const authUser = authUsers.find(u => u.id === profile.id);
-        return {
-          ...profile,
-          email: authUser?.email,
-          last_sign_in_at: authUser?.last_sign_in_at,
-          confirmed_at: authUser?.confirmed_at
-        };
-      });
-
-      res.json(combinedUsers);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/admin/users", (req, res, next) => requirePermission(req, res, next, 'users.manage'), async (req, res) => {
-    const { email, password, full_name, role_id } = req.body;
-    
-    try {
-      // 1. Create Auth User
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true
-      });
-
-      if (authError) throw authError;
-      const userId = authData.user.id;
-
-      // 2. Update Profile (Profile is usually created via trigger, but let's ensure full_name)
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .update({ full_name })
-        .eq('id', userId);
-      
-      if (profileError) throw profileError;
-
-      // 3. Assign Initial Role if provided
-      if (role_id) {
-        const { error: roleError } = await supabaseAdmin
-          .from('user_roles')
-          .insert({ user_id: userId, role_id });
-        if (roleError) throw roleError;
-      }
-
-      res.json({ success: true, user: authData.user });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.patch("/api/admin/users/:id", (req, res, next) => requirePermission(req, res, next, 'users.manage'), async (req, res) => {
-    const { id } = req.params;
-    const { email, password, full_name } = req.body;
-    
-    try {
-      // 1. Update Auth User
-      const authUpdates: any = {};
-      if (email) authUpdates.email = email;
-      if (password) authUpdates.password = password;
-
-      if (Object.keys(authUpdates).length > 0) {
-        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdates);
-        if (authError) throw authError;
-      }
-
-      // 2. Update Profile
-      if (full_name) {
-        const { error: profileError } = await supabaseAdmin
-          .from('profiles')
-          .update({ full_name })
-          .eq('id', id);
-        if (profileError) throw profileError;
-      }
-
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.delete("/api/admin/users/:id", (req, res, next) => requirePermission(req, res, next, 'users.manage'), async (req, res) => {
-    const { id } = req.params;
-    const currentUser = (req as any).user;
-
-    if (id === currentUser.id) {
-      return res.status(400).json({ error: "You cannot delete your own account" });
-    }
-    
-    try {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
-      if (error) throw error;
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/admin/users/:id/roles", (req, res, next) => requirePermission(req, res, next, 'users.manage'), async (req, res) => {
-    const { id } = req.params;
-    const { role_id } = req.body;
-    
-    try {
-      const { error } = await supabaseAdmin
-        .from('user_roles')
-        .insert({ user_id: id, role_id });
-      
-      if (error) throw error;
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.delete("/api/admin/users/:id/roles/:roleId", (req, res, next) => requirePermission(req, res, next, 'users.manage'), async (req, res) => {
-    const { id, roleId } = req.params;
-    
-    try {
-      const { error } = await supabaseAdmin
-        .from('user_roles')
-        .delete()
-        .eq('user_id', id)
-        .eq('role_id', roleId);
-      
-      if (error) throw error;
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/admin/roles", (req, res, next) => requirePermission(req, res, next, 'roles.read'), async (req, res) => {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('roles')
-        .select('*, role_permissions(permission_id, permissions(key, label))')
-        .order('label');
-
-      if (error) throw error;
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Bulk Import Endpoints
-  app.post("/api/import/create-batch", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
-    const { batch_type, source_type, source_ref } = req.body;
-    const user = (req as any).user;
-    
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('import_batches')
-        .insert({
-          batch_type,
-          source_type,
-          source_ref,
-          status: 'ingested',
-          created_by: user.id,
-          summary_json: {
-            resorts: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 },
-            media: { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 }
-          }
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-
-
-  app.post("/api/import/media-to-staging", (req, res, next) => requirePermission(req, res, next, 'imports.create'), async (req, res) => {
-    const { batchId, mediaItems, resortStagingId, targetResortId } = req.body;
-    
-    try {
-      const stagingItems = mediaItems.map((item: any) => ({
-        import_batch_id: batchId,
-        resort_staging_id: resortStagingId,
-        target_resort_id: targetResortId,
-        original_filename: item.original_filename,
-        original_url: item.source_url,
-        staged_storage_path: item.url || item.storage_path,
-        inferred_category_key: item.category,
-        inferred_subcategory: item.subcategory,
-        inferred_room_type_name: item.room_type_name,
-        confidence_score: 0.85,
-        review_status: 'pending'
-      }));
-
-      const { data, error } = await supabaseAdmin
-        .from('media_staging')
-        .insert(stagingItems)
-        .select();
-
-      if (error) throw error;
-
-      // Update batch summary
-      const { data: batch } = await supabaseAdmin.from('import_batches').select('summary_json').eq('id', batchId).single();
-      const summary = batch?.summary_json || {};
-      summary.media = summary.media || { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 };
-      summary.media.total += stagingItems.length;
-      summary.media.pending += stagingItems.length;
-      
-      await supabaseAdmin.from('import_batches').update({ summary_json: summary }).eq('id', batchId);
-
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/import/publish-batch", (req, res, next) => requirePermission(req, res, next, 'imports.publish'), async (req, res) => {
-    const { batchId } = req.body;
-    const user = (req as any).user;
-    
-    try {
-      // 1. Get approved resorts that haven't been published
-      const { data: approvedResorts, error: resError } = await supabaseAdmin
-        .from('resort_staging')
-        .select('*')
-        .eq('import_batch_id', batchId)
-        .eq('review_status', 'approved')
-        .is('published_at', null);
-
-      if (resError) throw resError;
-
-      const publishResults = [];
-      const errorLog = [];
-
-      for (const staged of approvedResorts) {
-        try {
-          let resortId = staged.duplicate_candidate_resort_id;
-          
-          if (resortId) {
-            // Update existing
-            const { error: updateError } = await supabaseAdmin.from('resorts').update({
-              ...staged.normalized_json,
-              status: 'published'
-            }).eq('id', resortId);
-            if (updateError) throw updateError;
-          } else {
-            // Create new
-            const { data: newResort, error: insertError } = await supabaseAdmin.from('resorts').insert({
-              ...staged.normalized_json,
-              status: 'published'
-            }).select().single();
-            if (insertError) throw insertError;
-            resortId = newResort.id;
-          }
-
-          // Update staging status and published_at
-          await supabaseAdmin.from('resort_staging').update({ 
-            review_status: 'approved',
-            published_at: new Date().toISOString(),
-            reviewer_id: user.id
-          }).eq('id', staged.id);
-          
-          publishResults.push({ type: 'resort', id: resortId, stagingId: staged.id });
-        } catch (err: any) {
-          errorLog.push({ type: 'resort', id: staged.id, error: err.message });
-        }
-      }
-
-      // 2. Get approved media that haven't been published
-      const { data: approvedMedia, error: mediaError } = await supabaseAdmin
-        .from('media_staging')
-        .select('*')
-        .eq('import_batch_id', batchId)
-        .eq('review_status', 'approved')
-        .is('published_at', null);
-
-      if (mediaError) throw mediaError;
-
-      for (const staged of approvedMedia) {
-        try {
-          // Find target resort ID
-          let targetResortId = staged.target_resort_id;
-          if (!targetResortId && staged.resort_staging_id) {
-            // If it was part of a resort import, find the published resort ID
-            const resMatch = publishResults.find(r => r.stagingId === staged.resort_staging_id);
-            if (resMatch) targetResortId = resMatch.id;
-            else {
-              // Check if it was already published in a previous run
-              const { data: prevResort } = await supabaseAdmin.from('resort_staging').select('duplicate_candidate_resort_id, published_at').eq('id', staged.resort_staging_id).single();
-              if (prevResort?.published_at) {
-                // If we don't have the ID from the new insert, we might need to find it
-                // This is a bit complex, but for now we'll assume targetResortId should be set if approved
-              }
-            }
-          }
-
-          if (targetResortId) {
-            const categoryKey = staged.reviewer_override_category_key || staged.inferred_category_key || 'uncategorized';
-            
-            // Ensure category exists
-            const { data: cat } = await supabaseAdmin
-              .from('resort_media_categories')
-              .select('id')
-              .eq('resort_id', targetResortId)
-              .eq('key', categoryKey)
-              .maybeSingle();
-
-            let categoryId = cat?.id;
-            if (!categoryId) {
-              const { data: newCat } = await supabaseAdmin.from('resort_media_categories').insert({
-                resort_id: targetResortId,
-                key: categoryKey,
-                label: categoryKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-              }).select().single();
-              categoryId = newCat?.id;
-            }
-
-            const { error: mediaInsertError } = await supabaseAdmin.from('resort_media').insert({
-              resort_id: targetResortId,
-              category: categoryKey,
-              category_id: categoryId,
-              subcategory: staged.reviewer_override_subcategory || staged.inferred_subcategory,
-              room_type_name: staged.reviewer_override_room_type_name || staged.inferred_room_type_name,
-              storage_path: staged.staged_storage_path,
-              original_filename: staged.original_filename,
-              source_url: staged.original_url,
-              import_batch_id: batchId,
-              status: 'active'
-            });
-
-            if (mediaInsertError) throw mediaInsertError;
-
-            // Update staging status and published_at
-            await supabaseAdmin.from('media_staging').update({ 
-              review_status: 'approved',
-              published_at: new Date().toISOString(),
-              reviewer_id: user.id
-            }).eq('id', staged.id);
-          } else {
-            throw new Error("Target resort ID missing for media item");
-          }
-        } catch (err: any) {
-          errorLog.push({ type: 'media', id: staged.id, error: err.message });
-        }
-      }
-
-      // 3. Update batch summary and status
-      const { data: allResorts } = await supabaseAdmin.from('resort_staging').select('review_status, published_at').eq('import_batch_id', batchId);
-      const { data: allMedia } = await supabaseAdmin.from('media_staging').select('review_status, published_at').eq('import_batch_id', batchId);
-
-      const summary = {
-        resorts: {
-          total: allResorts?.length || 0,
-          pending: allResorts?.filter(r => r.review_status === 'pending').length || 0,
-          approved: allResorts?.filter(r => r.review_status === 'approved' && !r.published_at).length || 0,
-          rejected: allResorts?.filter(r => r.review_status === 'rejected').length || 0,
-          published: allResorts?.filter(r => r.published_at).length || 0
-        },
-        media: {
-          total: allMedia?.length || 0,
-          pending: allMedia?.filter(m => m.review_status === 'pending').length || 0,
-          approved: allMedia?.filter(m => m.review_status === 'approved' && !m.published_at).length || 0,
-          rejected: allMedia?.filter(m => m.review_status === 'rejected').length || 0,
-          published: allMedia?.filter(m => m.published_at).length || 0
-        }
-      };
-
-      let finalStatus = 'published';
-      if (summary.resorts.pending > 0 || summary.media.pending > 0) finalStatus = 'reviewing';
-      else if (summary.resorts.approved > 0 || summary.media.approved > 0) finalStatus = 'partially_approved';
-      if (errorLog.length > 0 && summary.resorts.published === 0 && summary.media.published === 0) finalStatus = 'failed';
-
-      await supabaseAdmin.from('import_batches').update({ 
-        status: finalStatus,
-        summary_json: summary,
-        error_log_json: errorLog
-      }).eq('id', batchId);
-
-      res.json({ 
-        success: errorLog.length === 0, 
-        publishedCount: publishResults.length + (approvedMedia?.length || 0) - errorLog.filter(e => e.type === 'media').length,
-        errors: errorLog
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-  app.post("/api/ai/extract-resort-pdf", async (req, res) => {
-    const { base64Data } = req.body;
-    if (!base64Data) return res.status(400).json({ error: "Base64 data is required" });
-
+  app.get("/api/ai/status", async (req, res) => {
     const apiKey = await getGeminiApiKey();
-    if (!apiKey) {
-      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
-    }
-
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3-flash-preview";
-    const prompt = `
-      Extract resort information from this PDF document. 
-      Return a JSON object with the following fields. IMPORTANT: Keep all descriptions concise to prevent output truncation.
-      - name: string
-      - location: string
-      - atoll: string
-      - description: string (luxury tone, maximum 3 sentences)
-      - category: string (e.g., Ultra-Luxury, Luxury, Premium)
-      - transfer_type: string (e.g., Seaplane, Speedboat)
-      - meal_plans: string[] (maximum 5 items)
-      - room_types: object[] (name, description (maximum 1 sentence), max_guests, size. Maximum 10 room types total)
-      - highlights: string[] (key selling points, maximum 8 items)
-    `;
-
-    try {
-      const result = await genAI.models.generateContent({
-        model,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "application/pdf",
-                  data: base64Data,
-                },
-              },
-            ],
-          },
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              location: { type: Type.STRING },
-              atoll: { type: Type.STRING },
-              description: { type: Type.STRING },
-              category: { type: Type.STRING },
-              transfer_type: { type: Type.STRING },
-              meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
-              room_types: { 
-                type: Type.ARRAY, 
-                items: { 
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    max_guests: { type: Type.STRING },
-                    size: { type: Type.STRING }
-                  }
-                } 
-              },
-              highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-              seo_summary: { type: Type.STRING }
-            }
-          }
-        }
-      });
-
-      res.json(JSON.parse(result.text || '{}'));
-    } catch (error: any) {
-      console.error('PDF extraction error:', error);
-      if (error.message && error.message.includes("API key not valid")) {
-        return res.status(500).json({ error: "Gemini API key is invalid. Please configure a valid GEMINI_API_KEY in the Settings menu." });
-      }
-      res.status(500).json({ error: error.message });
-    }
+    res.json({ configured: !!apiKey });
   });
 
-  app.post("/api/ai/generate-resort-marketing", async (req, res) => {
-    const { resortData } = req.body;
-    if (!resortData) return res.status(400).json({ error: "Resort data is required" });
-
-    const apiKey = await getGeminiApiKey();
-    if (!apiKey) {
-      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
-    }
-
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3-flash-preview";
-    const prompt = `
-      You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
-      Create high-end marketing copy for the following resort:
-      Name: ${resortData.name}
-      Location: ${resortData.location} (${resortData.atoll})
-      Category: ${resortData.category}
-      Features: ${resortData.highlights?.join(', ')}
-      Meal Plans: ${resortData.meal_plans?.join(', ')}
-
-      Return a JSON object with:
-      - marketing_hook: A one-sentence punchy headline for travel agents.
-      - unique_selling_points: 3-5 bullet points focusing on B2B value.
-      - luxury_description: A 2-paragraph evocative description for a brochure.
-      - ideal_for: Who is the target client? (e.g., Honeymooners, Multi-gen families, Divers).
-    `;
-
+  app.post("/api/ai/generate-copy", async (req, res) => {
     try {
+      const apiKey = await getGeminiApiKey();
+      if (!apiKey) {
+        return res.status(500).json({ error: "Gemini API key is missing or invalid." });
+      }
+      const { resortData } = req.body;
+      const genAI = new GoogleGenAI({ apiKey });
+      const model = "gemini-3-flash-preview";
+      const prompt = `
+        You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC.
+        Generate a luxury marketing copy for the following resort:
+        ${JSON.stringify(resortData)}
+        
+        Return a JSON object with:
+        - luxury_description: string (3-4 paragraphs, evocative, professional)
+        - unique_selling_points: string[] (5-7 points)
+        - target_audience: string (who is this resort best for?)
+      `;
+
       const result = await genAI.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1799,60 +1280,51 @@ async function handleDrivePdfImport(req: any, res: any) {
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              marketing_hook: { type: Type.STRING },
-              unique_selling_points: { type: Type.ARRAY, items: { type: Type.STRING } },
               luxury_description: { type: Type.STRING },
-              ideal_for: { type: Type.STRING }
+              unique_selling_points: { type: Type.ARRAY, items: { type: Type.STRING } },
+              target_audience: { type: Type.STRING }
             }
           }
         }
       });
 
       res.json(JSON.parse(result.text || '{}'));
-    } catch (error: any) {
-      console.error('Marketing copy generation error:', error);
-      res.status(500).json({ error: error.message });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
   app.post("/api/ai/classify-image", async (req, res) => {
-    const { base64Image } = req.body;
-    if (!base64Image) return res.status(400).json({ error: "Base64 image is required" });
-
-    const apiKey = await getGeminiApiKey();
-    if (!apiKey) {
-      return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
-    }
-
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3-flash-preview";
-    const prompt = `
-      Analyze this image of a Maldives resort and classify it into one of these categories:
-      - main_hero (exterior shots, aerials, main pool, landing)
-      - room_types (bedrooms, bathrooms, villa interiors)
-      - restaurants (dining areas, food, bars)
-      - spa (wellness areas, gym, massage rooms)
-      - activities (diving, excursions, kids club)
-      - maps (site plans, floor plans)
-      - logos (brand logos)
-      - beaches (beach shots, ocean views)
-
-      Return a JSON object with:
-      - category: The chosen category key.
-      - subcategory: A more specific label if applicable (e.g., "Water Villa", "Italian Restaurant").
-      - description: A brief alt-text description.
-    `;
-
     try {
+      const apiKey = await getGeminiApiKey();
+      if (!apiKey) {
+        return res.status(500).json({ error: "Gemini API key is missing or invalid." });
+      }
+      const { base64Image } = req.body;
+      const genAI = new GoogleGenAI({ apiKey });
+      const model = "gemini-3-flash-preview";
+      const prompt = `
+        Analyze this resort image and categorize it.
+        Categories: main_hero, room_types, restaurants, spa, activities, beaches, facilities, maps, logos.
+        Subcategories for rooms: water villa, beach villa, residence, suite, deluxe room, family room.
+        
+        Return JSON:
+        {
+          "category": "string",
+          "subcategory": "string|null",
+          "description": "short descriptive alt text"
+        }
+      `;
+
       const result = await genAI.models.generateContent({
         model,
         contents: [
-          { 
-            role: 'user', 
+          {
+            role: 'user',
             parts: [
-              { text: prompt }, 
-              { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
-            ] 
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+            ]
           }
         ],
         config: {
@@ -1861,7 +1333,7 @@ async function handleDrivePdfImport(req: any, res: any) {
             type: Type.OBJECT,
             properties: {
               category: { type: Type.STRING },
-              subcategory: { type: Type.STRING },
+              subcategory: { type: Type.STRING, nullable: true },
               description: { type: Type.STRING }
             }
           }
@@ -1869,91 +1341,14 @@ async function handleDrivePdfImport(req: any, res: any) {
       });
 
       res.json(JSON.parse(result.text || '{}'));
-    } catch (error: any) {
-      console.error('Image classification error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/ai/status", async (req, res) => {
-    console.log("[AI Status] Request received");
-    const apiKey = await getGeminiApiKey();
-    res.json({ 
-      configured: !!apiKey,
-      model: "gemini-3.1-pro-preview/gemini-3-flash-preview"
-    });
-  });
-
-  app.get("/api/debug/drive-test", async (req, res) => {
-    try {
-      const auth = await getDriveAuth();
-      res.json({ ok: true, message: "Drive auth configured" });
     } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
+      res.status(500).json({ error: err.message });
     }
   });
 
-  // 404 handler for API routes (must be before Vite/Static middleware)
-  app.all("/api/*", (req, res) => {
-    console.warn(`[API 404] ${req.method} ${req.path}`);
-    res.status(404).json({ 
-      error: "API route not found", 
-      method: req.method, 
-      path: req.path 
-    });
-  });
-
-  // Global API Error Handler to ensure JSON responses
-  app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("API Error:", err);
-    res.status(err.status || 500).json({
-      error: err.message || "Internal Server Error",
-      details: err.details || null,
-      path: req.path
-    });
-  });
-
-  app.get("/api/debug/drive-test", async (req, res) => {
-    const folderId = req.query.folderId as string;
-
-    try {
-      const authClient = await getDriveAuth();
-      const drive = google.drive({ version: "v3", auth: authClient as any });
-
-      if (!folderId) {
-        return res.json({
-          ok: true,
-          message: "Auth works. Pass folderId to test folder access."
-        });
-      }
-
-      const folder = await drive.files.get({
-        fileId: folderId,
-        fields: "id,name,mimeType,driveId,parents",
-        supportsAllDrives: true,
-      });
-
-      const filesResult = await drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields: "files(id,name,mimeType,driveId,parents)",
-        pageSize: 20,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      });
-
-      res.json({
-        ok: true,
-        folder: folder.data,
-        files: filesResult.data.files || [],
-      });
-    } catch (err: any) {
-      logDriveError("Drive Debug Test failed", err, { folderId });
-      res.status(500).json({
-        ok: false,
-        error: err.message,
-        debug: serializeError(err),
-      });
-    }
+  // API 404 handler to prevent HTML fallback for API routes
+  app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
   });
 
   // Vite middleware for development
@@ -1964,10 +1359,10 @@ async function handleDrivePdfImport(req: any, res: any) {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 

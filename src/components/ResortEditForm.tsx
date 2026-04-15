@@ -10,7 +10,7 @@ import { ResortOverviewPanel } from './ResortOverviewPanel';
 import { ResortRoomTypesPanel } from './ResortRoomTypesPanel';
 import { ResortMediaPanel } from './ResortMediaPanel';
 import { ResortImportPanel } from './ResortImportPanel';
-import { uploadResortFile } from '../pages/AdminDashboard';
+import { uploadResortFile } from '../lib/upload';
 import { importService } from '../services/importService';
 
 const TextInput = ({ label, value, onChange, icon, type = 'text' }: any) => (
@@ -629,4 +629,3 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     </form>
   );
 };
-

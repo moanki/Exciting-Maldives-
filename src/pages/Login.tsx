@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { LogIn, Mail, Lock, Chrome } from 'lucide-react';
 import { canAccessAdmin } from '../lib/rbac';
 
+// Admin Login Page
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

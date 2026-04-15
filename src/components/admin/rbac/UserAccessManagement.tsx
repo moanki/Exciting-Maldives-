@@ -9,6 +9,8 @@ export const UserAccessManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -16,17 +18,23 @@ export const UserAccessManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setError(null);
+
     try {
-      const response = await apiFetch('/api/admin/users');
+      const response = await apiFetch("/api/admin/users");
       const data = await response.json();
-      if (data.error) throw new Error(data.error);
+
+      if (!response.ok) throw new Error(data.error || "Failed to fetch users");
       setUsers(data);
 
-      const rolesResponse = await apiFetch('/api/admin/roles');
+      const rolesResponse = await apiFetch("/api/admin/roles");
       const rolesData = await rolesResponse.json();
+
+      if (!rolesResponse.ok) throw new Error(rolesData.error || "Failed to fetch roles");
       setRoles(rolesData);
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
+    } catch (err: any) {
+      console.error("Failed to fetch users:", err);
+      setError(err.message || "Failed to load user access management");
     } finally {
       setLoading(false);
     }
@@ -39,15 +47,21 @@ export const UserAccessManagement: React.FC = () => {
   }, [permissionsLoading, hasPermission]);
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
-    
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+
+    setActionLoading(true);
+    setError(null);
+
     try {
-      const response = await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
       const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      fetchUsers();
+
+      if (!response.ok) throw new Error(data.error || "Failed to delete user");
+      await fetchUsers();
     } catch (err: any) {
-      alert(err.message);
+      setError(err.message || "Failed to delete user");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -91,6 +105,12 @@ export const UserAccessManagement: React.FC = () => {
       </div>
 
       {/* Search & Stats */}
+      {error && (
+        <div className="p-4 bg-brand-coral/10 border border-brand-coral/20 rounded-2xl text-brand-coral text-sm font-medium">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-navy/20" size={18} />
@@ -164,8 +184,18 @@ export const UserAccessManagement: React.FC = () => {
                               {hasPermission('users.manage') && (
                                 <button 
                                   onClick={async () => {
-                                    await apiFetch(`/api/admin/users/${user.id}/roles/${ur.role_id}`, { method: 'DELETE' });
-                                    fetchUsers();
+                                    setActionLoading(true);
+                                    setError(null);
+                                    try {
+                                      const response = await apiFetch(`/api/admin/users/${user.id}/roles/${ur.role_id}`, { method: "DELETE" });
+                                      const data = await response.json();
+                                      if (!response.ok) throw new Error(data.error || "Failed to remove role");
+                                      await fetchUsers();
+                                    } catch (err: any) {
+                                      setError(err.message || "Failed to remove role");
+                                    } finally {
+                                      setActionLoading(false);
+                                    }
                                   }}
                                   className="hover:text-brand-coral transition-colors"
                                 >
@@ -182,12 +212,22 @@ export const UserAccessManagement: React.FC = () => {
                             roles={roles} 
                             assignedRoleIds={user.user_roles?.map((ur: any) => ur.role_id) || []} 
                             onSelect={async (roleId) => {
-                              await apiFetch(`/api/admin/users/${user.id}/roles`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ role_id: roleId })
-                              });
-                              fetchUsers();
+                              setActionLoading(true);
+                              setError(null);
+                              try {
+                                const response = await apiFetch(`/api/admin/users/${user.id}/roles`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ role_id: roleId })
+                                });
+                                const data = await response.json();
+                                if (!response.ok) throw new Error(data.error || "Failed to assign role");
+                                await fetchUsers();
+                              } catch (err: any) {
+                                setError(err.message || "Failed to assign role");
+                              } finally {
+                                setActionLoading(false);
+                              }
                             }}
                           />
                         )}
@@ -326,25 +366,29 @@ const UserModal = ({ user, roles, onClose, onSuccess }: any) => {
     setError(null);
 
     try {
-      const url = user ? `/api/admin/users/${user.id}` : '/api/admin/users';
-      const method = user ? 'PATCH' : 'POST';
-      
+      if (!user && !roleId) {
+        throw new Error("Initial role is required when creating a user");
+      }
+
+      const url = user ? `/api/admin/users/${user.id}` : "/api/admin/users";
+      const method = user ? "PATCH" : "POST";
+
       const body: any = { email, full_name: fullName };
       if (password) body.password = password;
-      if (!user && roleId) body.role_id = roleId;
+      if (!user) body.role_id = roleId;
 
       const response = await apiFetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
 
       const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || "Failed to save user");
 
       onSuccess();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to save user");
     } finally {
       setLoading(false);
     }
@@ -427,6 +471,7 @@ const UserModal = ({ user, roles, onClose, onSuccess }: any) => {
                 <select 
                   value={roleId}
                   onChange={(e) => setRoleId(e.target.value)}
+                  required={!user}
                   className="w-full px-6 py-4 bg-brand-paper/50 rounded-2xl border border-transparent focus:border-brand-teal focus:bg-white outline-none transition-all font-sans appearance-none"
                 >
                   <option value="">Select a role...</option>
