@@ -85,6 +85,63 @@ const supabaseAdmin = (() => {
   });
 })();
 
+const GEMINI_KEY_PLACEHOLDERS = new Set(['', 'TODO_KEYHERE', 'YOUR_GEMINI_API_KEY_HERE', 'changeme']);
+const GEMINI_SETTINGS_KEYS = ['gemini_api_key:published', 'gemini_api_key', 'gemini_api_key:draft'];
+let cachedGeminiApiKey: { value: string | null; expiresAt: number } = { value: null, expiresAt: 0 };
+
+const parseGeminiKeyValue = (value: any): string | null => {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const candidate = value.apiKey || value.key || value.value;
+    if (typeof candidate === 'string') return candidate.trim();
+  }
+  return null;
+};
+
+const isValidGeminiKey = (value: string | null | undefined) => {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (GEMINI_KEY_PLACEHOLDERS.has(trimmed)) return false;
+  return trimmed.length >= 20;
+};
+
+async function getGeminiApiKey(): Promise<string | null> {
+  const envKey = process.env.GEMINI_API_KEY?.trim();
+  if (isValidGeminiKey(envKey)) return envKey!;
+
+  const now = Date.now();
+  if (cachedGeminiApiKey.expiresAt > now) {
+    return cachedGeminiApiKey.value;
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('site_settings')
+      .select('key,value')
+      .in('key', GEMINI_SETTINGS_KEYS);
+
+    if (error) {
+      console.warn('[Gemini Key] Failed to load key from site_settings:', error.message);
+      cachedGeminiApiKey = { value: null, expiresAt: now + 60_000 };
+      return null;
+    }
+
+    for (const keyName of GEMINI_SETTINGS_KEYS) {
+      const row = data?.find((item: any) => item.key === keyName);
+      const parsed = parseGeminiKeyValue(row?.value);
+      if (isValidGeminiKey(parsed)) {
+        cachedGeminiApiKey = { value: parsed!, expiresAt: now + 60_000 };
+        return parsed!;
+      }
+    }
+  } catch (error: any) {
+    console.warn('[Gemini Key] Unexpected key lookup error:', error?.message || error);
+  }
+
+  cachedGeminiApiKey = { value: null, expiresAt: now + 60_000 };
+  return null;
+}
+
 // Helper to normalize resort names for duplicate detection
 const normalizeResortName = (name: string) => {
   if (!name) return '';
@@ -511,7 +568,10 @@ async function startServer() {
 
   app.get("/api/debug/gemini-test", async (req, res) => {
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = await getGeminiApiKey();
+      if (!apiKey) {
+        return res.status(500).json({ ok: false, error: "Gemini API key is missing or invalid." });
+      }
       const genAI = new GoogleGenAI({ apiKey });
       const result = await genAI.models.generateContent({
         model: "gemini-2.5-flash",
@@ -528,14 +588,10 @@ async function startServer() {
 
   // --- Generic Sync Endpoint to bypass WAF ---
   async function processResortPDF(base64Data: string, filename: string, batchId: string, skipDuplicates: boolean = false) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    console.log("[DEBUG] API Key prefix:", apiKey?.substring(0, 5));
-    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
-      throw new Error("Gemini API key is missing or invalid.");
-    }
-
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3.1-pro-preview";
+    const apiKey = await getGeminiApiKey();
+    
+    const genAI = new GoogleGenAI(apiKey ? { apiKey } : {});
+    const model = "gemini-3-flash-preview";
     const prompt = `
       Extract resort information from this PDF document. 
       Return a JSON object with the following fields:
@@ -1628,13 +1684,13 @@ async function handleDrivePdfImport(req: any, res: any) {
     const { base64Data } = req.body;
     if (!base64Data) return res.status(400).json({ error: "Base64 data is required" });
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
       return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3.1-pro-preview";
+    const model = "gemini-3-flash-preview";
     const prompt = `
       Extract resort information from this PDF document. 
       Return a JSON object with the following fields. IMPORTANT: Keep all descriptions concise to prevent output truncation.
@@ -1711,13 +1767,13 @@ async function handleDrivePdfImport(req: any, res: any) {
     const { resortData } = req.body;
     if (!resortData) return res.status(400).json({ error: "Resort data is required" });
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
       return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
     }
 
     const genAI = new GoogleGenAI({ apiKey });
-    const model = "gemini-3.1-pro-preview";
+    const model = "gemini-3-flash-preview";
     const prompt = `
       You are a luxury travel copywriter for "Exciting Maldives", a B2B DMC. 
       Create high-end marketing copy for the following resort:
@@ -1763,8 +1819,8 @@ async function handleDrivePdfImport(req: any, res: any) {
     const { base64Image } = req.body;
     if (!base64Image) return res.status(400).json({ error: "Base64 image is required" });
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'TODO_KEYHERE' || apiKey === '') {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
       return res.status(500).json({ error: "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in the Settings menu." });
     }
 
@@ -1819,12 +1875,22 @@ async function handleDrivePdfImport(req: any, res: any) {
     }
   });
 
-  app.get("/api/ai/status", (req, res) => {
+  app.get("/api/ai/status", async (req, res) => {
     console.log("[AI Status] Request received");
+    const apiKey = await getGeminiApiKey();
     res.json({ 
-      configured: !!process.env.GEMINI_API_KEY,
+      configured: !!apiKey,
       model: "gemini-3.1-pro-preview/gemini-3-flash-preview"
     });
+  });
+
+  app.get("/api/debug/drive-test", async (req, res) => {
+    try {
+      const auth = await getDriveAuth();
+      res.json({ ok: true, message: "Drive auth configured" });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
   });
 
   // 404 handler for API routes (must be before Vite/Static middleware)

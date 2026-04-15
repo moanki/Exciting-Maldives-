@@ -4175,6 +4175,22 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
           )}
           {activeTab === 'system' && (
             <div className="space-y-8">
+              <div className="bg-white/80 p-6 rounded-3xl border border-brand-navy/5">
+                <h3 className="text-xl font-serif text-brand-navy">AI Provider Settings</h3>
+                <p className="text-brand-navy/60 font-sans text-sm mt-1 mb-4">
+                  Set a persistent Gemini API key used by imports and AI tools. This is saved in <code>site_settings</code> as <code>gemini_api_key</code>.
+                </p>
+                <TextInput
+                  label="Gemini API Key"
+                  type="password"
+                  value={settings.gemini_api_key || ''}
+                  onChange={(val: string) => saveSetting('gemini_api_key', val.trim())}
+                />
+                <p className="text-[11px] text-brand-navy/50 mt-3">
+                  Prefer this field for long-term reliability. Environment variable <code>GEMINI_API_KEY</code> is still supported as a higher-priority override.
+                </p>
+              </div>
+
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-serif text-brand-navy">Database & System Schema</h3>
