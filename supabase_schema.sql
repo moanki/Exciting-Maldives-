@@ -335,22 +335,37 @@ alter table public.audit_logs enable row level security;
 
 -- RBAC Policies
 drop policy if exists "Admins can read roles" on public.roles;
-create policy "Admins can read roles" on public.roles for select using (public.has_permission('roles.read') or auth.role() = 'authenticated');
+create policy "Admins can read roles" on public.roles
+for select
+using (public.has_permission('roles.read'));
 drop policy if exists "Admins can manage roles" on public.roles;
 create policy "Admins can manage roles" on public.roles for all using (public.has_permission('roles.manage'));
 
 drop policy if exists "Admins can read permissions" on public.permissions;
-create policy "Admins can read permissions" on public.permissions for select using (public.has_permission('permissions.read') or auth.role() = 'authenticated');
+create policy "Admins can read permissions" on public.permissions
+for select
+using (public.has_permission('permissions.read'));
 
 drop policy if exists "Admins can read role permissions" on public.role_permissions;
-create policy "Admins can read role permissions" on public.role_permissions for select using (public.has_permission('roles.read') or auth.role() = 'authenticated');
+create policy "Admins can read role permissions" on public.role_permissions
+for select
+using (public.has_permission('roles.read'));
 drop policy if exists "Admins can manage role permissions" on public.role_permissions;
 create policy "Admins can manage role permissions" on public.role_permissions for all using (public.has_permission('roles.manage'));
 
 drop policy if exists "Admins can read user roles" on public.user_roles;
 create policy "Admins can read user roles" on public.user_roles for select using (public.has_permission('users.read') or auth.uid() = user_id);
 drop policy if exists "Admins can manage user roles" on public.user_roles;
-create policy "Admins can manage user roles" on public.user_roles for all using (public.has_permission('users.manage'));
+create policy "Admins can manage user roles" on public.user_roles
+for all
+using (
+  public.has_permission('users.manage')
+  or public.has_permission('roles.manage')
+)
+with check (
+  public.has_permission('users.manage')
+  or public.has_permission('roles.manage')
+);
 
 drop policy if exists "Admins can read audit logs" on public.audit_logs;
 create policy "Admins can read audit logs" on public.audit_logs for select using (public.has_permission('audit_logs.read'));
