@@ -10,7 +10,7 @@ import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagem
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
 import { PermissionMatrix } from '../components/admin/rbac/PermissionMatrix';
 import { usePermissions } from '../hooks/usePermissions';
-import { logAuditAction, getUserRoleLabels } from '../lib/rbac';
+import { getUserRoleLabels } from '../lib/rbac';
 import { importService } from '../services/importService';
 import { motion, AnimatePresence } from 'motion/react';
 import Map, { Marker, Popup } from 'react-map-gl/maplibre';
@@ -990,7 +990,7 @@ function AdminOverview() {
 
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('site_settings').upsert(initialSettings, { onConflict: 'key' });
-      if (user) await logAuditAction(user.id, 'settings.update', 'site_settings', null, null, { settings: initialSettings });
+      if (user) { /* logAuditAction(user.id, 'settings.update', 'site_settings', null, null, { settings: initialSettings }); */ }
 
       setSeedStatus('Seeding booking requests...');
       const sampleRequests = [
@@ -2280,7 +2280,7 @@ function AdminPageManager({ showNotification, setUploadProgress }: { showNotific
       // Audit log
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        logAuditAction(user.id, 'settings.update', 'site_settings', key, currentValue, newValue);
+        /* logAuditAction(user.id, 'settings.update', 'site_settings', key, currentValue, newValue); */
       }
     } else {
       showNotification('Error saving changes');

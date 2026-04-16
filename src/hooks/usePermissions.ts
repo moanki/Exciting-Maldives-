@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
-import { getUserPermissions, Permission, canAccessAdmin, getUserRoleKeys, getLegacyUserRole } from '../lib/rbac';
+import { getUserPermissions, Permission, canAccessAdmin, getUserRoleKeys } from '../lib/rbac';
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -19,15 +19,7 @@ export function usePermissions() {
       
       try {
         const roleKeys = await getUserRoleKeys(userId);
-        let superAdmin = roleKeys.includes('super_admin');
-        
-        // Fallback for super admin detection during migration
-        if (!superAdmin) {
-          const legacyRole = await getLegacyUserRole(userId);
-          if (legacyRole === 'superadmin') {
-            superAdmin = true;
-          }
-        }
+        const superAdmin = roleKeys.includes('super_admin');
         
         if (mounted) {
           setIsSuperAdmin(superAdmin);
@@ -38,20 +30,12 @@ export function usePermissions() {
           if (mounted) {
             setPermissions(perms);
             setCanAccessAdminState(canAccess);
-            if (!canAccess && !superAdmin) {
-              console.warn(`User ${userId} does not have admin access.`);
-            }
           }
         }
       } catch (err: any) {
         console.error('Failed to load permissions:', err);
-        // We don't set error here if it's just a missing table, 
-        // because canAccessAdmin fallback might still work.
         if (mounted) {
-          // Only set error if it's a critical failure (e.g. network)
-          if (err.message && !err.message.includes('42P01')) {
-            setError(err.message || 'Failed to load permissions');
-          }
+          setError(err.message || 'Failed to load permissions');
         }
       } finally {
         if (mounted) {
@@ -60,7 +44,6 @@ export function usePermissions() {
       }
     }
 
-    // Initial fetch
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         fetchPermissions(user.id);
@@ -69,7 +52,6 @@ export function usePermissions() {
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         fetchPermissions(session.user.id);

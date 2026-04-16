@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../supabase';
 import { usePermissions } from '../../../hooks/usePermissions';
-import { Shield, ShieldCheck, ShieldAlert, Loader2, Info, CheckCircle2, XCircle } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldAlert, Loader2, Info, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { apiFetch, readApiJson } from '../../../lib/api';
 
 export const RoleManagement: React.FC = () => {
   const [roles, setRoles] = useState<any[]>([]);
@@ -18,9 +17,13 @@ export const RoleManagement: React.FC = () => {
       setError(null);
 
       try {
-        const response = await apiFetch("/api/admin/roles");
-        const data = await readApiJson<any[]>(response);
-        setRoles(data);
+        const { data, error } = await supabase
+          .from('roles')
+          .select('*, role_permissions(permission_id, permissions(key, label, description, module, action))')
+          .order('label');
+
+        if (error) throw error;
+        setRoles(data || []);
       } catch (err: any) {
         console.error("Failed to fetch roles:", err);
         setError(err.message || "Failed to load roles");
