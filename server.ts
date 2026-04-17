@@ -941,11 +941,7 @@ async function startServer() {
 
   // --- Generic Sync Endpoint to bypass WAF ---
   async function processResortPDF(base64Data: string, filename: string, batchId: string, skipDuplicates: boolean = false) {
-    // Directly initialize using the env key or default
-    const genAI = process.env.GEMINI_API_KEY 
-      ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) 
-      : new GoogleGenAI();
-      
+    const genAI = new GoogleGenAI();
     const model = "gemini-3-flash-preview";
     const prompt = `
       Extract resort information from this PDF document. 
@@ -959,7 +955,7 @@ async function startServer() {
       - meal_plans: string[]
       - room_types: object[] (name, description, max_guests, size)
       - highlights: string[]
-      - seo_summary: string (short, luxury tone, human sounding, concise, suitable for listing/introduction)
+      - seo_summary: string
     `;
 
     let result;
