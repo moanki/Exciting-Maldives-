@@ -24,7 +24,7 @@ export default function FeaturedRetreatsCarousel({ resorts }: { resorts: any[] }
           <div key={resort.id} className="min-w-[300px] md:min-w-[450px] group">
             <div className="overflow-hidden rounded-[2rem] aspect-[4/3] relative">
               <img 
-                src={resort.banner_url || resort.images?.[0] || 'https://picsum.photos/seed/resort/800/600'} 
+                src={resort.banner_url || resort.images?.[0] || ''} 
                 alt={resort.name} 
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 referrerPolicy="no-referrer"

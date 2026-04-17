@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles, Save, Download } from 'lucide-react';
+import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles, Save, Download, Activity } from 'lucide-react';
 import { supabase } from '../supabase';
 import { apiFetch } from '../lib/api';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
@@ -8,7 +8,6 @@ import { extractResortDataFromPDF } from '../services/content';
 import { AdminImportBatches } from '../components/ImportWorkflow';
 import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagement';
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
-import { PermissionMatrix } from '../components/admin/rbac/PermissionMatrix';
 import { usePermissions } from '../hooks/usePermissions';
 import { getUserRoleLabels } from '../lib/rbac';
 import { importService } from '../services/importService';
@@ -33,7 +32,7 @@ import { uploadFile, uploadResortFile } from '../lib/upload';
  * - Implements secure data processing for document uploads.
  */
 export default function AdminDashboard() {
-  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const { hasPermission, loading: permissionsLoading, isSuperAdmin } = usePermissions();
   const location = useLocation();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -41,41 +40,34 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[Admin] Session error:', sessionError);
+      }
+      
+      const user = session?.user ?? null;
+      console.log('[Admin] Current User:', user?.email, 'Session valid:', !!session);
+      
       setUser(user);
       if (user) {
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
+        
+        if (profileError) {
+          console.error('[Admin] Profile fetch error:', profileError);
+        }
+        
         setProfile(profileData);
         
         try {
           const labels = await getUserRoleLabels(user.id);
           setRoleLabels(labels);
-
-          // Auto-migration logic: If user has legacy role but no RBAC roles
-          if (profileData?.role && (!labels || labels.length === 0)) {
-            console.log('Attempting auto-migration for user:', user.email);
-            const roleKey = profileData.role === 'superadmin' ? 'super_admin' : profileData.role;
-            const { data: roleObj } = await supabase
-              .from('roles')
-              .select('id')
-              .eq('key', roleKey)
-              .maybeSingle();
-            
-            if (roleObj) {
-              await supabase.from('user_roles').insert({
-                user_id: user.id,
-                role_id: roleObj.id
-              });
-              const newLabels = await getUserRoleLabels(user.id);
-              setRoleLabels(newLabels);
-            }
-          }
         } catch (e) {
-          console.warn('RBAC tables might be missing, skipping auto-migration.');
+          console.warn('RBAC tables might be missing.');
         }
       }
     };
@@ -257,7 +249,7 @@ export default function AdminDashboard() {
               {hasPermission('users.read') && (
                 <SidebarLink to="/admin/users" icon={<UserCheck size={18} />} label="User Access" active={location.pathname.startsWith('/admin/users')} onClick={() => setIsMobileMenuOpen(false)} />
               )}
-              {hasPermission('roles.read') && (
+              {isSuperAdmin && (
                 <SidebarLink to="/admin/roles" icon={<Shield size={18} />} label="Roles" active={location.pathname.startsWith('/admin/roles')} onClick={() => setIsMobileMenuOpen(false)} />
               )}
             </>
@@ -351,7 +343,7 @@ export default function AdminDashboard() {
             {hasPermission('users.read') && (
               <Route path="/users" element={<UserAccessManagement />} />
             )}
-            {hasPermission('roles.read') && (
+            {isSuperAdmin && (
               <Route path="/roles" element={<RoleManagement />} />
             )}
             
@@ -909,8 +901,8 @@ function AdminOverview() {
 
   const seedData = async () => {
     setSeeding(true);
+    setSeedStatus('Seeding resorts...');
     try {
-      setSeedStatus('Seeding resorts...');
       const sampleResorts = [
         {
           name: "Soneva Fushi",
@@ -922,7 +914,7 @@ function AdminOverview() {
           meal_plans: ["Bed & Breakfast", "Half Board", "Full Board"],
           room_types: [{ name: "Crusoe Villa", max_guests: 2, size: "235sqm" }],
           highlights: ["Eco-friendly", "Private Cinema", "Observatory"],
-          images: ["https://picsum.photos/seed/soneva/1200/800"],
+          images: [],
           is_featured: true
         },
         {
@@ -935,12 +927,13 @@ function AdminOverview() {
           meal_plans: ["Bed & Breakfast", "Half Board"],
           room_types: [{ name: "Villa Suite", max_guests: 2, size: "210sqm" }],
           highlights: ["Overwater Villas", "No News, No Shoes", "Private Reserve"],
-          images: ["https://picsum.photos/seed/gili/1200/800"],
+          images: [],
           is_featured: true
         }
       ];
 
-      await supabase.from('resorts').upsert(sampleResorts, { onConflict: 'name' });
+      const { error: resortError } = await supabase.from('resorts').upsert(sampleResorts, { onConflict: 'name' });
+      if (resortError) throw resortError;
 
       setSeedStatus('Seeding site settings...');
       const initialSettings = [
@@ -949,7 +942,7 @@ function AdminOverview() {
           value: {
             title: 'The B2B Gateway to Luxury Travel in the Maldives',
             subtitle: 'A destination management and digital distribution platform connecting global travel professionals with the Maldives’ most exceptional resorts and experiences.',
-            banner_url: 'https://picsum.photos/seed/maldives-luxury/1920/1080',
+            banner_url: '',
             banner_type: 'image'
           }
         },
@@ -988,28 +981,71 @@ function AdminOverview() {
         }
       ];
 
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('site_settings').upsert(initialSettings, { onConflict: 'key' });
-      if (user) { /* logAuditAction(user.id, 'settings.update', 'site_settings', null, null, { settings: initialSettings }); */ }
+      const { error: settingsError } = await supabase.from('site_settings').upsert(initialSettings, { onConflict: 'key' });
+      if (settingsError) throw settingsError;
 
       setSeedStatus('Seeding booking requests...');
       const sampleRequests = [
         {
           resort_name: "Soneva Fushi",
-          guest_name: "John Doe",
-          email: "john@example.com",
-          check_in: new Date().toISOString(),
-          check_out: new Date(Date.now() + 86400000 * 7).toISOString(),
-          status: 'pending'
+          check_in: new Date().toISOString().split('T')[0],
+          check_out: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+          guests: 2,
+          room_type: "Crusoe Villa",
+          status: 'new'
         }
       ];
 
-      await supabase.from('booking_requests').upsert(sampleRequests);
+      const { error: bookingError } = await supabase.from('booking_requests').upsert(sampleRequests);
+      if (bookingError) throw bookingError;
 
       setSeedStatus('Success! Data seeded.');
       fetchStats();
     } catch (err: any) {
-      setSeedStatus(`Error: ${err.message}`);
+      console.error('Seeding error:', err);
+      setSeedStatus(`Error: ${err.message || 'Unknown error'}`);
+    }
+    setSeeding(false);
+  };
+
+  const cleanupSeedPhotos = async () => {
+    setSeeding(true);
+    setSeedStatus('Cleaning up seed photos...');
+    try {
+      // 1. Update resorts to remove picsum images
+      const { data: resorts } = await supabase.from('resorts').select('id, images, banner_url');
+      if (resorts) {
+        for (const resort of resorts) {
+          const newImages = (resort.images || []).filter((img: string) => !img.includes('picsum.photos'));
+          const newBanner = resort.banner_url?.includes('picsum.photos') ? '' : resort.banner_url;
+          
+          if (newImages.length !== (resort.images || []).length || newBanner !== resort.banner_url) {
+            await supabase.from('resorts').update({ 
+              images: newImages, 
+              banner_url: newBanner 
+            }).eq('id', resort.id);
+          }
+        }
+      }
+
+      // 2. Update site_settings to remove picsum banner
+      const { data: settings } = await supabase.from('site_settings').select('key, value');
+      if (settings) {
+        for (const s of settings) {
+          if (JSON.stringify(s.value).includes('picsum.photos')) {
+            let newValue = JSON.parse(JSON.stringify(s.value));
+            if (newValue.banner_url?.includes('picsum.photos')) {
+              newValue.banner_url = '';
+            }
+            await supabase.from('site_settings').update({ value: newValue }).eq('key', s.key);
+          }
+        }
+      }
+
+      setSeedStatus('Cleanup complete! Seed photos removed.');
+      fetchStats();
+    } catch (err: any) {
+      setSeedStatus(`Cleanup Error: ${err.message}`);
     }
     setSeeding(false);
   };
@@ -1096,6 +1132,14 @@ function AdminOverview() {
                 >
                   {seeding ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Database size={16} />}
                   Seed Sample Data
+                </button>
+                <button 
+                  onClick={cleanupSeedPhotos}
+                  disabled={seeding}
+                  className="border border-brand-coral/20 text-brand-coral px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-brand-coral/5 transition-all disabled:opacity-50 flex items-center gap-2 font-sans"
+                >
+                  {seeding ? <div className="w-4 h-4 border-2 border-brand-coral/30 border-t-brand-coral rounded-full animate-spin" /> : <Trash2 size={16} />}
+                  Cleanup Seed Photos
                 </button>
                 <button 
                   onClick={() => setShowSql(!showSql)}

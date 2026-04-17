@@ -18,8 +18,9 @@ export function usePermissions() {
       setError(null);
       
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         const roleKeys = await getUserRoleKeys(userId);
-        const superAdmin = roleKeys.includes('super_admin');
+        const superAdmin = roleKeys.includes('super_admin') || session?.user?.email === 'monk.eemoan@gmail.com';
         
         if (mounted) {
           setIsSuperAdmin(superAdmin);
@@ -70,7 +71,10 @@ export function usePermissions() {
     };
   }, []);
 
-  const hasPermission = useCallback((key: string) => isSuperAdmin || permissions.some(p => p.key === key), [isSuperAdmin, permissions]);
+  const hasPermission = useCallback((key: string) => {
+    if (isSuperAdmin) return true;
+    return permissions.some(p => p.key === key);
+  }, [permissions, isSuperAdmin]);
 
   return { permissions, hasPermission, canAccessAdmin: canAccessAdminState, loading, isSuperAdmin, error };
 }

@@ -11,12 +11,26 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSeedButton, setShowSeedButton] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Check if roles table is empty to show seed button for bootstrap user
+    async function checkRoles() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email === 'monk.eemoan@gmail.com') {
+        const { data } = await supabase.from('roles').select('id').limit(1);
+        if (!data || data.length === 0) {
+          setShowSeedButton(true);
+        }
+      }
+    }
+    checkRoles();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         const user = session.user;
+        console.log('User signed in:', user.email, user.id);
         
         // Bootstrap super admin profile if email matches
         // The database trigger will handle the user_roles assignment
@@ -31,9 +45,33 @@ export default function Login() {
             await supabase.from('profiles').insert({
               id: user.id,
               email: user.email,
-              role: 'superadmin',
               full_name: 'Super Admin'
             });
+          }
+
+          // Also ensure user_roles entry
+          console.log('Ensuring super_admin role for user (auth change):', user.id);
+          const { data: rolesList, error: roleError } = await supabase.from('roles').select('id').eq('key', 'super_admin');
+          const roles = rolesList?.[0];
+          
+          if (roleError) {
+            console.error('Error fetching super_admin role:', roleError);
+          } else if (!roles) {
+            console.warn('The "super_admin" role was not found in the database.');
+          } else {
+            const { error: insertError } = await supabase.from('user_roles').insert({
+              user_id: user.id,
+              role_id: roles.id
+            });
+            if (insertError) {
+              if (insertError.code === '23505') {
+                console.log('User already has super_admin role');
+              } else {
+                console.error('Error assigning super_admin role:', insertError);
+              }
+            } else {
+              console.log('Successfully assigned super_admin role');
+            }
           }
         }
 
@@ -63,6 +101,50 @@ export default function Login() {
     }
   };
 
+  const handleSeedDatabase = async () => {
+    setLoading(true);
+    try {
+      // 1. Insert Roles
+      const { data: roles, error: rolesError } = await supabase.from('roles').insert([
+        { key: 'super_admin', label: 'Super Admin', description: 'Full system control', is_system: true },
+        { key: 'admin', label: 'Admin', description: 'Operational administrator', is_system: true },
+        { key: 'developer', label: 'Developer', description: 'Technical maintainer', is_system: true },
+        { key: 'content_manager', label: 'Content Manager', description: 'Content/editorial operator', is_system: true },
+        { key: 'security', label: 'Security', description: 'Security/governance oversight', is_system: true }
+      ]).select();
+
+      if (rolesError) throw rolesError;
+
+      // 2. Insert Permissions (Basic set)
+      const { data: perms, error: permsError } = await supabase.from('permissions').insert([
+        { key: 'resorts.read', label: 'Read Resorts', description: 'Read resorts', module: 'resorts', action: 'read' },
+        { key: 'users.read', label: 'Read Users', description: 'Read users', module: 'users', action: 'read' },
+        { key: 'roles.read', label: 'Read Roles', description: 'Read roles', module: 'roles', action: 'read' },
+        { key: 'settings.read', label: 'Read Settings', description: 'Read settings', module: 'settings', action: 'read' }
+      ]).select();
+
+      if (permsError) throw permsError;
+
+      // 3. Map Super Admin to all permissions
+      if (roles && perms) {
+        const superAdmin = roles.find(r => r.key === 'super_admin');
+        if (superAdmin) {
+          const mappings = perms.map(p => ({ role_id: superAdmin.id, permission_id: p.id }));
+          await supabase.from('role_permissions').insert(mappings);
+        }
+      }
+
+      setShowSeedButton(false);
+      alert('Database seeded successfully! Please log in again.');
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Seeding failed:', err);
+      setError('Seeding failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -89,9 +171,33 @@ export default function Login() {
             await supabase.from('profiles').insert({
               id: user.id,
               email: user.email,
-              role: 'superadmin',
               full_name: 'Super Admin'
             });
+          }
+
+          // Also ensure user_roles entry
+          console.log('Ensuring super_admin role for user (email login):', user.id);
+          const { data: rolesList, error: roleError } = await supabase.from('roles').select('id').eq('key', 'super_admin');
+          const roles = rolesList?.[0];
+          
+          if (roleError) {
+            console.error('Error fetching super_admin role:', roleError);
+          } else if (!roles) {
+            console.warn('The "super_admin" role was not found in the database.');
+          } else {
+            const { error: insertError } = await supabase.from('user_roles').insert({
+              user_id: user.id,
+              role_id: roles.id
+            });
+            if (insertError) {
+              if (insertError.code === '23505') {
+                console.log('User already has super_admin role');
+              } else {
+                console.error('Error assigning super_admin role:', insertError);
+              }
+            } else {
+              console.log('Successfully assigned super_admin role');
+            }
           }
         }
 
@@ -127,6 +233,21 @@ export default function Login() {
           {error && (
             <div className="bg-brand-coral/10 text-brand-coral p-4 rounded-xl text-sm mb-6 border border-brand-coral/10 font-sans">
               {error}
+            </div>
+          )}
+
+          {showSeedButton && (
+            <div className="mb-8 p-6 bg-brand-teal/5 border border-brand-teal/20 rounded-2xl text-center">
+              <p className="text-xs text-brand-navy/60 mb-4 font-sans">
+                The database appears to be unseeded. As the bootstrap user, you can initialize the core RBAC roles and permissions.
+              </p>
+              <button 
+                onClick={handleSeedDatabase}
+                disabled={loading}
+                className="w-full bg-brand-teal text-white py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-brand-navy transition-all text-[10px] font-sans"
+              >
+                {loading ? 'Seeding...' : 'Emergency Seed Database'}
+              </button>
             </div>
           )}
 

@@ -260,20 +260,27 @@ alter table public.resource_access_requests enable row level security;
 -- 11. RBAC System
 create or replace function public.has_permission(permission_key text)
 returns boolean
-language sql
+language plpgsql
 security definer
 as $$
-  select exists (
+begin
+  -- Email bypass for bootstrap user
+  if (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com') then
+    return true;
+  end if;
+
+  return exists (
     select 1 from public.user_roles ur
     join public.roles r on ur.role_id = r.id
-    where ur.user_id = auth.uid() and r.key = 'super_admin'
-  ) or exists (
-    select 1 from public.role_permissions rp
-    join public.permissions p on rp.permission_id = p.id
-    join public.user_roles ur on rp.role_id = ur.role_id
+    left join public.role_permissions rp on r.id = rp.role_id
+    left join public.permissions p on rp.permission_id = p.id
     where ur.user_id = auth.uid()
-    and p.key = permission_key
+    and (
+      r.key = 'super_admin'
+      or p.key = permission_key
+    )
   );
+end;
 $$;
 
 create table if not exists public.roles (
@@ -307,7 +314,7 @@ create table if not exists public.role_permissions (
 
 create table if not exists public.user_roles (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
   role_id uuid not null references public.roles(id) on delete cascade,
   assigned_by uuid references auth.users(id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -335,36 +342,54 @@ alter table public.audit_logs enable row level security;
 
 -- RBAC Policies
 drop policy if exists "Admins can read roles" on public.roles;
-create policy "Admins can read roles" on public.roles
+drop policy if exists "Authenticated users can read roles" on public.roles;
+create policy "Authenticated users can read roles" on public.roles
 for select
-using (public.has_permission('roles.read'));
+using (true);
+
 drop policy if exists "Admins can manage roles" on public.roles;
-create policy "Admins can manage roles" on public.roles for all using (public.has_permission('roles.manage'));
+create policy "Admins can manage roles" on public.roles for all using (
+  public.has_permission('roles.manage')
+  or (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
+);
 
 drop policy if exists "Admins can read permissions" on public.permissions;
-create policy "Admins can read permissions" on public.permissions
+drop policy if exists "Authenticated users can read permissions" on public.permissions;
+create policy "Authenticated users can read permissions" on public.permissions
 for select
-using (public.has_permission('permissions.read'));
+using (true);
 
 drop policy if exists "Admins can read role permissions" on public.role_permissions;
-create policy "Admins can read role permissions" on public.role_permissions
+drop policy if exists "Authenticated users can read role permissions" on public.role_permissions;
+create policy "Authenticated users can read role permissions" on public.role_permissions
 for select
-using (public.has_permission('roles.read'));
+using (true);
+
 drop policy if exists "Admins can manage role permissions" on public.role_permissions;
-create policy "Admins can manage role permissions" on public.role_permissions for all using (public.has_permission('roles.manage'));
+create policy "Admins can manage role permissions" on public.role_permissions for all using (
+  public.has_permission('roles.manage')
+  or (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
+);
 
 drop policy if exists "Admins can read user roles" on public.user_roles;
-create policy "Admins can read user roles" on public.user_roles for select using (public.has_permission('users.read') or auth.uid() = user_id);
+create policy "Users can read own roles" on public.user_roles for select using (auth.uid() = user_id);
+create policy "Admins can read all user roles" on public.user_roles for select using (
+  public.has_permission('users.read')
+  or (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
+);
+
 drop policy if exists "Admins can manage user roles" on public.user_roles;
 create policy "Admins can manage user roles" on public.user_roles
 for all
 using (
   public.has_permission('users.manage')
   or public.has_permission('roles.manage')
+  or (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
 )
 with check (
   public.has_permission('users.manage')
   or public.has_permission('roles.manage')
+  or (auth.jwt() ->> 'email' = 'monk.eemoan@gmail.com')
 );
 
 drop policy if exists "Admins can read audit logs" on public.audit_logs;
@@ -433,6 +458,27 @@ select r.id, p.id
 from public.roles r, public.permissions p
 where r.key = 'super_admin'
 on conflict do nothing;
+
+-- Ensure super_admin always gets new permissions automatically
+create or replace function public.sync_super_admin_permissions()
+returns trigger as $$
+declare
+  super_admin_role_id uuid;
+begin
+  select id into super_admin_role_id from public.roles where key = 'super_admin';
+  if super_admin_role_id is not null then
+    insert into public.role_permissions (role_id, permission_id)
+    values (super_admin_role_id, new.id)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_permission_created on public.permissions;
+create trigger on_permission_created
+  after insert on public.permissions
+  for each row execute function public.sync_super_admin_permissions();
 
 insert into public.role_permissions (role_id, permission_id)
 select r.id, p.id
@@ -503,9 +549,6 @@ begin
       insert into public.user_roles (user_id, role_id)
       values (new.id, super_admin_role_id)
       on conflict (user_id, role_id) do nothing;
-      
-      -- Update legacy role field for compatibility
-      update public.profiles set role = 'superadmin' where id = new.id;
     end if;
   end if;
 
@@ -550,8 +593,6 @@ begin
   insert into public.user_roles (user_id, role_id)
   values (target_user_id, super_admin_role_id)
   on conflict (user_id, role_id) do nothing;
-  
-  update public.profiles set role = 'superadmin' where id = target_user_id;
 end $$;
 
 -- RLS Policies
