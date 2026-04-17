@@ -68,8 +68,11 @@ export async function readApiJson<T = any>(response: Response): Promise<T> {
     }
 
     // If it's not JSON, check if it looks like HTML
-    if (text.trim().toLowerCase().startsWith('<!doctype html') || text.trim().toLowerCase().startsWith('<html')) {
-      throw new Error("Server returned HTML instead of JSON. Check API route, proxy, or API base URL.");
+    const lowerText = text.trim().toLowerCase();
+    if (lowerText.startsWith('<!doctype html') || lowerText.startsWith('<html')) {
+      const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+      const title = titleMatch ? titleMatch[1] : 'Unknown Page';
+      throw new Error(`Server returned HTML ("${title}") instead of JSON. Content teaser: ${text.slice(0, 100).replace(/\n/g, ' ')}...`);
     }
     
     // Fallback for other non-JSON content or empty response

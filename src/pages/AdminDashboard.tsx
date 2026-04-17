@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useParams, useNavigate, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus, Search, Check, X, Edit2, Trash2, Upload, Palette, Image, Globe, Link2, Phone, Mail, MapPin, Instagram, Linkedin, Facebook, Play, Eye, EyeOff, Send, History, RefreshCw, Database, Shield, LogOut, Palmtree, Calendar, AlertCircle, Gem, Zap, Menu, Handshake, CheckCircle2, UserCheck, ChevronDown, ChevronRight, Copy, Layers, Loader2, Sparkles, Save, Download, Activity } from 'lucide-react';
 import { supabase } from '../supabase';
-import { apiFetch } from '../lib/api';
+import { apiFetch, readApiJson } from '../lib/api';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
-import { extractResortDataFromPDF } from '../services/content';
+import { extractResortInfoFromPDF } from '../services/geminiImport';
 import { AdminImportBatches } from '../components/ImportWorkflow';
 import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagement';
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
@@ -1235,6 +1235,8 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
   const [editingResort, setEditingResort] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiTokenExhausted, setAiTokenExhausted] = useState(false);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [smartUploadProgress, setSmartUploadProgress] = useState<{
     total: number;
     current: number;
@@ -1283,24 +1285,15 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     if (!files || files.length === 0) return;
 
     setAiProcessing(true);
+    setAiTokenExhausted(false);
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      // 1. Create Batch using importService
-      const batch = await importService.createBatch({
-        batch_type: 'resort_pdf_import',
-        source_type: 'local_upload'
-      });
-      const batchId = batch.id;
-
       setSmartUploadProgress({
         total: files.length,
         current: 0,
         completed: 0,
         failed: 0,
-        status: 'Initializing batch...'
+        status: 'Starting local file processing...'
       });
       
       for (let i = 0; i < files.length; i++) {
@@ -1308,55 +1301,59 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         setSmartUploadProgress(prev => prev ? { 
           ...prev, 
           current: i + 1, 
-          status: `Uploading ${file.name} to staging...` 
+          status: `Reading ${file.name}...` 
         } : null);
         
-        await new Promise<void>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64 = (reader.result as string).split(',')[1];
-            try {
-              const uploadPayload = btoa(JSON.stringify({
-                action: 'import-local',
-                data: {
-                  batchId,
-                  base64Data: base64,
-                  filename: file.name
-                }
-              }));
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
 
-              const res = await apiFetch('/api/v1/data/sync', {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  payload: uploadPayload
-                })
-              });
-              
-              const { raw: resRaw, data: resData } = await readJsonSafe(res);
-              
-              if (!res.ok) throw new Error(resData?.error || resRaw || 'Upload failed');
+          // Extract with Gemini on frontend
+          const extracted = await extractResortInfoFromPDF(base64, (modelName) => {
+            setCurrentModel(modelName);
+            setSmartUploadProgress(prev => prev ? { 
+              ...prev, 
+              status: `Using ${modelName} for ${file.name}...` 
+            } : null);
+          });
 
-              setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
-            } catch (err) {
-              console.error('Staging failed for file:', file.name, err);
-              setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
-            } finally {
-              resolve();
-            }
-          };
-          reader.readAsDataURL(file);
-        });
+          // Save to DB
+          const saveRes = await apiFetch('/api/resorts/import-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              resortData: extracted,
+              skipDuplicates: true
+            })
+          });
+          const saveData = await readApiJson(saveRes);
+
+          if (saveData.status === 'skipped') {
+            // Stats locally if needed, for progress we count success
+          }
+          setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
+        } catch (err: any) {
+          if (err.message === 'AI_TOKENS_EXHAUSTED') {
+            setAiTokenExhausted(true);
+            showNotification('AI Quota exhausted across all models. Please try again later.');
+            break;
+          }
+          console.error('Failed processing file:', file.name, err);
+          setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
+        }
       }
 
-      showNotification('Batch Ingested to Staging. Please review in Import Batches.');
-      navigate('/admin/imports');
+      showNotification('Local files processed successfully.');
+      fetchResorts();
     } catch (err: any) {
-      showNotification('Batch creation failed: ' + err.message);
+      showNotification('Upload failed: ' + err.message);
     } finally {
       setAiProcessing(false);
+      setCurrentModel(null);
       setTimeout(() => setSmartUploadProgress(null), 5000);
     }
   };
@@ -1508,6 +1505,7 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     if (!driveUrl) return;
 
     localStorage.setItem('admin_drive_url', driveUrl);
+    setAiTokenExhausted(false);
 
     setIsFetchingDrive(true);
     setAiProcessing(true);
@@ -1516,17 +1514,6 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     let stats = { total: 0, new: 0, skipped: 0, failed: 0 };
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      // 1. Create Batch using importService
-      const batch = await importService.createBatch({
-        batch_type: 'resort_pdf_import',
-        source_type: 'google_drive',
-        source_ref: driveUrl
-      });
-      const batchId = batch.id;
-
       setSmartUploadProgress({
         total: 1,
         current: 0,
@@ -1535,29 +1522,17 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         status: 'Listing files from Google Drive...'
       });
 
-      // 2. List PDFs from Drive
+      // 1. List PDFs from Drive
       let folderId = driveUrl;
       const folderMatch = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
       if (folderMatch) {
         folderId = folderMatch[1];
       }
 
-      const listResponse = await apiFetch(`/api/drive/list?folderId=${folderId}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const { raw: listRaw, data: listData } = await readJsonSafe(listResponse);
-
-      if (!listResponse.ok) {
-        const errorMessage = listData?.error || listRaw || `Server error (${listResponse.status})`;
-        if (!listData) {
-          console.error('Non-JSON error response:', listResponse.status, listRaw.substring(0, 200));
-        }
-        throw new Error(errorMessage);
-      }
-
-      const files = listData?.files; // Array of { id, name }
+      const listResponse = await apiFetch(`/api/drive/list?folderId=${folderId}`);
+      if (!listResponse.ok) throw new Error('Failed to list files from Drive');
+      const listData = await listResponse.json();
+      const files = listData?.files;
 
       if (!files || files.length === 0) {
         throw new Error('No PDFs found in the provided Google Drive folder.');
@@ -1570,42 +1545,62 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         current: 0,
         completed: 0,
         failed: 0,
-        status: 'Processing PDFs to staging...'
+        status: 'Processing PDFs with Gemini...'
       });
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        
+        // Minor delay to prevent hammering proxy/server
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
+
         setSmartUploadProgress(prev => prev ? { 
           ...prev, 
           current: i + 1, 
-          status: `Processing ${file.name} to staging (${i + 1} of ${files.length})...` 
+          status: `Processing ${file.name} (${i + 1} of ${files.length})...` 
         } : null);
 
         try {
-          const res = await apiFetch('/api/drive/import', {
+          // A. Fetch Base64 from backend
+          const fetchRes = await apiFetch(`/api/drive/fetch-file`, {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: file.id })
+          });
+          const { base64 } = await readApiJson(fetchRes);
+
+          // B. Extract info with Gemini on frontend (with model fallback)
+          const extracted = await extractResortInfoFromPDF(base64, (modelName) => {
+            setCurrentModel(modelName);
+            setSmartUploadProgress(prev => prev ? { 
+              ...prev, 
+              status: `Using ${modelName} for ${file.name}...` 
+            } : null);
+          });
+
+          // C. Save to DB
+          const saveRes = await apiFetch('/api/resorts/import-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              batchId,
-              fileId: file.id,
-              filename: file.name,
+              resortData: extracted,
               skipDuplicates
             })
           });
-          
-          const { raw: resRaw, data: resData } = await readJsonSafe(res);
-          
-          if (!res.ok) throw new Error(resData?.error || resRaw || 'Staging failed');
+          const saveData = await readApiJson(saveRes);
 
-          if (resData?.skipped) {
+          if (saveData.status === 'skipped') {
             stats.skipped++;
           } else {
             stats.new++;
             setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
           }
-        } catch (err) {
+        } catch (err: any) {
+          if (err.message === 'AI_TOKENS_EXHAUSTED') {
+            setAiTokenExhausted(true);
+            showNotification('AI Quota exhausted across all models. Please try again later.');
+            break; // Stop processing batch
+          }
           console.error(`Failed processing ${file.name}:`, err);
           stats.failed++;
           setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
@@ -1613,18 +1608,15 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
       }
       
       setDriveSyncSummary({ ...stats, show: true });
-      showNotification(skipDuplicates ? 'Google Drive sync completed' : 'Google Drive batch ingested to staging');
-      
-      if (!skipDuplicates) {
-        navigate('/admin/imports');
-      }
+      showNotification('Google Drive processing complete');
+      fetchResorts();
     } catch (error: any) {
       console.error('Drive fetch error:', error);
       showNotification(`Error: ${error.message}`);
-      setSmartUploadProgress(null);
     } finally {
       setIsFetchingDrive(false);
       setAiProcessing(false);
+      setCurrentModel(null);
     }
   };
 
@@ -1770,6 +1762,24 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
           </button>
         </div>
       </div>
+
+      {aiTokenExhausted && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 p-6 rounded-3xl flex items-center gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
+            <AlertCircle size={24} />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-amber-900 uppercase tracking-widest">AI Quota Exhausted</h3>
+            <p className="text-[11px] text-amber-700 font-medium">All available free models have reached their rate limits. Processing will resume once tokens renew (usually in a few minutes or according to quota resets).</p>
+          </div>
+          <button 
+            onClick={() => setAiTokenExhausted(false)}
+            className="px-4 py-2 bg-amber-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-amber-700 transition-all shadow-lg shadow-amber-600/20"
+          >
+            Acknowledge
+          </button>
+        </div>
+      )}
 
       {smartUploadProgress && (
         <div className="mb-8 bg-white p-6 rounded-3xl border border-brand-navy/5 shadow-xl shadow-brand-navy/5">

@@ -936,169 +936,8 @@ async function startServer() {
     }
   });
 
-  await bootstrapInitialAdmin();
-  await seedMetadata();
-
-  // --- Generic Sync Endpoint to bypass WAF ---
-  async function processResortPDF(base64Data: string, filename: string, batchId: string, skipDuplicates: boolean = false) {
-    const genAI = new GoogleGenAI();
-    const model = "gemini-3-flash-preview";
-    const prompt = `
-      Extract resort information from this PDF document. 
-      Return a JSON object with the following fields:
-      - name: string
-      - location: string
-      - atoll: string
-      - description: string
-      - category: string
-      - transfer_type: string
-      - meal_plans: string[]
-      - room_types: object[] (name, description, max_guests, size)
-      - highlights: string[]
-      - seo_summary: string
-    `;
-
-    let result;
-    try {
-      result = await genAI.models.generateContent({
-        model,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "application/pdf",
-                  data: base64Data,
-                },
-              },
-            ],
-          },
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              location: { type: Type.STRING },
-              atoll: { type: Type.STRING },
-              description: { type: Type.STRING },
-              category: { type: Type.STRING },
-              transfer_type: { type: Type.STRING },
-              meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
-              room_types: { 
-                type: Type.ARRAY, 
-                items: { 
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    max_guests: { type: Type.STRING },
-                    size: { type: Type.STRING }
-                  }
-                } 
-              },
-              highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-              seo_summary: { type: Type.STRING }
-            }
-          }
-        }
-      });
-    } catch (error: any) {
-      console.error("[Gemini API Error]", error);
-      throw error;
-    }
-
-    const extracted = JSON.parse(result.text || '{}');
-    
-    // Improved Duplicate detection
-    const resortName = extracted.name || '';
-    const normalizedName = normalizeResortName(resortName);
-    
-    // Fetch existing resorts for comparison
-    const { data: existingResorts } = await supabaseAdmin
-      .from('resorts')
-      .select('id, name, atoll, location');
-    
-    let duplicateCandidate = null;
-    let confidence = 0.9;
-    let isDefiniteDuplicate = false;
-
-    if (existingResorts && existingResorts.length > 0) {
-      for (const existing of existingResorts) {
-        const existingNormalized = normalizeResortName(existing.name);
-        
-        // 1. Exact normalized name match
-        if (existingNormalized === normalizedName) {
-          duplicateCandidate = existing.id;
-          isDefiniteDuplicate = true;
-          confidence = 0.99;
-          break;
-        }
-        
-        // 2. Fuzzy match (contains)
-        if (existingNormalized.includes(normalizedName) || normalizedName.includes(existingNormalized)) {
-          // Check atoll/location to increase confidence
-          const atollMatch = existing.atoll && extracted.atoll && 
-            (existing.atoll.toLowerCase().includes(extracted.atoll.toLowerCase()) || 
-             extracted.atoll.toLowerCase().includes(existing.atoll.toLowerCase()));
-          
-          if (atollMatch) {
-            duplicateCandidate = existing.id;
-            isDefiniteDuplicate = true;
-            confidence = 0.95;
-            break;
-          } else {
-            // Potential match but not certain
-            if (!duplicateCandidate) {
-              duplicateCandidate = existing.id;
-              confidence = 0.7;
-            }
-          }
-        }
-      }
-    }
-
-    // If skipDuplicates is true and we found a definite duplicate, return early
-    if (skipDuplicates && isDefiniteDuplicate) {
-      console.log(`[Import] Skipping duplicate resort: ${resortName} (Matches existing ID: ${duplicateCandidate})`);
-      return { 
-        skipped: true, 
-        reason: 'duplicate', 
-        resortName, 
-        existingId: duplicateCandidate 
-      };
-    }
-
-    // Save to staging
-    const { data: staging, error: stagingError } = await supabaseAdmin
-      .from('resort_staging')
-      .insert({
-        import_batch_id: batchId,
-        extracted_json: extracted,
-        normalized_json: extracted,
-        confidence_score: confidence,
-        duplicate_candidate_resort_id: duplicateCandidate,
-        review_status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (stagingError) throw stagingError;
-
-    // Update batch summary
-    const { data: batch } = await supabaseAdmin.from('import_batches').select('summary_json').eq('id', batchId).single();
-    const summary = batch?.summary_json || {};
-    summary.resorts = summary.resorts || { total: 0, pending: 0, approved: 0, rejected: 0, published: 0 };
-    summary.resorts.total += 1;
-    summary.resorts.pending += 1;
-    
-    await supabaseAdmin.from('import_batches').update({ summary_json: summary }).eq('id', batchId);
-
-    return staging;
-  }
+  // await bootstrapInitialAdmin(); // Moved to background listener
+  // await seedMetadata(); // Moved to background listener
 
   app.post("/api/v1/data/sync", async (req, res) => {
     try {
@@ -1120,18 +959,9 @@ async function startServer() {
       if (action === 'list') {
         req.query.folderId = data.folderId;
         return handleGList(req, res);
-      } else if (action === 'import-drive-pdf') {
+      } else if (action === 'fetch-file') {
         req.body = data;
-        return handleDrivePdfImport(req, res);
-      } else if (action === 'import-url') {
-        req.body = data;
-        return handleUrlImport(req, res);
-      } else if (action === 'import-local') {
-        req.body = data;
-        return handleLocalImport(req, res);
-      } else if (action === 'fetch') {
-        req.body = data;
-        return handleGFetch(req, res);
+        return handleDriveFetch(req, res);
       } else if (action === 'scrape') {
         req.body = data;
         return handleScrape(req, res);
@@ -1176,26 +1006,6 @@ async function startServer() {
       res.json({ files: response.data.files || [] });
     } catch (err: any) {
       logDriveError("Sync List", err, { folderId });
-      res.status(500).json({ error: err.message });
-    }
-  }
-
-  async function handleDrivePdfImport(req: express.Request, res: express.Response) {
-    const { fileId, filename, batchId, skipDuplicates } = req.body;
-    try {
-      const auth = await getDriveAuth();
-      const drive = google.drive({ version: "v3", auth });
-
-      const response = await drive.files.get(
-        { fileId, alt: "media" },
-        { responseType: "arraybuffer" }
-      );
-
-      const base64 = Buffer.from(response.data as ArrayBuffer).toString("base64");
-      const result = await processResortPDF(base64, filename, batchId, skipDuplicates);
-      res.json(result);
-    } catch (err: any) {
-      logDriveError("Drive PDF Import", err, { fileId, filename });
       res.status(500).json({ error: err.message });
     }
   }
@@ -1362,29 +1172,86 @@ async function startServer() {
     }
   });
 
-  async function handleDriveImport(req: express.Request, res: express.Response) {
-    const { fileId, filename, batchId } = req.body;
+  async function handleDriveFetch(req: express.Request, res: express.Response) {
+    const { fileId } = req.body || req.query;
+    if (!fileId) return res.status(400).json({ error: "Missing fileId" });
     try {
       const auth = await getDriveAuth();
       const drive = google.drive({ version: "v3", auth });
       const response = await drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
       const base64 = Buffer.from(response.data as ArrayBuffer).toString('base64');
-      
-      const result = await processResortPDF(base64, filename, batchId || 'batch-' + Date.now(), false);
-      res.json(result);
+      res.json({ base64 });
     } catch (err: any) {
-      logDriveError("Drive PDF Import", err, { fileId, filename });
+      logDriveError("Drive Fetch", err, { fileId });
       res.status(500).json({ error: err.message });
     }
   }
 
-  app.post("/api/drive/import", handleDriveImport);
+  app.post("/api/drive/fetch-file", handleDriveFetch);
+  app.get("/api/drive/fetch-file", handleDriveFetch);
+
+  // New endpoint to save extracted resort data
+  app.post("/api/resorts/import-data", async (req, res) => {
+    console.log('[API] Entered /api/resorts/import-data');
+    try {
+      const user = await getAuthenticatedUser(req);
+      const permissions = await getUserPermissionsServerSide(user.id);
+      if (!permissions.includes('resorts.manage')) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const { resortData, skipDuplicates = true } = req.body;
+      if (!resortData || !resortData.name) {
+        return res.status(400).json({ error: "Invalid resort data" });
+      }
+
+      // 1. Check for duplicates
+      if (skipDuplicates) {
+        const { data: existing } = await supabase
+          .from('resorts')
+          .select('id')
+          .ilike('name', resortData.name)
+          .maybeSingle();
+
+        if (existing) {
+          return res.json({ status: 'skipped', message: `Resort "${resortData.name}" already exists.`, id: existing.id });
+        }
+      }
+
+      // 2. Insert the resort
+      const { data: inserted, error } = await supabase
+        .from('resorts')
+        .insert({
+          name: resortData.name,
+          location: resortData.location,
+          atoll: resortData.atoll,
+          description: resortData.description,
+          category: resortData.category,
+          transfer_type: resortData.transfer_type,
+          meal_plans: resortData.meal_plans || [],
+          room_types: resortData.room_types || [],
+          highlights: resortData.highlights || [],
+          seo_summary: resortData.seo_summary,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ status: 'success', resort: inserted });
+    } catch (err: any) {
+      console.error('Failed to import resort data:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // API 404 handler to prevent HTML fallback for API routes
   app.all('/api/*', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
   });
 
+  console.log('[Server] Initializing Vite middleware...');
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -1392,16 +1259,29 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+    console.log('[Server] Vite middleware initialized');
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+    console.log('[Server] Static file serving initialized (Production)');
   }
 
+  console.log('[Server] Binding to port...');
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Run initialization in background to avoid blocking server start
+    (async () => {
+      try {
+        await bootstrapInitialAdmin();
+        await seedMetadata();
+      } catch (err: any) {
+        console.error('[Init] Background initialization failed:', err.message);
+      }
+    })();
   });
 }
 
