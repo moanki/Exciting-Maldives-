@@ -48,11 +48,7 @@ export const importService = {
       inferred_subcategory: item.subcategory,
       inferred_room_type_name: item.room_type_name,
       review_status: 'pending',
-      confidence_score: 1.0,
-      metadata_json: {
-        source: 'manual_upload',
-        uploaded_at: new Date().toISOString()
-      }
+      confidence_score: 1.0
     }));
 
     const { data, error } = await supabase

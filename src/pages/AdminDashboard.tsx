@@ -4,7 +4,6 @@ import { LayoutDashboard, Hotel, Users, FileText, MessageSquare, Settings, Plus,
 import { supabase } from '../supabase';
 import { apiFetch, readApiJson } from '../lib/api';
 import { getSiteSettings, clearSettingsCache } from '../lib/settings';
-import { extractResortInfoFromPDF } from '../services/geminiImport';
 import { AdminImportBatches } from '../components/ImportWorkflow';
 import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagement';
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
@@ -95,7 +94,7 @@ export default function AdminDashboard() {
     const fetchAiStatus = async () => {
       try {
         const response = await apiFetch('/api/ai/status');
-        const data = await response.json();
+        const data = await readApiJson(response);
         setAiConfigured(data.configured);
       } catch (err) {
         console.error('Failed to fetch AI status:', err);
@@ -1312,14 +1311,25 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
             reader.readAsDataURL(file);
           });
 
-          // Extract with Gemini on frontend
-          const extracted = await extractResortInfoFromPDF(base64, (modelName) => {
-            setCurrentModel(modelName);
-            setSmartUploadProgress(prev => prev ? { 
-              ...prev, 
-              status: `Using ${modelName} for ${file.name}...` 
-            } : null);
+          // Extract with Gemini on backend for consistency
+          setSmartUploadProgress(prev => prev ? { 
+            ...prev, 
+            status: `Analyzing ${file.name} (server-side)...` 
+          } : null);
+
+          const extractRes = await apiFetch('/api/resorts/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64 })
           });
+
+          if (!extractRes.ok) {
+            const errData = await readApiJson(extractRes);
+            if (errData.error === 'AI_TOKENS_EXHAUSTED') throw new Error('AI_TOKENS_EXHAUSTED');
+            throw new Error(errData.error || 'Extraction failed');
+          }
+
+          const extracted = await extractRes.json();
 
           // Save to DB
           const saveRes = await apiFetch('/api/resorts/import-data', {
@@ -1449,7 +1459,17 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     skipped: number;
     failed: number;
     show: boolean;
+    exhausted?: boolean;
   } | null>(null);
+
+  // Debounced autosave for Drive URL
+  useEffect(() => {
+    if (!driveUrl) return;
+    const timer = setTimeout(() => {
+      handleSaveDriveUrl();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [driveUrl]);
 
   useEffect(() => {
     const loadDriveUrl = async () => {
@@ -1511,112 +1531,63 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
     setAiProcessing(true);
     setDriveSyncSummary(null);
     
-    let stats = { total: 0, new: 0, skipped: 0, failed: 0 };
-    
     try {
       setSmartUploadProgress({
         total: 1,
         current: 0,
         completed: 0,
         failed: 0,
-        status: 'Listing files from Google Drive...'
+        status: 'Initiating server-side sync...'
       });
 
-      // 1. List PDFs from Drive
+      // 1. Extract folderId
       let folderId = driveUrl;
       const folderMatch = driveUrl.match(/folders\/([a-zA-Z0-9_-]+)/);
       if (folderMatch) {
         folderId = folderMatch[1];
       }
 
-      const listResponse = await apiFetch(`/api/drive/list?folderId=${folderId}`);
-      if (!listResponse.ok) throw new Error('Failed to list files from Drive');
-      const listData = await listResponse.json();
-      const files = listData?.files;
-
-      if (!files || files.length === 0) {
-        throw new Error('No PDFs found in the provided Google Drive folder.');
-      }
-
-      stats.total = files.length;
-
-      setSmartUploadProgress({
-        total: files.length,
-        current: 0,
-        completed: 0,
-        failed: 0,
-        status: 'Processing PDFs with Gemini...'
+      // 2. Call single backend endpoint for the whole folder
+      const response = await apiFetch(`/api/drive/sync-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId, skipDuplicates })
       });
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Minor delay to prevent hammering proxy/server
-        if (i > 0) await new Promise(r => setTimeout(r, 1000));
-
-        setSmartUploadProgress(prev => prev ? { 
-          ...prev, 
-          current: i + 1, 
-          status: `Processing ${file.name} (${i + 1} of ${files.length})...` 
-        } : null);
-
-        try {
-          // A. Fetch Base64 from backend
-          const fetchRes = await apiFetch(`/api/drive/fetch-file`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId: file.id })
-          });
-          const { base64 } = await readApiJson(fetchRes);
-
-          // B. Extract info with Gemini on frontend (with model fallback)
-          const extracted = await extractResortInfoFromPDF(base64, (modelName) => {
-            setCurrentModel(modelName);
-            setSmartUploadProgress(prev => prev ? { 
-              ...prev, 
-              status: `Using ${modelName} for ${file.name}...` 
-            } : null);
-          });
-
-          // C. Save to DB
-          const saveRes = await apiFetch('/api/resorts/import-data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              resortData: extracted,
-              skipDuplicates
-            })
-          });
-          const saveData = await readApiJson(saveRes);
-
-          if (saveData.status === 'skipped') {
-            stats.skipped++;
-          } else {
-            stats.new++;
-            setSmartUploadProgress(prev => prev ? { ...prev, completed: prev.completed + 1 } : null);
-          }
-        } catch (err: any) {
-          if (err.message === 'AI_TOKENS_EXHAUSTED') {
-            setAiTokenExhausted(true);
-            showNotification('AI Quota exhausted across all models. Please try again later.');
-            break; // Stop processing batch
-          }
-          console.error(`Failed processing ${file.name}:`, err);
-          stats.failed++;
-          setSmartUploadProgress(prev => prev ? { ...prev, failed: prev.failed + 1 } : null);
-        }
+      if (!response.ok) {
+        const errData = await readApiJson(response);
+        throw new Error(errData.error || 'Server-side sync failed');
       }
-      
-      setDriveSyncSummary({ ...stats, show: true });
-      showNotification('Google Drive processing complete');
+
+      const syncResult = await response.json();
+      const { summary } = syncResult;
+
+      setDriveSyncSummary({
+        total: summary.total,
+        new: summary.new,
+        skipped: summary.skipped,
+        failed: summary.failed,
+        exhausted: summary.exhausted,
+        show: true
+      });
+
+      if (summary.exhausted) {
+        setAiTokenExhausted(true);
+        showNotification('AI Quota exhausted. Some files were skipped.');
+      } else if (summary.failed > 0) {
+        showNotification(`Sync complete with ${summary.failed} errors.`);
+      } else {
+        showNotification(`Sync complete: ${summary.new} new, ${summary.skipped} skipped.`);
+      }
+
       fetchResorts();
-    } catch (error: any) {
-      console.error('Drive fetch error:', error);
-      showNotification(`Error: ${error.message}`);
+    } catch (err: any) {
+      console.error('[Sync] Frontend error:', err);
+      showNotification('Sync failed: ' + err.message);
     } finally {
       setIsFetchingDrive(false);
       setAiProcessing(false);
-      setCurrentModel(null);
+      setSmartUploadProgress(null);
     }
   };
 

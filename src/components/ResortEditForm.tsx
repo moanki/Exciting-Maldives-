@@ -456,29 +456,28 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
     setUploadProgress(0);
     
     try {
-      // 1. Create Import Batch using importService (Direct Supabase)
-      const batch = await importService.createBatch({
-        batch_type: 'media_import',
-        source_type: 'mixed_upload',
-        source_ref: editingResort.name
-      });
+      const uploadedMedia = [];
+      const newImages: string[] = [];
+      let newBannerUrl = bannerUrl;
       
-      const batchId = batch.id;
-      const mediaItemsToStage = [];
-      
+      // Get category data first to map keys to IDs
+      const { data: categoryData } = await supabase
+        .from('resort_media_categories')
+        .select('id, key')
+        .eq('resort_id', editingResort.id);
+
       for (let i = 0; i < importedMedia.length; i++) {
         const item = importedMedia[i];
         if (item.ignore) continue;
 
-        let storagePath = item.storage_path;
+        let finalUrl = item.storage_path;
         
-        if (item.file || (storagePath && storagePath.startsWith('http'))) {
+        if (item.file || (finalUrl && finalUrl.startsWith('http'))) {
           try {
             let fileToUpload = item.file;
             
-            if (!fileToUpload && storagePath.startsWith('http')) {
-              // Note: Proxy still needs a backend, but we'll try to handle it
-              const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(storagePath)}`;
+            if (!fileToUpload && finalUrl.startsWith('http')) {
+              const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(finalUrl)}`;
               const response = await fetch(proxyUrl);
               if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
               const blob = await response.blob();
@@ -490,41 +489,68 @@ export const ResortEditForm: React.FC<ResortEditFormProps> = ({ formData, setFor
             }
 
             if (fileToUpload) {
-              // Upload directly to Supabase Storage with staging path
+              // Upload directly to resorts (Not staging)
               const internalUrl = await uploadResortFile(
                 fileToUpload, 
                 formData.name || editingResort.name, 
                 item.category, 
                 (p) => setUploadProgress(((i + p/100) / importedMedia.length) * 100),
                 showNotification,
-                true // isStaging = true
+                false // isStaging = false
               );
-              if (internalUrl) storagePath = internalUrl;
+              if (internalUrl) finalUrl = internalUrl;
             }
           } catch (uploadErr) {
             console.error(`Failed to upload image ${i}:`, uploadErr);
           }
         }
 
-        mediaItemsToStage.push({ 
-          url: storagePath,
+        const categoryId = categoryData?.find(c => c.key === item.category)?.id;
+
+        uploadedMedia.push({ 
+          resort_id: editingResort.id,
+          storage_path: finalUrl,
           category: item.category,
+          category_id: categoryId,
           subcategory: item.subcategory,
           original_filename: item.original_filename,
-          source_url: item.source_url,
-          room_type_name: item.room_type_name
+          sort_order: 100 + i,
+          is_hero: !!item.is_hero
         });
+
+        newImages.push(finalUrl);
+        if (item.is_hero) {
+          newBannerUrl = finalUrl;
+        }
       }
       
-      // 2. Stage Media Items using importService (Direct Supabase)
-      await importService.stageMediaItems(batchId, editingResort.id, mediaItemsToStage);
+      if (uploadedMedia.length > 0) {
+        const { error: insertError } = await supabase
+          .from('resort_media')
+          .insert(uploadedMedia);
+        
+        if (insertError) throw insertError;
+
+        // Update local state and parent state
+        const currentImages = Array.isArray(formData.images) ? formData.images : [];
+        const combinedImages = [...currentImages, ...newImages];
+        
+        setBannerUrl(newBannerUrl);
+        setFormData((prev: any) => ({
+          ...prev,
+          images: combinedImages,
+          banner_url: newBannerUrl
+        }));
+
+        await fetchMedia();
+        showNotification(`${uploadedMedia.length} images added to resort library!`);
+      }
       
       setImportedMedia([]);
       setImportState('saved');
-      showNotification('Media sent to staging for review. Please check Import Batches.');
       setTimeout(() => {
         setImportState('idle');
-        window.location.href = '/admin/imports';
+        setActiveTab('Media Library');
       }, 2000);
     } catch (err: any) {
       console.error('Save error:', err);

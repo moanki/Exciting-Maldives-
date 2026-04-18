@@ -151,12 +151,27 @@ const isValidGeminiKey = (value: string | null | undefined) => {
   if (!value) return false;
   const trimmed = value.trim();
   if (GEMINI_KEY_PLACEHOLDERS.has(trimmed)) return false;
-  return trimmed.length >= 20;
+  // If it's a non-empty string that's not a placeholder, let's at least try it
+  return trimmed.length >= 8;
 };
 
 async function getGeminiApiKey(): Promise<string | null> {
   const envKey = process.env.GEMINI_API_KEY?.trim();
+  const viteEnvKey = process.env.VITE_GEMINI_API_KEY?.trim();
+  const googleKey = process.env.GOOGLE_API_KEY?.trim();
+  const genericKey = process.env.API_KEY?.trim();
+  
   if (isValidGeminiKey(envKey)) return envKey!;
+  if (isValidGeminiKey(viteEnvKey)) return viteEnvKey!;
+  if (isValidGeminiKey(googleKey)) return googleKey!;
+  if (isValidGeminiKey(genericKey)) return genericKey!;
+
+  console.log('[Gemini Key Check] Environment key check failed:', {
+    hasEnvKey: !!envKey,
+    hasViteEnvKey: !!viteEnvKey,
+    hasGoogleKey: !!googleKey,
+    hasGenericKey: !!genericKey
+  });
 
   const now = Date.now();
   if (cachedGeminiApiKey.expiresAt > now) {
@@ -191,16 +206,59 @@ async function getGeminiApiKey(): Promise<string | null> {
   return null;
 }
 
-// Helper to normalize resort names for duplicate detection
+// Helper to normalize resort names for duplicate detection (fuzzy matching)
 const normalizeResortName = (name: string) => {
   if (!name) return '';
   return name.toLowerCase()
-    .replace(/resort/gi, '')
-    .replace(/spa/gi, '')
-    .replace(/maldives/gi, '')
+    .replace(/\b(resort|spa|maldives|the|and|hotel|villas|at)\b/g, '')
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]/g, '')
     .trim();
+};
+
+const RESORT_EXTRACTION_PROMPT = `
+  Extract resort information from this PDF document of its factsheet. 
+  Be extremely accurate and detailed.
+  Return a JSON object with the following fields:
+  - name: string (The official name of the resort)
+  - location: string (General location details)
+  - atoll: string (Specifically identify which Maldivian atoll)
+  - description: string (A rich, engaging description)
+  - category: string (5-star, 4-star, etc)
+  - transfer_type: string (Seaplane, Speedboat, etc)
+  - meal_plans: string[] (List of plans like All Inclusive, Half Board)
+  - room_types: array of objects (name, description, max_guests, size)
+  - highlights: string[] (Key features or USPs)
+  - seo_summary: string (An SEO optimized summary of the resort and its rooms, at least 2 paragraphs)
+`;
+
+const RESORT_EXTRACTION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    name: { type: Type.STRING },
+    location: { type: Type.STRING },
+    atoll: { type: Type.STRING },
+    description: { type: Type.STRING },
+    category: { type: Type.STRING },
+    transfer_type: { type: Type.STRING },
+    meal_plans: { type: Type.ARRAY, items: { type: Type.STRING } },
+    room_types: { 
+      type: Type.ARRAY, 
+      items: { 
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          max_guests: { type: Type.STRING },
+          size: { type: Type.STRING }
+        },
+        required: ["name", "description"]
+      }
+    },
+    highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+    seo_summary: { type: Type.STRING }
+  },
+  required: ["name", "location", "atoll", "description", "seo_summary"]
 };
 
 // Helper for Google Drive Auth
@@ -665,7 +723,25 @@ async function startServer() {
     next();
   });
 
-  // --- Admin RBAC Endpoints (Moved up for priority) ---
+  // Early route for health/status checks
+  app.get("/api/ai/status", async (req, res) => {
+    try {
+      const apiKey = await getGeminiApiKey();
+      res.json({ configured: !!apiKey });
+    } catch (err: any) {
+      res.json({ configured: false, error: err.message });
+    }
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      env: process.env.NODE_ENV || 'development'
+    });
+  });
+
+  // --- Admin RBAC Endpoints ---
 
   app.get("/api/admin/roles", requirePermission("roles.read"), async (req, res) => {
     try {
@@ -910,32 +986,6 @@ async function startServer() {
     });
   });
 
-  // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      env: process.env.NODE_ENV || 'development'
-    });
-  });
-
-  app.get("/api/debug/gemini-test", async (req, res) => {
-    try {
-      const apiKey = await getGeminiApiKey();
-      if (!apiKey) {
-        return res.status(500).json({ ok: false, error: "Gemini API key is missing or invalid." });
-      }
-      const genAI = new GoogleGenAI({ apiKey });
-      const result = await genAI.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: "Say OK" }] }],
-      });
-      res.json({ ok: true, text: result.text });
-    } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
   // await bootstrapInitialAdmin(); // Moved to background listener
   // await seedMetadata(); // Moved to background listener
 
@@ -965,12 +1015,206 @@ async function startServer() {
       } else if (action === 'scrape') {
         req.body = data;
         return handleScrape(req, res);
+      } else if (action === 'import-url') {
+        req.body = data;
+        return handleUrlImport(req, res);
       }
 
       res.status(400).json({ error: "Unknown action" });
     } catch (error: any) {
       console.error("[Sync] Error:", error);
       res.status(error.status || 500).json({ error: error.message });
+    }
+  });
+
+  // Dynamic Gemini model discovery and fallback
+  async function getGeminiModelChain() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) throw new Error("Gemini API key not found in environment (GEMINI_API_KEY, GOOGLE_API_KEY, etc.) or Site Settings. Please configure it in the Admin Panel -> Site Settings.");
+    
+    const ai = new GoogleGenAI({ apiKey });
+    let models: string[] = [];
+    
+    try {
+      const response = await ai.models.list();
+      const modelList = (response as any).models || [];
+      models = modelList
+        .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent') && 
+                    (m.name.includes('flash') || m.name.includes('pro')))
+        .map((m: any) => m.name.split('/').pop() || '');
+      
+      // Prioritize flash/lite first for speed/cost
+      models.sort((a,b) => {
+        const aLow = a.toLowerCase();
+        const bLow = b.toLowerCase();
+        if (aLow.includes('lite') && !bLow.includes('lite')) return -1;
+        if (!aLow.includes('lite') && bLow.includes('lite')) return 1;
+        if (aLow.includes('flash') && !bLow.includes('pro')) return -1;
+        if (aLow.includes('pro') && !bLow.includes('flash')) return  1;
+        return 0;
+      });
+    } catch (e) {
+      console.warn("[Gemini] Failed to list models dynamically, using static fallback.");
+      models = [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3-flash-preview",
+        "gemini-3.1-pro-preview"
+      ];
+    }
+    
+    return { ai, models };
+  }
+
+  // End-to-end Drive Sync Route
+  app.post("/api/drive/sync-import", async (req, res) => {
+    const { folderId, skipDuplicates = true } = req.body;
+    if (!folderId) return res.status(400).json({ error: "Missing folderId" });
+
+    const summary = {
+      total: 0,
+      new: 0,
+      skipped: 0,
+      failed: 0,
+      exhausted: false
+    };
+
+    try {
+      const auth = await getDriveAuth();
+      const drive = google.drive({ version: "v3", auth });
+
+      // 1. List files
+      const listResponse = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false and mimeType = 'application/pdf'`,
+        fields: "files(id, name, size)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+
+      const files = listResponse.data.files || [];
+      summary.total = files.length;
+
+      if (files.length === 0) {
+        return res.json({ status: 'success', summary, results: [] });
+      }
+
+      const { ai, models } = await getGeminiModelChain();
+      const results: any[] = [];
+
+      // Process sequentially to respect rate limits and allow progress tracking (if we used sockets, but simple for now)
+      for (const file of files) {
+        if (summary.exhausted) break;
+        
+        console.log(`[Sync] Processing: ${file.name} (${file.id})`);
+        
+        try {
+          // A. Duplicate check
+          if (skipDuplicates) {
+            const normalizedName = normalizeResortName(file.name.replace(/\.pdf$/i, ''));
+            const { data: existing } = await supabase
+              .from('resorts')
+              .select('id, name')
+              .ilike('name', `%${file.name.replace(/\.pdf$/i, '').substring(0, 10)}%`);
+
+            // Check if any existing resort normalized name matches
+            const isDuplicate = existing?.some(r => normalizeResortName(r.name) === normalizedName);
+            
+            if (isDuplicate) {
+              summary.skipped++;
+              results.push({ name: file.name, status: 'skipped' });
+              continue;
+            }
+          }
+
+          // B. Fetch file content
+          const fileResponse = await drive.files.get(
+            { fileId: file.id, alt: "media", supportsAllDrives: true },
+            { responseType: "arraybuffer" }
+          );
+          const base64 = Buffer.from(fileResponse.data as ArrayBuffer).toString('base64');
+
+          // C. Extraction with model fallback
+          let extractedData = null;
+          let extractionError = null;
+
+          for (const modelName of models) {
+            try {
+              const generation = await ai.models.generateContent({
+                model: modelName,
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      { text: RESORT_EXTRACTION_PROMPT },
+                      { inlineData: { mimeType: "application/pdf", data: base64 } }
+                    ]
+                  }
+                ],
+                config: {
+                  responseMimeType: "application/json",
+                  responseSchema: RESORT_EXTRACTION_SCHEMA as any
+                }
+              });
+
+              extractedData = JSON.parse(generation.text || '{}');
+              break; // Success!
+            } catch (err: any) {
+              const msg = err.message?.toLowerCase() || '';
+              if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted')) {
+                console.warn(`[Gemini] Model ${modelName} exhausted, trying next...`);
+                continue;
+              }
+              extractionError = err;
+              console.error(`[Gemini] Model ${modelName} failed on ${file.name}:`, err.message);
+            }
+          }
+
+          if (!extractedData) {
+            // Check if it was because all models were exhausted
+            summary.exhausted = true;
+            summary.failed++;
+            results.push({ name: file.name, status: 'failed', error: 'AI_TOKENS_EXHAUSTED' });
+            break; 
+          }
+
+          // D. Save to DB
+          const { data: inserted, error: insertError } = await supabase
+            .from('resorts')
+            .insert({
+              name: extractedData.name,
+              location: extractedData.location,
+              atoll: extractedData.atoll,
+              description: extractedData.description,
+              category: extractedData.category,
+              transfer_type: extractedData.transfer_type,
+              meal_plans: extractedData.meal_plans || [],
+              room_types: extractedData.room_types || [],
+              highlights: extractedData.highlights || [],
+              seo_summary: extractedData.seo_summary,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (insertError) throw insertError;
+
+          summary.new++;
+          results.push({ name: file.name, status: 'success', id: inserted.id });
+
+          // Small delay to be nice to APIs
+          await new Promise(r => setTimeout(r, 800));
+
+        } catch (err: any) {
+          console.error(`[Sync] Failed processing ${file.name}:`, err);
+          summary.failed++;
+          results.push({ name: file.name, status: 'failed', error: err.message });
+        }
+      }
+
+      res.json({ status: 'complete', summary, results });
+
+    } catch (err: any) {
+      logDriveError("Sync Import", err, { folderId });
+      res.status(500).json({ error: err.message, summary });
     }
   });
 
@@ -1072,11 +1316,6 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   }
-
-  app.get("/api/ai/status", async (req, res) => {
-    const apiKey = await getGeminiApiKey();
-    res.json({ configured: !!apiKey });
-  });
 
   app.post("/api/ai/generate-copy", async (req, res) => {
     try {
@@ -1191,6 +1430,59 @@ async function startServer() {
   app.get("/api/drive/fetch-file", handleDriveFetch);
 
   // New endpoint to save extracted resort data
+  app.post("/api/resorts/extract", async (req, res) => {
+    const { base64 } = req.body;
+    if (!base64) return res.status(400).json({ error: "Missing base64 data" });
+
+    try {
+      const { ai, models } = await getGeminiModelChain();
+      let extractedData = null;
+      let lastError = null;
+
+      for (const modelName of models) {
+        try {
+          const generation = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: RESORT_EXTRACTION_PROMPT },
+                  { inlineData: { mimeType: "application/pdf", data: base64 } }
+                ]
+              }
+            ],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: RESORT_EXTRACTION_SCHEMA as any
+            }
+          });
+
+          extractedData = JSON.parse(generation.text || '{}');
+          break;
+        } catch (err: any) {
+          const msg = err.message?.toLowerCase() || '';
+          if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted')) {
+            console.warn(`[Gemini] Model ${modelName} exhausted during local extract, trying next...`);
+            continue;
+          }
+          lastError = err;
+        }
+      }
+
+      if (!extractedData) {
+        if (lastError?.message?.toLowerCase().includes('429') || lastError?.message?.toLowerCase().includes('quota')) {
+          return res.status(429).json({ error: 'AI_TOKENS_EXHAUSTED' });
+        }
+        throw lastError || new Error('Failed to extract data');
+      }
+
+      res.json(extractedData);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/resorts/import-data", async (req, res) => {
     console.log('[API] Entered /api/resorts/import-data');
     try {
