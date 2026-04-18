@@ -1561,13 +1561,13 @@ function AdminResorts({ showNotification, setUploadProgress, bulkImportEnabled }
         body: JSON.stringify({ folderId, skipDuplicates })
       });
 
-      if (!response.ok) {
-        const errData = await readApiJson(response);
-        throw new Error(errData.error || 'Server-side sync failed');
-      }
-
-      const syncResult = await response.json();
+      const syncResult = await readApiJson(response);
+      
       const { summary } = syncResult;
+      
+      if (!response.ok) {
+        throw new Error(syncResult.error || 'Server-side sync failed');
+      }
 
       setDriveSyncSummary({
         total: summary.total,
