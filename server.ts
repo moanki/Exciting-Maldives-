@@ -716,6 +716,10 @@ function requirePermission(permissionKey: string) {
 async function startServer() {
   const app = express();
   console.log("--- STARTING SERVER WITH RBAC FIXES ---");
+  app.use((req, res, next) => {
+    console.log(`[DEBUG_ALL] Recv: ${req.method} ${req.url} - Headers: ${JSON.stringify(req.headers)}`);
+    next();
+  });
   
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
@@ -745,6 +749,52 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       env: process.env.NODE_ENV || 'development'
     });
+  });
+
+  app.post("/api/settings/update-gemini-key", async (req, res) => {
+    console.log('[API] Entered /api/settings/update-gemini-key');
+    try {
+      // 1. Authenticate user
+      const token = req.headers.authorization?.split(' ')[1];
+      if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) return res.status(401).json({ error: "Unauthorized" });
+
+      // 2. Authorize user (Check for Super Admin)
+      const { data: userData, error: rolesError } = await supabaseAdmin
+        .from('user_roles')
+        .select('role_id, roles(is_super_admin)')
+        .eq('user_id', user.id);
+
+      // Verify the user has at least one role with is_super_admin: true
+      const isSuperAdmin = userData?.some(r => (r.roles as any)?.is_super_admin);
+      
+      if (rolesError || !isSuperAdmin) {
+        return res.status(403).json({ error: "Forbidden: Super Admin only" });
+      }
+
+      // 3. Update setting
+      const { apiKey } = req.body;
+      if (!apiKey || apiKey.trim().length < 8) {
+        return res.status(400).json({ error: "Invalid API Key provided" });
+      }
+
+      const { error: updateError } = await supabaseAdmin
+        .from('site_settings')
+        .upsert({
+          key: 'gemini_api_key',
+          value: apiKey.trim()
+        }, { onConflict: 'key' });
+
+      if (updateError) throw updateError;
+
+      console.log(`[Admin] Gemini API Key updated by user: ${user.email}`);
+      res.json({ status: 'success' });
+    } catch (error: any) {
+      console.error("[Admin] Error updating Gemini API Key:", error);
+      res.status(500).json({ error: error.message || "Failed to update API key" });
+    }
   });
 
   // --- Admin RBAC Endpoints ---

@@ -10,8 +10,8 @@ function resolveApiUrl(url: string): string {
     return url;
   }
   
-  const path = url.startsWith('/') ? url : `/${url}`;
-  return `${API_BASE_URL}${path}`;
+  // Use relative path directly from the origin
+  return url.startsWith('/') ? url : `/${url}`;
 }
 
 /**

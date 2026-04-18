@@ -7,6 +7,7 @@ import { getSiteSettings, clearSettingsCache } from '../lib/settings';
 import { AdminImportBatches } from '../components/ImportWorkflow';
 import { UserAccessManagement } from '../components/admin/rbac/UserAccessManagement';
 import { RoleManagement } from '../components/admin/rbac/RoleManagement';
+import { GeminiSettings } from '../components/admin/GeminiSettings';
 import { usePermissions } from '../hooks/usePermissions';
 import { getUserRoleLabels } from '../lib/rbac';
 import { importService } from '../services/importService';
@@ -251,6 +252,9 @@ export default function AdminDashboard() {
               {isSuperAdmin && (
                 <SidebarLink to="/admin/roles" icon={<Shield size={18} />} label="Roles" active={location.pathname.startsWith('/admin/roles')} onClick={() => setIsMobileMenuOpen(false)} />
               )}
+              {isSuperAdmin && (
+                <SidebarLink to="/admin/ai-settings" icon={<Sparkles size={18} />} label="AI Settings" active={location.pathname.startsWith('/admin/ai-settings')} onClick={() => setIsMobileMenuOpen(false)} />
+              )}
             </>
           )}
           <div className="pt-8 mt-auto border-t border-white/10">
@@ -344,6 +348,9 @@ export default function AdminDashboard() {
             )}
             {isSuperAdmin && (
               <Route path="/roles" element={<RoleManagement />} />
+            )}
+            {isSuperAdmin && (
+              <Route path="/ai-settings" element={<GeminiSettings showNotification={showNotification} />} />
             )}
             
             <Route path="*" element={<Navigate to="/admin" replace />} />
