@@ -200,6 +200,7 @@ async function getGeminiApiKey(): Promise<string | null> {
       const row = data?.find((item: any) => item.key === keyName);
       const parsed = parseGeminiKeyValue(row?.value);
       if (isValidGeminiKey(parsed)) {
+        console.log(`[Gemini Key] Successfully loaded from site_settings: ${keyName}`);
         cachedGeminiApiKey = { value: parsed!, expiresAt: now + 60_000 };
         return parsed!;
       }
@@ -783,7 +784,7 @@ async function startServer() {
       const { error: updateError } = await supabaseAdmin
         .from('site_settings')
         .upsert({
-          key: 'gemini_api_key',
+          key: 'gemini_api_key:published',
           value: apiKey.trim()
         }, { onConflict: 'key' });
 

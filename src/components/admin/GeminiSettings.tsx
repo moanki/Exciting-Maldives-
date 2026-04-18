@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../supabase';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, readApiJson } from '../../lib/api';
 import { Save, Loader2, Key } from 'lucide-react';
 
 export const GeminiSettings = ({ showNotification }: { showNotification: (msg: string) => void }) => {
@@ -21,22 +21,22 @@ export const GeminiSettings = ({ showNotification }: { showNotification: (msg: s
       const response = await apiFetch('/api/settings/update-gemini-key', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ apiKey: apiKey.trim() })
       });
 
+      const result = await readApiJson<{ status?: string, error?: string }>(response);
+
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to save key');
+        throw new Error(result.error || 'Failed to save key');
       }
 
       showNotification('Gemini API Key updated successfully');
       setApiKey('');
     } catch (err: any) {
       console.error(err);
-      showNotification(err.message);
+      showNotification(err.message === 'Forbidden' ? 'Forbidden: Please sign out and sign back in to refresh your credentials.' : err.message);
     } finally {
       setSaving(false);
     }
